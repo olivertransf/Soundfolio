@@ -6,15 +6,12 @@ export async function GET() {
     const token = await getAccessToken();
     if (!token) throw new Error("No token returned");
 
-    const res = await fetch("https://api.spotify.com/v1/me/top/tracks?limit=1", {
+    const res = await fetch("https://api.spotify.com/v1/tracks/4iV5W9uYEdYUVa79Axb7Rh", {
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (res.status === 401) {
       return NextResponse.json({ ok: false, error: "Token expired or invalid" }, { status: 500 });
-    }
-    if (res.status === 403) {
-      return NextResponse.json({ ok: false, error: "App lacks permission. Re-authorize with user-top-read scope." }, { status: 500 });
     }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
