@@ -32,6 +32,7 @@ export async function getAccessToken(): Promise<string> {
   const data = await res.json();
 
   if (!res.ok) {
+    cachedToken = null;
     const msg = data?.error_description ?? data?.error ?? `HTTP ${res.status}`;
     throw new Error(msg);
   }

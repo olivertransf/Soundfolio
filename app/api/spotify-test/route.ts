@@ -10,13 +10,20 @@ export async function GET() {
       headers: { Authorization: `Bearer ${token}` },
     });
 
+    const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
-      return NextResponse.json({ ok: false, error: "Token expired or invalid" }, { status: 500 });
+      return NextResponse.json({ ok: false, error: data?.error?.message ?? "Token expired or invalid" }, { status: 500 });
+    }
+    if (res.status === 403) {
+      const msg = data?.error?.message ?? data?.error ?? "Access forbidden";
+      return NextResponse.json({
+        ok: false,
+        error: `403: ${msg}. If it worked before: you may have hit rate limits (wait 1hr) or your app user was removed from the allowlist. Re-add your email in Dashboard → App → Settings → User Management.`,
+      }, { status: 500 });
     }
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
       return NextResponse.json(
-        { ok: false, error: data?.error?.message ?? `Spotify API ${res.status}` },
+        { ok: false, error: data?.error?.message ?? data?.error ?? `Spotify API ${res.status}` },
         { status: 500 }
       );
     }
