@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Upload, CheckCircle, AlertCircle, ExternalLink } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, ExternalLink, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Status = "idle" | "uploading" | "success" | "error";
@@ -22,7 +22,22 @@ export default function ImportPage() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [backfillStatus, setBackfillStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [backfillResult, setBackfillResult] = useState<{ updated: number; total: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function runBackfill() {
+    setBackfillStatus("running");
+    try {
+      const res = await fetch("/api/backfill-art", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Backfill failed");
+      setBackfillResult({ updated: data.updated, total: data.total ?? 0 });
+      setBackfillStatus("done");
+    } catch {
+      setBackfillStatus("error");
+    }
+  }
 
   async function handleFile(file: File) {
     if (!file.name.endsWith(".zip")) {
@@ -168,6 +183,36 @@ export default function ImportPage() {
                 <p className="text-muted-foreground mt-1">{error}</p>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ImageIcon className="h-4 w-4" />
+            Backfill album artwork
+          </CardTitle>
+          <CardDescription>
+            Imported streams don&apos;t include images. This fetches artwork from Spotify for tracks that are missing it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <button
+            onClick={runBackfill}
+            disabled={backfillStatus === "running"}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary hover:bg-secondary/80 font-medium text-sm transition-colors disabled:opacity-50"
+          >
+            {backfillStatus === "running" ? "Fetching artwork..." : "Backfill missing artwork"}
+          </button>
+          {backfillStatus === "done" && backfillResult && (
+            <p className="text-sm text-muted-foreground mt-3">
+              Updated {backfillResult.updated.toLocaleString()} streams with album art
+              {backfillResult.total > 0 && ` (${backfillResult.total} tracks checked)`}
+            </p>
+          )}
+          {backfillStatus === "error" && (
+            <p className="text-sm text-destructive mt-3">Backfill failed. Check that your Spotify token is valid.</p>
           )}
         </CardContent>
       </Card>

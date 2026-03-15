@@ -105,6 +105,22 @@ export async function getTopItems(
   return data.items;
 }
 
+export async function getTracks(trackIds: string[]) {
+  if (trackIds.length === 0) return [];
+  const token = await getAccessToken();
+  const ids = trackIds.slice(0, 50).join(",");
+  const res = await fetch(
+    `https://api.spotify.com/v1/tracks?ids=${ids}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
+  const data = await res.json();
+  return (data.tracks ?? []).filter(Boolean).map((t: { id: string; album?: { images: { url: string }[] } }) => ({
+    id: t.id,
+    albumArt: t.album?.images?.[0]?.url ?? null,
+  }));
+}
+
 export async function getCurrentlyPlaying(): Promise<{
   is_playing: boolean;
   item?: {
