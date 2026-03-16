@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
+import { SyncOnLoad } from "@/components/sync-on-load";
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -26,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}>
+        <SyncOnLoad />
         <div className="flex min-h-screen">
           <Nav />
           <main className="flex-1 ml-56 p-8">{children}</main>
