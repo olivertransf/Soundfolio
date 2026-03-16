@@ -30,8 +30,12 @@ async function runSync() {
 
     const data = await getRecentlyPlayed(after);
 
-    if (!data.items.length) {
-      return NextResponse.json({ synced: 0, message: "No new tracks" });
+    if (!data.items || !data.items.length) {
+      return NextResponse.json({
+        synced: 0,
+        message: "No new tracks",
+        lastSync: latest?.playedAt?.toISOString() ?? null,
+      });
     }
 
     const result = await db.stream.createMany({
@@ -47,9 +51,17 @@ async function runSync() {
       skipDuplicates: true,
     });
 
-    return NextResponse.json({ synced: result.count });
+    return NextResponse.json({
+      synced: result.count,
+      fetched: data.items.length,
+      lastStream: data.items[0]?.played_at ?? null,
+    });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("Sync error:", err);
-    return NextResponse.json({ error: "Sync failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Sync failed", detail: msg },
+      { status: 500 }
+    );
   }
 }

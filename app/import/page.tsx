@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Upload, CheckCircle, AlertCircle, ExternalLink, ImageIcon } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, ExternalLink, ImageIcon, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Status = "idle" | "uploading" | "success" | "error";
@@ -28,6 +28,26 @@ export default function ImportPage() {
   const [testStatus, setTestStatus] = useState<"idle" | "running" | "ok" | "fail">("idle");
   const [testError, setTestError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [syncResult, setSyncResult] = useState<{ synced: number; message?: string; error?: string } | null>(null);
+
+  async function runSync() {
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/sync", { method: "GET" });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncResult({ synced: 0, error: data.detail ?? data.error ?? "Sync failed" });
+      } else {
+        setSyncResult({
+          synced: data.synced ?? 0,
+          message: data.message ?? (data.synced > 0 ? `Added ${data.synced} streams` : "No new tracks"),
+        });
+      }
+    } catch {
+      setSyncResult({ synced: 0, error: "Network error" });
+    }
+  }
 
   async function testSpotify() {
     setTestStatus("running");
@@ -250,6 +270,32 @@ export default function ImportPage() {
           )}
           {backfillStatus === "error" && (
             <p className="text-sm text-destructive mt-3">{backfillError ?? "Backfill failed."}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Sync now
+          </CardTitle>
+          <CardDescription>
+            Manually fetch new plays from Spotify. Runs automatically every hour, or click to sync now.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <button
+            onClick={runSync}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary hover:bg-secondary/80 font-medium text-sm"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Sync now
+          </button>
+          {syncResult && (
+            <p className={`text-sm ${syncResult.error ? "text-destructive" : "text-muted-foreground"}`}>
+              {syncResult.error ?? (syncResult.synced > 0 ? `Added ${syncResult.synced} streams.` : syncResult.message)}
+            </p>
           )}
         </CardContent>
       </Card>

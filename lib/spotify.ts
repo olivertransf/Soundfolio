@@ -72,7 +72,9 @@ export async function getRecentlyPlayed(after?: string): Promise<{
   );
 
   if (!res.ok) {
-    throw new Error(`Spotify API error: ${res.status}`);
+    const data = await res.json().catch(() => ({}));
+    const msg = data?.error?.message ?? data?.error ?? `HTTP ${res.status}`;
+    throw new Error(`Spotify recently-played: ${msg}`);
   }
 
   return res.json();
