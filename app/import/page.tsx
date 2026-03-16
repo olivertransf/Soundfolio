@@ -29,7 +29,7 @@ export default function ImportPage() {
   const [testError, setTestError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [syncResult, setSyncResult] = useState<{ synced: number; message?: string; error?: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ synced: number; message?: string; error?: string; hint?: string } | null>(null);
 
   async function runSync() {
     setSyncResult(null);
@@ -37,7 +37,11 @@ export default function ImportPage() {
       const res = await fetch("/api/sync", { method: "GET" });
       const data = await res.json();
       if (!res.ok) {
-        setSyncResult({ synced: 0, error: data.detail ?? data.error ?? "Sync failed" });
+        setSyncResult({
+          synced: 0,
+          error: data.detail ?? data.error ?? "Sync failed",
+          hint: data.hint,
+        });
       } else {
         setSyncResult({
           synced: data.synced ?? 0,
@@ -293,9 +297,14 @@ export default function ImportPage() {
             Sync now
           </button>
           {syncResult && (
-            <p className={`text-sm ${syncResult.error ? "text-destructive" : "text-muted-foreground"}`}>
-              {syncResult.error ?? (syncResult.synced > 0 ? `Added ${syncResult.synced} streams.` : syncResult.message)}
-            </p>
+            <div className="space-y-1">
+              <p className={`text-sm ${syncResult.error ? "text-destructive" : "text-muted-foreground"}`}>
+                {syncResult.error ?? (syncResult.synced > 0 ? `Added ${syncResult.synced} streams.` : syncResult.message)}
+              </p>
+              {syncResult.hint && (
+                <p className="text-xs text-muted-foreground">{syncResult.hint}</p>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

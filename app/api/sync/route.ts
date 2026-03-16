@@ -58,9 +58,16 @@ async function runSync() {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
+    const is403 = msg.includes("403");
     console.error("Sync error:", err);
     return NextResponse.json(
-      { error: "Sync failed", detail: msg },
+      {
+        error: "Sync failed",
+        detail: msg,
+        hint: is403
+          ? "403 = Spotify blocked. Add your email in Dashboard → App → Settings → User Management, then run `npm run get-token` to get a new token."
+          : undefined,
+      },
       { status: 500 }
     );
   }
