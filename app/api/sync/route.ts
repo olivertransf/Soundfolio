@@ -59,14 +59,17 @@ async function runSync() {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     const is403 = msg.includes("403");
+    const isPremium = msg.toLowerCase().includes("premium");
     console.error("Sync error:", err);
     return NextResponse.json(
       {
         error: "Sync failed",
         detail: msg,
-        hint: is403
-          ? "403 = Spotify blocked. Add your email in Dashboard → App → Settings → User Management, then run `npm run get-token` to get a new token."
-          : undefined,
+        hint: isPremium
+          ? "The recently-played API requires the app owner to have Spotify Premium. Import + backfill work without it."
+          : is403
+            ? "403 = Spotify blocked. Add your email in Dashboard → App → Settings → User Management, then run `npm run get-token` to get a new token."
+            : undefined,
       },
       { status: 500 }
     );

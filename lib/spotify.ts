@@ -71,13 +71,26 @@ export async function getRecentlyPlayed(after?: string): Promise<{
     { headers: { Authorization: `Bearer ${token}` } }
   );
 
+  const text = await res.text();
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    const msg = data?.error?.message ?? data?.error ?? `HTTP ${res.status}`;
-    throw new Error(`Spotify recently-played: ${msg}`);
+    let data: { error?: { message?: string }; [k: string]: unknown };
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {};
+    }
+    let msg = data?.error?.message ?? data?.error ?? text?.slice(0, 150) ?? `HTTP ${res.status}`;
+    if (res.status === 403 && (text.includes("premium") || text.includes("Premium"))) {
+      msg = "Spotify Premium required: the recently-played endpoint needs the app owner to have an active Premium subscription.";
+    } else if (res.status === 403) {
+      msg = `403: ${msg}`;
+    } else {
+      msg = `Spotify recently-played: ${msg}`;
+    }
+    throw new Error(msg);
   }
 
-  return res.json();
+  return JSON.parse(text);
 }
 
 export interface TopItem {

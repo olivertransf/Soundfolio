@@ -11,7 +11,8 @@
     "db:migrate": "npx prisma migrate dev",
     "db:push": "npx prisma db push",
     "db:studio": "npx prisma studio",
-    "get-token": "npx tsx scripts/get-refresh-token.ts"
+    "get-token": "npx tsx scripts/get-refresh-token.ts",
+    "test-token": "npx tsx scripts/test-token.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
