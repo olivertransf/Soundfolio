@@ -1,7 +1,6 @@
 /**
  * Backfill album art for streams missing artwork.
- * Tries Spotify first; on 403, falls back to Last.fm.
- * Uses local .env (DATABASE_URL, SPOTIFY_*, LASTFM_API_KEY).
+ * Tries Spotify first; on 403, falls back to iTunes -> Cover Art Archive -> Last.fm.
  *
  * Usage: npx tsx scripts/backfill-art.ts
  */
@@ -9,17 +8,19 @@
 import "dotenv/config";
 import { db } from "../lib/db";
 import { getTracks } from "../lib/spotify";
+import { getAlbumArtFromItunes } from "../lib/itunes";
+import { getAlbumArtFromCoverArtArchive } from "../lib/coverartarchive";
 import { getTrackArt } from "../lib/lastfm";
 
 const MAX_PER_RUN = 500;
 const BATCH_SIZE = 50;
 const DELAY_MS = 150;
-const LASTFM_DELAY_MS = 300;
+const FALLBACK_DELAY_MS = 400;
 const SPOTIFY_ID_REGEX = /^[a-zA-Z0-9]{22}$/;
 
 async function main() {
   const missing = await db.stream.groupBy({
-    by: ["trackId", "trackName", "artistName"],
+    by: ["trackId", "trackName", "artistName", "albumName"],
     where: { albumArt: null },
   });
 
@@ -35,7 +36,6 @@ async function main() {
   const toProcess = spotifyTracks.slice(0, MAX_PER_RUN);
   const remaining = spotifyTracks.length - toProcess.length;
   let updated = 0;
-  let usedLastFm = false;
 
   console.log(`Processing ${toProcess.length} tracks (${remaining} remaining)...`);
 
@@ -60,13 +60,22 @@ async function main() {
   } catch (err) {
     const is403 = err instanceof Error && err.message.includes("403");
     if (!is403) throw err;
-    if (!process.env.LASTFM_API_KEY) {
-      throw new Error("Spotify returned 403. Add LASTFM_API_KEY to .env to use Last.fm fallback.");
-    }
-    usedLastFm = true;
-    console.log("Spotify returned 403, falling back to Last.fm...");
+    console.log("Spotify returned 403, using fallbacks (iTunes -> Cover Art Archive -> Last.fm)...");
     for (const m of toProcess) {
-      const art = await getTrackArt(m.artistName, m.trackName);
+      let art: string | null = null;
+      try {
+        art = await getAlbumArtFromItunes(m.artistName, m.albumName);
+      } catch {}
+      if (!art && process.env.LASTFM_API_KEY) {
+        try {
+          art = await getTrackArt(m.artistName, m.trackName);
+        } catch {}
+      }
+      if (!art) {
+        try {
+          art = await getAlbumArtFromCoverArtArchive(m.artistName, m.albumName);
+        } catch {}
+      }
       if (art) {
         const result = await db.stream.updateMany({
           where: { trackId: m.trackId, albumArt: null },
@@ -74,11 +83,11 @@ async function main() {
         });
         updated += result.count;
       }
-      await new Promise((r) => setTimeout(r, LASTFM_DELAY_MS));
+      await new Promise((r) => setTimeout(r, FALLBACK_DELAY_MS));
     }
   }
 
-  console.log(`Updated ${updated} streams via ${usedLastFm ? "Last.fm" : "Spotify"}. ${remaining} remaining.`);
+  console.log(`Updated ${updated} streams. ${remaining} remaining.`);
 }
 
 main().catch((err) => {

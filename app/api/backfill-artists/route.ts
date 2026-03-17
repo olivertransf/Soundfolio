@@ -6,8 +6,8 @@ import { getArtistArt } from "@/lib/lastfm";
 
 export const maxDuration = 60;
 
-const MAX_PER_RUN = 100;
-const DELAY_MS = 200;
+const MAX_PER_RUN = 25;
+const DELAY_MS = 2100;
 
 async function getArtistImage(artistName: string): Promise<string | null> {
   try {

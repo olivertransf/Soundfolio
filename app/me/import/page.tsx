@@ -253,7 +253,7 @@ export default function ImportPage() {
                   <Badge variant="secondary">{result.skipped.toLocaleString()} duplicates skipped</Badge>
                 </div>
                 <p className="text-muted-foreground mt-2">
-                  Head to the <a href="/" className="text-primary hover:underline">Overview</a> to see your stats.
+                  Head to the <a href="/me" className="text-primary hover:underline">Overview</a> to see your stats.
                 </p>
               </div>
             </div>

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getTracks } from "@/lib/spotify";
+import { getAlbumArtFromItunes } from "@/lib/itunes";
+import { getAlbumArtFromCoverArtArchive } from "@/lib/coverartarchive";
 import { getTrackArt } from "@/lib/lastfm";
 
 export const maxDuration = 60;
@@ -9,12 +11,12 @@ const SPOTIFY_ID_REGEX = /^[a-zA-Z0-9]{22}$/;
 const MAX_PER_RUN = 500;
 const BATCH_SIZE = 50;
 const DELAY_MS = 150;
-const LASTFM_DELAY_MS = 300;
+const FALLBACK_DELAY_MS = 400;
 
 export async function POST() {
   try {
   const missing = await db.stream.groupBy({
-    by: ["trackId", "trackName", "artistName"],
+    by: ["trackId", "trackName", "artistName", "albumName"],
     where: { albumArt: null },
   });
 
@@ -50,10 +52,23 @@ export async function POST() {
     }
   } catch (err) {
     const is403 = err instanceof Error && err.message.includes("403");
-    if (!is403 || !process.env.LASTFM_API_KEY) throw err;
-    source = "lastfm";
+    if (!is403) throw err;
+    source = "fallback";
     for (const m of toProcess) {
-      const art = await getTrackArt(m.artistName, m.trackName);
+      let art: string | null = null;
+      try {
+        art = await getAlbumArtFromItunes(m.artistName, m.albumName);
+      } catch {}
+      if (!art && process.env.LASTFM_API_KEY) {
+        try {
+          art = await getTrackArt(m.artistName, m.trackName);
+        } catch {}
+      }
+      if (!art) {
+        try {
+          art = await getAlbumArtFromCoverArtArchive(m.artistName, m.albumName);
+        } catch {}
+      }
       if (art) {
         const result = await db.stream.updateMany({
           where: { trackId: m.trackId, albumArt: null },
@@ -61,7 +76,7 @@ export async function POST() {
         });
         updated += result.count;
       }
-      await new Promise((r) => setTimeout(r, LASTFM_DELAY_MS));
+      await new Promise((r) => setTimeout(r, FALLBACK_DELAY_MS));
     }
   }
 

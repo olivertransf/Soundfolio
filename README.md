@@ -53,7 +53,7 @@ npm run db:push
 2. Check **Extended streaming history** only
 3. Click **Request data** — Spotify will email you in 1-5 days
 4. Download the ZIP file
-5. Start the app and go to `/import`, upload the ZIP
+5. Start the app, go to the Import page, upload the ZIP
 
 ### 7. Run locally
 

@@ -6,14 +6,14 @@ import { LayoutDashboard, Music, Mic2, History, Clock, Upload, Disc, Activity } 
 import { cn } from "@/lib/utils";
 
 const links = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/top-tracks", label: "Top Tracks", icon: Music },
-  { href: "/top-artists", label: "Top Artists", icon: Mic2 },
-  { href: "/top-albums", label: "Top Albums", icon: Disc },
-  { href: "/patterns", label: "Patterns", icon: Activity },
-  { href: "/history", label: "History", icon: History },
-  { href: "/recent", label: "Recent", icon: Clock },
-  { href: "/import", label: "Import Data", icon: Upload },
+  { href: "/me", label: "Overview", icon: LayoutDashboard },
+  { href: "/me/top-tracks", label: "Top Tracks", icon: Music },
+  { href: "/me/top-artists", label: "Top Artists", icon: Mic2 },
+  { href: "/me/top-albums", label: "Top Albums", icon: Disc },
+  { href: "/me/patterns", label: "Patterns", icon: Activity },
+  { href: "/me/history", label: "History", icon: History },
+  { href: "/me/recent", label: "Recent", icon: Clock },
+  { href: "/me/import", label: "Import Data", icon: Upload },
 ];
 
 export function Nav() {
