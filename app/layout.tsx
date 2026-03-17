@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Nav } from "@/components/nav";
+import { LayoutWrapper } from "@/components/layout-wrapper";
 import { SyncOnLoad } from "@/components/sync-on-load";
 
 const geistSans = Geist({
@@ -28,10 +28,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}>
         <SyncOnLoad />
-        <div className="flex min-h-screen">
-          <Nav />
-          <main className="flex-1 ml-56 p-8">{children}</main>
-        </div>
+        <LayoutWrapper>{children}</LayoutWrapper>
       </body>
     </html>
   );
