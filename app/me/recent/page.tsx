@@ -27,28 +27,26 @@ export default async function RecentPage() {
               {streams.map((stream) => (
                 <div
                   key={stream.id}
-                  className="group flex items-center gap-4 rounded-xl px-2 py-2.5 transition-colors hover:bg-secondary/50"
+                  className="group flex flex-col gap-1.5 rounded-xl px-2 py-2.5 transition-colors hover:bg-secondary/50 sm:flex-row sm:items-center sm:gap-4"
                 >
-                  <AlbumArt
-                    src={stream.albumArt}
-                    alt={stream.albumName}
-                    width={40}
-                    height={40}
-                    className="shrink-0 rounded"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{stream.trackName}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {stream.artistName} · {stream.albumName}
-                    </p>
+                  <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                    <AlbumArt
+                      src={stream.albumArt}
+                      alt={stream.albumName}
+                      width={40}
+                      height={40}
+                      className="shrink-0 rounded"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{stream.trackName}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {stream.artistName} · {stream.albumName}
+                      </p>
+                    </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs text-muted-foreground">
-                      {format(stream.playedAt, "MMM d, yyyy")}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(stream.playedAt, "h:mm a")}
-                    </p>
+                  <div className="flex shrink-0 flex-col items-end text-xs tabular-nums text-muted-foreground sm:text-right">
+                    <p>{format(stream.playedAt, "MMM d, yyyy")}</p>
+                    <p>{format(stream.playedAt, "h:mm a")}</p>
                   </div>
                 </div>
               ))}
