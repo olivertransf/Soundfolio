@@ -36,7 +36,7 @@ function AuthForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="flex min-h-dvh min-h-screen items-center justify-center p-4 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
         <h1 className="text-xl font-semibold">Enter access key</h1>
         <input
@@ -44,7 +44,7 @@ function AuthForm() {
           value={key}
           onChange={(e) => setKey(e.target.value)}
           placeholder="Access key"
-          className="w-full px-4 py-2 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full rounded-lg border border-border bg-secondary px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           autoFocus
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -62,7 +62,7 @@ function AuthForm() {
 
 export default function AuthPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+    <Suspense fallback={<div className="flex min-h-dvh min-h-screen items-center justify-center">Loading...</div>}>
       <AuthForm />
     </Suspense>
   );

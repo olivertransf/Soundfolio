@@ -39,7 +39,7 @@ export function AppHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-50 overflow-visible border-b border-border/50 bg-background">
+      <header className="sticky top-0 z-50 overflow-visible border-b border-border/50 bg-background pt-[env(safe-area-inset-top,0px)]">
         <div className="app-container grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 overflow-visible py-3 md:grid-cols-[auto_minmax(0,1fr)_auto]">
           <Link
             href="/me?range=ytd"
@@ -140,7 +140,7 @@ export function AppHeader({
       <aside
         id="mobile-drawer-nav"
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-[min(18rem,92vw)] flex-col border-l border-border/60 bg-card py-6 pl-3 pr-4 shadow-2xl transition-transform duration-200 ease-out md:hidden",
+          "fixed inset-y-0 right-0 z-50 flex w-[min(18rem,92vw)] flex-col border-l border-border/60 bg-card pb-[env(safe-area-inset-bottom,0px)] pl-3 pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[calc(1.5rem+env(safe-area-inset-top,0px))] shadow-2xl transition-transform duration-200 ease-out md:hidden",
           mobileOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
         )}
         aria-hidden={!mobileOpen}

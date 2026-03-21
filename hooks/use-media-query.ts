@@ -4,7 +4,11 @@ import { useSyncExternalStore } from "react";
 
 function subscribeResize(cb: () => void) {
   window.addEventListener("resize", cb);
-  return () => window.removeEventListener("resize", cb);
+  window.visualViewport?.addEventListener("resize", cb);
+  return () => {
+    window.removeEventListener("resize", cb);
+    window.visualViewport?.removeEventListener("resize", cb);
+  };
 }
 
 function getWidthSnapshot() {

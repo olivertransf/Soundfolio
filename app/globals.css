@@ -107,7 +107,16 @@ body {
 }
 
 .app-container {
-  @apply mx-auto w-full max-w-7xl px-4 sm:px-6;
+  @apply mx-auto w-full max-w-7xl sm:px-6;
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 640px) {
+  .app-container {
+    padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+  }
 }
 
 .spotify-green {
