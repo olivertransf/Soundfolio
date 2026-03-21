@@ -160,4 +160,4 @@ Backfill uses **no Spotify API**: album art uses iTunes, Last.fm, and Cover Art 
 
 ## License
 
-Add a `LICENSE` file if you publish the repo.
+[MIT](LICENSE)
