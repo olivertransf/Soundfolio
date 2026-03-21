@@ -1,6 +1,6 @@
 import { getRecentStreams } from "@/lib/stats";
 import { Card, CardContent } from "@/components/ui/card";
-import { format } from "date-fns";
+import { LocalDateTime } from "@/components/local-datetime";
 import Image from "next/image";
 
 export const dynamic = "force-dynamic";
@@ -49,10 +49,10 @@ export default async function RecentPage() {
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-xs text-muted-foreground">
-                      {format(stream.playedAt, "MMM d, yyyy")}
+                      <LocalDateTime date={stream.playedAt} pattern="MMM d, yyyy" />
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {format(stream.playedAt, "h:mm a")}
+                      <LocalDateTime date={stream.playedAt} pattern="h:mm a" />
                     </p>
                   </div>
                 </div>
