@@ -6,6 +6,26 @@ Self-hosted **listening history and stats**: import an **Extended streaming hist
 
 **Disclaimer:** Not affiliated with Spotify. *Spotify* is a trademark of Spotify AB. The app reads the official **account data export** (ZIP), not the Spotify Web API.
 
+## Screenshots
+
+### Overview
+
+Totals, diversity, and weekly listening (year-to-date).
+
+![Soundfolio overview with stat cards and weekly chart](docs/screenshots/overview.png)
+
+### Listening patterns
+
+Busiest hour and weekday, listening by hour and by day, week × hour heatmap.
+
+![Soundfolio listening patterns page](docs/screenshots/patterns.png)
+
+### Top artists
+
+Ranked by streams for the selected period.
+
+![Soundfolio top artists](docs/screenshots/top-artists.png)
+
 ---
 
 ## Database (PostgreSQL)
