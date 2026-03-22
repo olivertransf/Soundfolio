@@ -17,7 +17,28 @@ A **template preview** with ~12 months of **synthetic listening data** lives at 
 
 The real stats UI is under **`/me`** (and may require `AUTH_KEY` when set).
 
-**Removing the demo (optional):** After setup or if you cloned the repo only to self-host, you can delete the bundled preview: remove the **`app/demo`** and **`app/api/demo`** directories and **`lib/demo-seed.ts`**, **`lib/demo-artwork.ts`**, and **`lib/demo-stats.ts`**. Then drop **`/demo`** references in **`app/page.tsx`**, **`lib/nav-links.ts`** (the `createNavLinks("/demo")` branch and related types), and **`components/app-header.tsx`**, and remove **`cdn-images.dzcdn.net`** from **`next.config.ts`** `images.remotePatterns` if you added it only for demo artwork.
+### Removing the demo (optional)
+
+After setup or if you only self-host, you can remove the preview entirely.
+
+**Delete these paths:**
+
+| Path | What it is |
+|------|------------|
+| `app/demo/` | Demo UI routes (overview, charts, lists, `layout.tsx`, etc.) |
+| `app/api/demo/` | Demo-only API (`stats/history` for charts) |
+| `lib/demo-seed.ts` | Synthetic stream generator |
+| `lib/demo-stats.ts` | In-memory stats for the demo |
+| `lib/demo-artwork.ts` | Static album/artist image URLs for the demo |
+
+**Then adjust the app** (or the build will fail or still mention `/demo`):
+
+- **`app/page.tsx`** — remove the “View demo” link (or the whole marketing block).
+- **`lib/nav-links.ts`** — drop `NavBase`, `createNavLinks()`, and the `/demo` branch; keep only the `/me` link arrays (or inline `href`s like before).
+- **`components/app-header.tsx`** — stop switching on `/demo`; point the logo and nav at `/me` only.
+- **`next.config.ts`** — remove `cdn-images.dzcdn.net` from `images.remotePatterns` if you do not need Deezer images elsewhere.
+
+`components/listening-activity.tsx` only adds an optional `historyApiPath` prop (used by the demo overview). You can delete that prop and its usage if nothing passes it anymore.
 
 ## Screenshots
 
