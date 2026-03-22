@@ -15,7 +15,6 @@
     "backfill-artists": "npx tsx scripts/backfill-artists.ts",
     "backfill-all": "npx tsx scripts/backfill-all.ts",
     "clear-placeholder-art": "npx tsx scripts/clear-placeholder-art.ts",
-    "export-obsidian": "npx tsx scripts/export-obsidian-stats.ts",
     "remove-demo": "bash scripts/remove-demo.sh"
   },
   "dependencies": {

@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "lastfm.freetls.fastly.net" },
       { protocol: "https", hostname: "i.discogs.com" },
       { protocol: "https", hostname: "is1-ssl.mzstatic.com" },
+      { protocol: "https", hostname: "cdn-images.dzcdn.net" },
       { protocol: "https", hostname: "coverartarchive.org" },
     ],
   },
