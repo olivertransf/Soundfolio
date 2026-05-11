@@ -80,6 +80,49 @@
   --sidebar-ring: #22c55e;
 }
 
+:root[data-accent="blue"] {
+  --primary: #38bdf8;
+  --primary-foreground: #03141e;
+  --ring: #0ea5e9;
+  --chart-1: #38bdf8;
+  --chart-2: #7dd3fc;
+  --chart-3: #0ea5e9;
+  --chart-4: #0369a1;
+  --chart-5: #082f49;
+  --sidebar-primary: #38bdf8;
+  --sidebar-ring: #0ea5e9;
+}
+
+:root[data-accent="violet"] {
+  --primary: #8b5cf6;
+  --primary-foreground: #ffffff;
+  --ring: #8b5cf6;
+  --chart-1: #8b5cf6;
+  --chart-2: #a78bfa;
+  --chart-3: #7c3aed;
+  --chart-4: #5b21b6;
+  --chart-5: #2e1065;
+  --sidebar-primary: #8b5cf6;
+  --sidebar-ring: #8b5cf6;
+}
+
+:root[data-accent="sunset"] {
+  --primary: #f97316;
+  --primary-foreground: #180901;
+  --ring: #ea580c;
+  --chart-1: #f97316;
+  --chart-2: #fb923c;
+  --chart-3: #ea580c;
+  --chart-4: #9a3412;
+  --chart-5: #431407;
+  --sidebar-primary: #f97316;
+  --sidebar-ring: #ea580c;
+}
+
+:root[data-density="compact"] {
+  --radius: 0.625rem;
+}
+
 * {
   border-color: var(--border);
 }
@@ -98,8 +141,9 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
   background-image:
-    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(34, 197, 94, 0.12), transparent 50%),
-    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(34, 197, 94, 0.05), transparent 45%);
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(34, 197, 94, 0.14), transparent 50%),
+    radial-gradient(ellipse 60% 45% at 100% 0%, rgba(59, 130, 246, 0.07), transparent 46%),
+    radial-gradient(ellipse 40% 30% at 0% 0%, rgba(139, 92, 246, 0.05), transparent 52%);
 }
 
 .font-display {
@@ -121,4 +165,33 @@ body {
 
 .spotify-green {
   color: var(--primary);
+}
+
+[data-slot="card"] {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 8px 30px rgba(0, 0, 0, 0.14);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+[data-slot="card"]:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-density="compact"] [data-slot="card"] {
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+:root[data-density="compact"] [data-slot="card-header"],
+:root[data-density="compact"] [data-slot="card-content"] {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
 }

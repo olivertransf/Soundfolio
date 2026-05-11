@@ -1,5 +1,7 @@
 [build]
-  command = "npx prisma generate && npm run build"
+  # DATABASE_URL must be set in Netlify. Syncs schema, refreshes demo data, then builds.
+  # If you only use prisma migrate in CI, replace `db push` with your migration step.
+  command = "npx prisma generate && npx prisma db push && npm run db:seed-demo && npm run build"
   publish = ".next"
 
 [[plugins]]

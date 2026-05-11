@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type LocalDateTimeProps = {
   /** Prisma `Date` serializes to ISO when passed from a Server Component */
@@ -17,18 +17,20 @@ type LocalDateTimeProps = {
 export function LocalDateTime({ date, pattern, className }: LocalDateTimeProps) {
   const iso = typeof date === "string" ? date : date.toISOString();
   const [text, setText] = useState<string | null>(null);
+  const parsed = useMemo(() => new Date(iso), [iso]);
 
   useEffect(() => {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return;
-    setText(format(d, pattern));
-  }, [iso, pattern]);
+    if (Number.isNaN(parsed.getTime())) return;
+    setText(format(parsed, pattern));
+  }, [parsed, pattern]);
 
-  if (Number.isNaN(new Date(iso).getTime())) return null;
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const fallback = format(parsed, pattern);
 
   return (
-    <time dateTime={iso} className={className}>
-      {text ?? ""}
+    <time dateTime={iso} className={className} suppressHydrationWarning>
+      {text ?? fallback}
     </time>
   );
 }

@@ -1,14 +1,35 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListeningChart, type ChartXAxis } from "@/components/listening-chart";
+import type { ChartXAxis } from "@/components/listening-chart";
 import { TimeRangeTabs } from "@/components/time-range-tabs";
 import { GroupBySelect } from "@/components/group-by-select";
 import { PageHeader } from "@/components/page-header";
 import { describeTimeRangeFromSearchParams } from "@/lib/time-range-labels";
+import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
+import {
+  getStoredGroupBy,
+  setStoredGroupBy,
+} from "@/lib/stats-session-preferences";
+
+const ListeningChart = dynamic(
+  () =>
+    import("@/components/listening-chart").then((m) => ({
+      default: m.ListeningChart,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-72 items-center justify-center rounded-xl bg-secondary/20 text-sm text-muted-foreground">
+        Loading chart…
+      </div>
+    ),
+  }
+);
 
 type Mode = "weeks" | "months" | "days";
 
@@ -29,6 +50,7 @@ function HistoryContent() {
   const [mode, setMode] = useState<Mode>("weeks");
   const [data, setData] = useState<ChartPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [timeZone, setTimeZone] = useState<string>("");
 
   const range = searchParams.get("range") ?? "";
   const from = searchParams.get("from") ?? "";
@@ -36,18 +58,31 @@ function HistoryContent() {
   const periodLabel = describeTimeRangeFromSearchParams(searchParams);
 
   useEffect(() => {
+    try {
+      setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+    } catch {
+      setTimeZone("");
+    }
+  }, []);
+
+  useEffect(() => {
+    setMode(getStoredGroupBy());
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({ mode });
     if (range) params.set("range", range);
     if (from) params.set("from", from);
     if (to) params.set("to", to);
+    if (timeZone) params.set(VIEWER_TIMEZONE_PARAM, timeZone);
     fetch(`/api/stats/history?${params}`)
       .then((r) => r.json())
       .then((d) => {
         setData(d.data ?? []);
         setLoading(false);
       });
-  }, [mode, range, from, to]);
+  }, [mode, range, from, to, timeZone]);
 
   const chartTitle =
     mode === "months"
@@ -68,7 +103,13 @@ function HistoryContent() {
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Group by
         </p>
-        <GroupBySelect value={mode} onValueChange={(v) => setMode(v)} />
+        <GroupBySelect
+          value={mode}
+          onValueChange={(v) => {
+            setMode(v);
+            setStoredGroupBy(v);
+          }}
+        />
       </div>
     </div>
   );

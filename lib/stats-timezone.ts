@@ -3,14 +3,36 @@
  * Node’s default is often UTC in production; use TIMEZONE so hours match where you listen.
  */
 
+export const VIEWER_TIMEZONE_COOKIE = "soundfolio_tz";
+export const VIEWER_TIMEZONE_PARAM = "tz";
+
+export function isValidTimeZone(value: string | null | undefined): value is string {
+  if (!value) return false;
+  const zone = value.trim();
+  if (!zone) return false;
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: zone }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getStatsTimeZone(): string {
   const fromEnv = process.env.TIMEZONE?.trim() || process.env.SOUNDFOLIO_TIMEZONE?.trim();
-  if (fromEnv) return fromEnv;
+  if (isValidTimeZone(fromEnv)) return fromEnv;
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (isValidTimeZone(detected)) return detected;
+    return "UTC";
   } catch {
     return "UTC";
   }
+}
+
+export function resolveStatsTimeZone(preferredTimeZone?: string | null): string {
+  if (isValidTimeZone(preferredTimeZone)) return preferredTimeZone;
+  return getStatsTimeZone();
 }
 
 /** Hour 0–23 in `timeZone` (same instant as `date`). */
@@ -44,5 +66,14 @@ export function getDayOfWeekInTimeZone(date: Date, timeZone: string): number {
 
 /** Calendar date `yyyy-MM-dd` in `timeZone` for bucketing daily charts. */
 export function formatCalendarDateInZone(date: Date, timeZone: string): string {
-  return date.toLocaleDateString("en-CA", { timeZone });
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const month = parts.find((p) => p.type === "month")?.value ?? "01";
+  const day = parts.find((p) => p.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
 }

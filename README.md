@@ -10,14 +10,11 @@ Self-hosted **listening history and stats**: import an **Extended streaming hist
 
 A **template preview** at **`/demo`** uses the same UI and stats code as **`/me`**, but reads **synthetic rows in Postgres** (`isDemo: true`) so album and artist images are stored like real data and render reliably.
 
-**One-time after clone / schema change:**
+**Netlify (this repo’s `netlify.toml`):** each deploy runs **`prisma db push`**, **`db:seed-demo`**, then **`next build`**—you don’t need to seed `/demo` by hand as long as **`DATABASE_URL`** is set in the site env.
 
-```bash
-npm run db:push
-npm run db:seed-demo
-```
+**Local / other hosts:** after **`npm run db:push`** once (or whenever the schema changes), demo data is optional—run **`npm run db:seed-demo`** if you want **`/demo`** filled locally, or rely on your deploy script mirroring Netlify.
 
-That inserts ~12 months of sample plays (with artwork URLs). Re-run `db:seed-demo` anytime to replace demo data. **Backfill** buttons and `/api/backfill-*` also apply to demo rows missing art.
+Demo seed replaces only rows with **`isDemo: true`** (~12 months of sample plays + artwork URLs). **Backfill** buttons and **`/api/backfill-*`** also apply to demo rows missing art.
 
 | Where | URL |
 |--------|-----|
@@ -32,7 +29,7 @@ The real stats UI is under **`/me`** (and may require `AUTH_KEY` when set).
 **Not strictly impossible** to show a preview **without** Postgres—you could ship **in-memory** fake rows and duplicate the stats math (no Prisma). This repo **doesn’t** do that anymore because: one code path with **`/me`**, reliable album/artist URLs on real `Stream` rows, and **backfill** works the same.
 
 - **No database at all:** the app is built around **`DATABASE_URL`** for imports and **`/me`**, so a DB-less deploy only makes sense if you **only** want a static marketing page—not the current Soundfolio app.
-- **Postgres without manual seeding:** point **`DATABASE_URL`** at your host, run **`npm run db:push`** once, then either run **`npm run db:seed-demo`** yourself or add it to your **deploy** (e.g. Netlify build step after `prisma generate`) so demo rows are inserted automatically—**it still uses Postgres**, but you don’t have to remember to seed by hand after every clone.
+- **Postgres without manual seeding:** **Netlify** runs **`db push`** + **`db:seed-demo`** on every build (see `netlify.toml`). Elsewhere, run **`db:seed-demo`** in your pipeline or once locally after **`db:push`**.
 
 ### Removing the demo (optional)
 
@@ -102,7 +99,7 @@ cp .env.example .env
 1. Put your Postgres URL in **`DATABASE_URL`** (and **`DIRECT_URL`** if your host requires it).
 2. **`LASTFM_API_KEY`** + **`LASTFM_USER`** — from [Last.fm API](https://www.last.fm/api/account/create), and connect your Spotify app to Last.fm so scrobbles show up.
 3. **`npm run db:push`** (applies schema, including `isDemo` on `Stream`).
-4. **Optional:** **`npm run db:seed-demo`** — fills **`/demo`** with sample data (safe alongside a real import later).
+4. **Optional (local `/demo`):** **`npm run db:seed-demo`** — Netlify runs this on deploy automatically.
 5. **`npm run dev`** → **Import** → upload the ZIP → **Sync from Last.fm**.
 
 **Optional:** `AUTH_KEY` locks `/me` routes.
@@ -148,6 +145,8 @@ npm run db:generate
 ```
 
 ### 4. (Optional) Demo preview at `/demo`
+
+On **Netlify**, the build seeds demo data. **Locally:**
 
 ```bash
 npm run db:seed-demo
@@ -198,12 +197,11 @@ npm run dev
 
 ## Netlify
 
-1. Connect the repo; build uses `netlify.toml` (`prisma generate` + `next build`).
+1. Connect the repo; build uses `netlify.toml`: **`prisma generate` → `db push` → `db:seed-demo` → `next build`**.
 2. Set env: **`DATABASE_URL`**, **`LASTFM_API_KEY`**, **`LASTFM_USER`**, and optional **`DIRECT_URL`**, **`AUTH_KEY`**, **`TIMEZONE`** (recommended so hour-of-day charts match your locale).
-3. **First deploy / schema change:** from any machine with network access to the DB, run **`npx prisma db push`** (or your migration workflow) against the **same** `DATABASE_URL` Netlify uses, so tables include **`isDemo`**.
-4. **Optional `/demo`:** run **`npm run db:seed-demo`** once with `DATABASE_URL` set (e.g. locally or CI), or the demo UI stays empty until you seed.
+3. **Migrations-only workflow:** if you use **`prisma migrate deploy`** instead of **`db push`**, change the Netlify build command to run your migration step in place of **`db push`**, and keep **`db:seed-demo`** if you want **`/demo`** populated on each deploy.
 
-The build does **not** run `db:push` or `db:seed-demo` automatically—apply schema and seed explicitly.
+Each deploy refreshes demo rows (`isDemo: true`) so **`/demo`** stays in sync with the seed script without manual seeding.
 
 ---
 
@@ -221,7 +219,7 @@ Backfill uses **no Spotify API**: album art uses iTunes, Last.fm, and Cover Art 
 | `npm run build` / `start` | Production build / run. |
 | `npm run db:push` / `db:migrate` / `db:generate` / `db:studio` | Prisma. |
 | `npm run backfill-*` | Art / artists backfill CLI. |
-| `npm run db:seed-demo` | Inserts synthetic demo streams into Postgres (`isDemo: true`). |
+| `npm run db:seed-demo` | Inserts synthetic demo streams (`isDemo: true`); also run by Netlify build. |
 | `npm run remove-demo` | Deletes bundled `/demo` code and reverts nav/config (optional). |
 
 ---
@@ -231,7 +229,7 @@ Backfill uses **no Spotify API**: album art uses iTunes, Last.fm, and Cover Art 
 - **Last.fm sync does nothing** — Set `LASTFM_API_KEY` and `LASTFM_USER` in `.env` and restart the dev server. Until then, the API responds with `skipped: true` (not an error) so background refresh requests stay quiet.
 - **DB SSL** — Use `?sslmode=require` (or host equivalent) in `DATABASE_URL`.
 - **Empty charts** — Import the ZIP and sync Last.fm so rows exist.
-- **Empty `/demo` or “run db:seed-demo”** — Run **`npm run db:push`** then **`npm run db:seed-demo`** (needs `DATABASE_URL`). Demo rows are separate from your library (`isDemo: true`).
+- **Empty `/demo`** — Ensure **`DATABASE_URL`** is set in Netlify and redeploy (build runs **`db push`** + **`db:seed-demo`**). Locally: **`npm run db:push`** then **`npm run db:seed-demo`**. Demo rows are separate from your library (`isDemo: true`).
 - **Wrong “busiest hour” / time-of-day** — Set `TIMEZONE` to your real timezone (IANA). Hosted Node often runs in UTC; hour buckets use `TIMEZONE` (or the server default).
 
 ---

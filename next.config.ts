@@ -3,13 +3,15 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   async redirects() {
     return [
-      { source: "/import", destination: "/me/import", permanent: true },
-      { source: "/recent", destination: "/me/recent", permanent: true },
-      { source: "/history", destination: "/me/history", permanent: true },
-      { source: "/patterns", destination: "/me/patterns", permanent: true },
-      { source: "/top-tracks", destination: "/me/top-tracks", permanent: true },
-      { source: "/top-artists", destination: "/me/top-artists", permanent: true },
-      { source: "/top-albums", destination: "/me/top-albums", permanent: true },
+      { source: "/me/import", destination: "/history/import", permanent: true },
+      { source: "/me/recent", destination: "/history/recent", permanent: true },
+      { source: "/import", destination: "/history/import", permanent: true },
+      { source: "/recent", destination: "/history/recent", permanent: true },
+      { source: "/me/history", destination: "/history", permanent: true },
+      { source: "/me/patterns", destination: "/me", permanent: true },
+      { source: "/me/top-tracks", destination: "/top-tracks", permanent: true },
+      { source: "/me/top-artists", destination: "/top-artists", permanent: true },
+      { source: "/me/top-albums", destination: "/top-albums", permanent: true },
     ];
   },
   images: {
@@ -24,6 +26,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "is1-ssl.mzstatic.com" },
       { protocol: "https", hostname: "cdn-images.dzcdn.net" },
       { protocol: "https", hostname: "coverartarchive.org" },
+      { protocol: "http", hostname: "coverartarchive.org" },
     ],
   },
 };

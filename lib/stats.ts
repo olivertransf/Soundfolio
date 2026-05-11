@@ -1,8 +1,6 @@
 import type { Prisma } from "@/lib/generated/prisma";
 import { db } from "@/lib/db";
 import {
-  startOfWeek,
-  startOfMonth,
   startOfYear,
   startOfDay,
   endOfDay,
@@ -15,7 +13,7 @@ import {
 } from "date-fns";
 import { DEFAULT_TIME_RANGE } from "@/lib/time-range";
 import {
-  getStatsTimeZone,
+  resolveStatsTimeZone,
   getHourInTimeZone,
   getDayOfWeekInTimeZone,
   formatCalendarDateInZone,
@@ -44,8 +42,10 @@ function mergeScope(
 export function parseTimeRange(
   range?: string,
   from?: string,
-  to?: string
+  to?: string,
+  timeZone?: string
 ): TimeRangeFilter {
+  resolveStatsTimeZone(timeZone);
   const now = new Date();
 
   if (from && to) {
@@ -67,7 +67,11 @@ export function parseTimeRange(
 
   switch (range ?? DEFAULT_TIME_RANGE) {
     case "30d":
-      return { since: subDays(now, 30), until: now, label: "Last 30 days" };
+      return {
+        since: subDays(now, 30),
+        until: now,
+        label: "Last 30 days",
+      };
     case "3m":
       return { since: subMonths(now, 3), until: now, label: "Last 3 months" };
     case "6m":
@@ -232,9 +236,10 @@ export async function getTopAlbums(
 
 export async function getStreamsByHour(
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  timeZone?: string
 ) {
-  const tz = getStatsTimeZone();
+  const tz = resolveStatsTimeZone(timeZone);
   const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
@@ -259,9 +264,10 @@ export async function getStreamsByHour(
 
 export async function getStreamsByDayOfWeek(
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  timeZone?: string
 ) {
-  const tz = getStatsTimeZone();
+  const tz = resolveStatsTimeZone(timeZone);
   const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
@@ -287,9 +293,10 @@ export async function getStreamsByDayOfWeek(
 
 export async function getListeningHeatmap(
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  timeZone?: string
 ) {
-  const tz = getStatsTimeZone();
+  const tz = resolveStatsTimeZone(timeZone);
   const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
@@ -324,8 +331,10 @@ export async function getListeningHeatmap(
 export async function getStreamsByWeek(
   weeksBack = 26,
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  timeZone?: string
 ) {
+  const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subWeeks(new Date(), weeksBack);
   const where = mergeScope(resolveDateWhere(filter, defaultSince), scope);
   const streams = await db.stream.findMany({
@@ -337,7 +346,13 @@ export async function getStreamsByWeek(
   const byWeek: Record<string, { streams: number; minutes: number }> = {};
 
   for (const s of streams) {
-    const weekStart = format(startOfWeek(s.playedAt, { weekStartsOn: 1 }), "yyyy-MM-dd");
+    const localDate = formatCalendarDateInZone(s.playedAt, tz);
+    const localWeekday = getDayOfWeekInTimeZone(s.playedAt, tz);
+    const offsetFromMonday = (localWeekday + 6) % 7;
+    const weekStart = format(
+      subDays(parse(localDate, "yyyy-MM-dd", new Date()), offsetFromMonday),
+      "yyyy-MM-dd"
+    );
     if (!byWeek[weekStart]) byWeek[weekStart] = { streams: 0, minutes: 0 };
     byWeek[weekStart].streams++;
     byWeek[weekStart].minutes += Math.round(s.durationMs / 60000);
@@ -349,8 +364,10 @@ export async function getStreamsByWeek(
 export async function getStreamsByMonth(
   monthsBack = 12,
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  timeZone?: string
 ) {
+  const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subMonths(new Date(), monthsBack);
   const where = mergeScope(resolveDateWhere(filter, defaultSince), scope);
   const streams = await db.stream.findMany({
@@ -362,7 +379,7 @@ export async function getStreamsByMonth(
   const byMonth: Record<string, { streams: number; minutes: number }> = {};
 
   for (const s of streams) {
-    const monthKey = format(startOfMonth(s.playedAt), "yyyy-MM");
+    const monthKey = formatCalendarDateInZone(s.playedAt, tz).slice(0, 7);
     if (!byMonth[monthKey]) byMonth[monthKey] = { streams: 0, minutes: 0 };
     byMonth[monthKey].streams++;
     byMonth[monthKey].minutes += Math.round(s.durationMs / 60000);
@@ -373,9 +390,10 @@ export async function getStreamsByMonth(
 
 export async function getStreamsByDay(
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  timeZone?: string
 ) {
-  const tz = getStatsTimeZone();
+  const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subDays(new Date(), 90);
   const where = mergeScope(resolveDateWhere(filter, defaultSince), scope);
   const streams = await db.stream.findMany({
@@ -455,8 +473,8 @@ export async function getListeningDiversity(
   return { uniqueTracks: tracks.length, uniqueArtists: artists.length };
 }
 
-export async function getActivityHeatmap(scope: StatsScope = "me") {
-  const tz = getStatsTimeZone();
+export async function getActivityHeatmap(scope: StatsScope = "me", timeZone?: string) {
+  const tz = resolveStatsTimeZone(timeZone);
   const since = subMonths(new Date(), 12);
   const streams = await db.stream.findMany({
     where: mergeScope({ playedAt: { gte: since } }, scope),

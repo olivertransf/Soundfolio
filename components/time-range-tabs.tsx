@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_TIME_RANGE } from "@/lib/time-range";
@@ -11,6 +11,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
+import {
+  getStoredTimeFilter,
+  setStoredTimeFilter,
+} from "@/lib/stats-session-preferences";
 
 const presets = [
   { value: "30d", label: "30d" },
@@ -45,11 +50,47 @@ export function TimeRangeTabs() {
   const [customTo, setCustomTo] = useState(to || "");
   const [open, setOpen] = useState(false);
   const [customExpanded, setCustomExpanded] = useState(false);
+  const hydratedFromStorage = useRef(false);
 
   useEffect(() => {
     setCustomFrom(from || "");
     setCustomTo(to || "");
   }, [from, to]);
+
+  useEffect(() => {
+    if (hydratedFromStorage.current) return;
+    const hasCustom = Boolean(searchParams.get("from") && searchParams.get("to"));
+    const hasPreset = searchParams.has("range");
+    if (hasCustom || hasPreset) {
+      hydratedFromStorage.current = true;
+      return;
+    }
+    const stored = getStoredTimeFilter();
+    if (!stored) {
+      hydratedFromStorage.current = true;
+      return;
+    }
+    hydratedFromStorage.current = true;
+    const params = new URLSearchParams(searchParams.toString());
+    if (stored.kind === "preset") {
+      params.delete("from");
+      params.delete("to");
+      params.set("range", stored.range);
+    } else {
+      params.delete("range");
+      params.set("from", stored.from);
+      params.set("to", stored.to);
+    }
+    if (!params.has(VIEWER_TIMEZONE_PARAM)) {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz) params.set(VIEWER_TIMEZONE_PARAM, tz);
+      } catch {
+        // ignore
+      }
+    }
+    router.replace(`?${params.toString()}`);
+  }, [router, searchParams]);
 
   useEffect(() => {
     if (!open) {
@@ -59,11 +100,22 @@ export function TimeRangeTabs() {
     setCustomExpanded(isCustom);
   }, [open, isCustom]);
 
+  function applyViewerTimeZone(params: URLSearchParams) {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) params.set(VIEWER_TIMEZONE_PARAM, tz);
+    } catch {
+      // no-op: keep links functional even if timezone detection fails
+    }
+  }
+
   function applyPreset(value: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("from");
     params.delete("to");
     params.set("range", value);
+    applyViewerTimeZone(params);
+    setStoredTimeFilter({ kind: "preset", range: value });
     router.push(`?${params.toString()}`);
     setOpen(false);
     setCustomExpanded(false);
@@ -75,6 +127,8 @@ export function TimeRangeTabs() {
     params.delete("range");
     params.set("from", customFrom);
     params.set("to", customTo);
+    applyViewerTimeZone(params);
+    setStoredTimeFilter({ kind: "custom", from: customFrom, to: customTo });
     router.push(`?${params.toString()}`);
     setOpen(false);
     setCustomExpanded(false);

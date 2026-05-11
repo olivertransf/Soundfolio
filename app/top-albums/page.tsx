@@ -5,16 +5,20 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
 import { RankedStreamRow } from "@/components/ranked-stream-row";
+import { cookies } from "next/headers";
+import { VIEWER_TIMEZONE_COOKIE } from "@/lib/stats-timezone";
 
 export const dynamic = "force-dynamic";
 
 export default async function TopAlbumsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string }>;
 }) {
   const params = await searchParams;
-  const filter = parseTimeRange(params.range, params.from, params.to);
+  const cookieStore = await cookies();
+  const viewerTimeZone = params.tz ?? cookieStore.get(VIEWER_TIMEZONE_COOKIE)?.value;
+  const filter = parseTimeRange(params.range, params.from, params.to, viewerTimeZone);
   const albums = await getTopAlbums(50, filter);
 
   return (
