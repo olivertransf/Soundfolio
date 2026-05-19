@@ -2,6 +2,9 @@ import { DEFAULT_TIME_RANGE } from "@/lib/time-range";
 
 export const STATS_TIME_FILTER_KEY = "soundfolio:stats-time-filter";
 export const STATS_GROUP_BY_KEY = "soundfolio:chart-group-by";
+export const STATS_TOP_SORT_KEY = "soundfolio:top-sort";
+
+export type TopSortPreference = "minutes" | "streams";
 
 export type GroupByPreference = "days" | "weeks" | "months";
 
@@ -75,6 +78,25 @@ export function getStoredGroupBy(): GroupByPreference {
 export function setStoredGroupBy(v: GroupByPreference): void {
   try {
     localStorage.setItem(STATS_GROUP_BY_KEY, v);
+  } catch {
+    // ignore
+  }
+}
+
+export function getStoredTopSort(): TopSortPreference {
+  if (typeof window === "undefined") return "minutes";
+  try {
+    const v = localStorage.getItem(STATS_TOP_SORT_KEY);
+    if (v === "minutes" || v === "streams") return v;
+  } catch {
+    // ignore
+  }
+  return "minutes";
+}
+
+export function setStoredTopSort(v: TopSortPreference): void {
+  try {
+    localStorage.setItem(STATS_TOP_SORT_KEY, v);
   } catch {
     // ignore
   }

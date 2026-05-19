@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Clock, Headphones } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { TopSortBy } from "@/lib/top-sort";
 
 type RankedStreamRowProps = {
   rank: number;
@@ -9,6 +10,7 @@ type RankedStreamRowProps = {
   subtitle?: string;
   streams: number;
   minutes: number;
+  sortBy?: TopSortBy;
   padding?: "default" | "compact";
 };
 
@@ -19,8 +21,10 @@ export function RankedStreamRow({
   subtitle,
   streams,
   minutes,
+  sortBy = "minutes",
   padding = "default",
 }: RankedStreamRowProps) {
+  const primary = sortBy === "streams" ? "streams" : "minutes";
   return (
     <div
       className={cn(
@@ -39,13 +43,23 @@ export function RankedStreamRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center justify-end gap-3 text-xs tabular-nums text-muted-foreground sm:gap-4 sm:text-sm">
-        <span className="flex items-center gap-1.5">
-          <Headphones className="h-3.5 w-3.5 shrink-0" />
-          {streams.toLocaleString()}
-        </span>
-        <span className="flex items-center gap-1.5 whitespace-nowrap">
+        <span
+          className={cn(
+            "flex items-center gap-1.5 whitespace-nowrap",
+            primary === "minutes" && "font-medium text-foreground"
+          )}
+        >
           <Clock className="h-3.5 w-3.5 shrink-0" />
           {minutes.toLocaleString()} min
+        </span>
+        <span
+          className={cn(
+            "flex items-center gap-1.5",
+            primary === "streams" && "font-medium text-foreground"
+          )}
+        >
+          <Headphones className="h-3.5 w-3.5 shrink-0" />
+          {streams.toLocaleString()}
         </span>
       </div>
     </div>

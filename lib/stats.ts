@@ -8,6 +8,7 @@ import {
   differenceInCalendarDays,
 } from "date-fns";
 import { DEFAULT_TIME_RANGE } from "@/lib/time-range";
+import type { TopSortBy } from "@/lib/top-sort";
 import {
   resolveStatsTimeZone,
   getHourInTimeZone,
@@ -17,6 +18,15 @@ import {
   endOfCalendarDateInZone,
   startOfYearInZone,
 } from "@/lib/stats-timezone";
+
+export type { TopSortBy } from "@/lib/top-sort";
+export { parseTopSortBy, TOP_SORT_PARAM, topSortLabel } from "@/lib/top-sort";
+
+function topListOrderBy(sortBy: TopSortBy) {
+  return sortBy === "streams"
+    ? { _count: { id: "desc" as const } }
+    : { _sum: { durationMs: "desc" as const } };
+}
 
 export type TimeRangePreset = "30d" | "3m" | "6m" | "1y" | "ytd" | "all";
 
@@ -36,9 +46,10 @@ type StreamWhere = {
   isDemo?: boolean;
   artistName?: string | { in?: string[] };
   artistArt?: string | null | { not?: null };
-  albumArt?: string | null;
-  trackId?: string;
+  albumArt?: string | null | { not?: null };
+  trackId?: string | { in?: string[] };
   albumName?: string;
+  OR?: StreamWhere[];
 };
 
 function mergeScope(base: StreamWhere, scope: StatsScope): StreamWhere {
@@ -137,34 +148,54 @@ export async function getTotalStats(
 export async function getTopTracks(
   limit = 20,
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  sortBy: TopSortBy = "minutes"
 ) {
   const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
 
   const tracks = await db.stream.groupBy({
-    by: ["trackId", "trackName", "artistName", "albumName", "albumArt"],
+    by: ["trackId", "trackName", "artistName"],
     where,
     _count: { id: true },
     _sum: { durationMs: true },
-    orderBy: { _count: { id: "desc" } },
+    orderBy: topListOrderBy(sortBy),
     take: limit,
   });
 
-  return tracks.map((t) => ({
-    trackId: t.trackId,
-    trackName: t.trackName,
-    artistName: t.artistName,
-    albumName: t.albumName,
-    albumArt: t.albumArt,
-    streams: t._count.id,
-    minutesListened: Math.round((t._sum.durationMs ?? 0) / 60000),
-  }));
+  const trackIds = tracks.map((t) => t.trackId);
+  const albumMeta = new Map<string, { albumName: string; albumArt: string | null }>();
+  if (trackIds.length > 0) {
+    const metaRows = await db.stream.findMany({
+      where: mergeScope({ trackId: { in: trackIds } }, scope),
+      select: { trackId: true, albumName: true, albumArt: true, playedAt: true },
+      orderBy: { playedAt: "desc" },
+    });
+    for (const row of metaRows) {
+      if (!albumMeta.has(row.trackId)) {
+        albumMeta.set(row.trackId, { albumName: row.albumName, albumArt: row.albumArt });
+      }
+    }
+  }
+
+  return tracks.map((t) => {
+    const album = albumMeta.get(t.trackId);
+    return {
+      trackId: t.trackId,
+      trackName: t.trackName,
+      artistName: t.artistName,
+      albumName: album?.albumName ?? "",
+      albumArt: album?.albumArt ?? null,
+      streams: t._count.id,
+      minutesListened: Math.round((t._sum.durationMs ?? 0) / 60000),
+    };
+  });
 }
 
 export async function getTopArtists(
   limit = 20,
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  sortBy: TopSortBy = "minutes"
 ) {
   const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
 
@@ -173,7 +204,7 @@ export async function getTopArtists(
     where,
     _count: { id: true },
     _sum: { durationMs: true },
-    orderBy: { _count: { id: "desc" } },
+    orderBy: topListOrderBy(sortBy),
     take: limit,
   });
 
@@ -218,26 +249,52 @@ export async function getRecentStreams(
 export async function getTopAlbums(
   limit = 20,
   filter?: TimeRangeFilter,
-  scope: StatsScope = "me"
+  scope: StatsScope = "me",
+  sortBy: TopSortBy = "minutes"
 ) {
   const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
 
   const albums = await db.stream.groupBy({
-    by: ["albumName", "albumArt", "artistName"],
+    by: ["albumName", "artistName"],
     where,
     _count: { id: true },
     _sum: { durationMs: true },
-    orderBy: { _count: { id: "desc" } },
+    orderBy: topListOrderBy(sortBy),
     take: limit,
   });
 
-  return albums.map((a) => ({
-    albumName: a.albumName,
-    albumArt: a.albumArt,
-    artistName: a.artistName,
-    streams: a._count.id,
-    minutesListened: Math.round((a._sum.durationMs ?? 0) / 60000),
-  }));
+  const albumArt = new Map<string, string | null>();
+  if (albums.length > 0) {
+    const artRows = await db.stream.findMany({
+      where: mergeScope(
+        {
+          OR: albums.map((a) => ({
+            albumName: a.albumName,
+            artistName: a.artistName,
+            albumArt: { not: null },
+          })),
+        },
+        scope
+      ),
+      select: { albumName: true, artistName: true, albumArt: true, playedAt: true },
+      orderBy: { playedAt: "desc" },
+    });
+    for (const row of artRows) {
+      const key = `${row.albumName}\0${row.artistName}`;
+      if (!albumArt.has(key)) albumArt.set(key, row.albumArt);
+    }
+  }
+
+  return albums.map((a) => {
+    const key = `${a.albumName}\0${a.artistName}`;
+    return {
+      albumName: a.albumName,
+      albumArt: albumArt.get(key) ?? null,
+      artistName: a.artistName,
+      streams: a._count.id,
+      minutesListened: Math.round((a._sum.durationMs ?? 0) / 60000),
+    };
+  });
 }
 
 export async function getStreamsByHour(

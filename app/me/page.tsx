@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { TopSortTabs } from "@/components/top-sort-tabs";
 import Link from "next/link";
 import { Music } from "lucide-react";
 import { OverviewMetricsGrid } from "@/components/overview-metrics-grid";
@@ -15,6 +16,7 @@ import {
   getLatestPlayAt,
   getRecentStreams,
   parseTimeRange,
+  parseTopSortBy,
   getListeningDiversity,
   getListeningSpan,
   calendarDaysInFilter,
@@ -30,12 +32,13 @@ export const dynamic = "force-dynamic";
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string; sort?: string }>;
 }) {
   const params = await searchParams;
   const cookieStore = await cookies();
   const viewerTimeZone = params.tz ?? cookieStore.get(VIEWER_TIMEZONE_COOKIE)?.value;
   const filter = parseTimeRange(params.range, params.from, params.to, viewerTimeZone);
+  const sortBy = parseTopSortBy(params.sort);
 
   const [
     stats,
@@ -48,9 +51,9 @@ export default async function OverviewPage({
     recentStreams,
   ] = await Promise.all([
     getTotalStats(filter),
-    getTopTracks(5, filter),
-    getTopArtists(5, filter),
-    getTopAlbums(5, filter),
+    getTopTracks(5, filter, "me", sortBy),
+    getTopArtists(5, filter, "me", sortBy),
+    getTopAlbums(5, filter, "me", sortBy),
     getLatestPlayAt(),
     getListeningDiversity(filter),
     getListeningSpan(filter),
@@ -195,6 +198,20 @@ export default async function OverviewPage({
         </aside>
       </div>
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <p className="text-sm text-muted-foreground">
+          Top rankings for {filter.label.toLowerCase()}
+        </p>
+        <div className="w-full min-w-0 space-y-1.5 sm:max-w-[11rem]">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Rank by
+          </p>
+          <Suspense>
+            <TopSortTabs />
+          </Suspense>
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-border/40 bg-border/15 p-px">
         <div className="overflow-hidden rounded-[15px] bg-card/80">
           <div className="grid divide-y divide-border/30 md:grid-cols-3 md:divide-x md:divide-y-0">
@@ -220,7 +237,11 @@ export default async function OverviewPage({
                         <p className="truncate text-sm font-medium leading-snug">{track.trackName}</p>
                         <p className="truncate text-xs leading-snug text-muted-foreground">{track.artistName}</p>
                       </div>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{track.streams}×</span>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {sortBy === "streams"
+                          ? `${track.streams.toLocaleString()}×`
+                          : `${track.minutesListened.toLocaleString()} min`}
+                      </span>
                     </div>
                   </li>
                 ))}
@@ -247,11 +268,15 @@ export default async function OverviewPage({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium leading-snug">{artist.artistName}</p>
                         <p className="truncate text-xs leading-snug text-muted-foreground">
-                          {artist.minutesListened.toLocaleString()} min
+                          {sortBy === "streams"
+                            ? `${artist.minutesListened.toLocaleString()} min`
+                            : `${artist.streams.toLocaleString()} plays`}
                         </p>
                       </div>
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {artist.streams.toLocaleString()}×
+                        {sortBy === "streams"
+                          ? `${artist.streams.toLocaleString()}×`
+                          : `${artist.minutesListened.toLocaleString()} min`}
                       </span>
                     </div>
                   </li>
@@ -280,7 +305,11 @@ export default async function OverviewPage({
                         <p className="truncate text-sm font-medium leading-snug">{album.albumName}</p>
                         <p className="truncate text-xs leading-snug text-muted-foreground">{album.artistName}</p>
                       </div>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{album.streams}×</span>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {sortBy === "streams"
+                          ? `${album.streams.toLocaleString()}×`
+                          : `${album.minutesListened.toLocaleString()} min`}
+                      </span>
                     </div>
                   </li>
                 ))}

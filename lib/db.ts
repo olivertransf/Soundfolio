@@ -24,7 +24,9 @@ export interface Stream {
 }
 
 type StreamDocument = Omit<Stream, "id"> & { _id: string };
-type StreamWhere = Partial<Record<keyof Stream, unknown>>;
+type StreamWhere = Partial<Record<keyof Stream, unknown>> & {
+  OR?: StreamWhere[];
+};
 type StreamSelect = Partial<Record<keyof Stream, boolean>>;
 type StreamOrderBy = Partial<Record<keyof Stream, "asc" | "desc">>;
 
@@ -71,9 +73,14 @@ export async function mongoDb(): Promise<Db> {
 }
 
 function toMongoFilter(where: StreamWhere = {}): Filter<StreamDocument> {
+  if ("OR" in where && Array.isArray(where.OR)) {
+    return { $or: where.OR.map((clause) => toMongoFilter(clause)) };
+  }
+
   const filter: Filter<StreamDocument> = {};
 
   for (const [key, value] of Object.entries(where)) {
+    if (key === "OR") continue;
     if (value === undefined) continue;
     if (key === "id") {
       filter._id = value as string;
@@ -258,7 +265,9 @@ class StreamRepository {
     where?: StreamWhere;
     _count?: Record<string, boolean>;
     _sum?: Partial<Record<keyof Stream, boolean>>;
-    orderBy?: { _count?: Record<string, "asc" | "desc"> };
+    orderBy?:
+      | { _count?: Record<string, "asc" | "desc"> }
+      | { _sum?: Partial<Record<keyof Stream, "asc" | "desc">> };
     take?: number;
   }) {
     const collection = await this.collection();
@@ -281,9 +290,13 @@ class StreamRepository {
       },
     ];
 
-    if (orderBy?._count) {
+    if (orderBy && "_count" in orderBy && orderBy._count) {
       const direction = Object.values(orderBy._count)[0] === "asc" ? 1 : -1;
       pipeline.push({ $sort: { "_count.id": direction } });
+    } else if (orderBy && "_sum" in orderBy && orderBy._sum?.durationMs) {
+      pipeline.push({
+        $sort: { "_sum.durationMs": orderBy._sum.durationMs === "asc" ? 1 : -1 },
+      });
     }
     if (take) pipeline.push({ $limit: take });
 

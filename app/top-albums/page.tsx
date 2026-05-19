@@ -1,6 +1,5 @@
-import { Suspense } from "react";
-import { getTopAlbums, parseTimeRange } from "@/lib/stats";
-import { TimeRangeTabs } from "@/components/time-range-tabs";
+import { getTopAlbums, parseTimeRange, parseTopSortBy, topSortLabel } from "@/lib/stats";
+import { TopListToolbar } from "@/components/top-list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
@@ -13,24 +12,23 @@ export const dynamic = "force-dynamic";
 export default async function TopAlbumsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string; sort?: string }>;
 }) {
   const params = await searchParams;
   const cookieStore = await cookies();
   const viewerTimeZone = params.tz ?? cookieStore.get(VIEWER_TIMEZONE_COOKIE)?.value;
   const filter = parseTimeRange(params.range, params.from, params.to, viewerTimeZone);
-  const albums = await getTopAlbums(50, filter);
+  const sortBy = parseTopSortBy(params.sort);
+  const albums = await getTopAlbums(50, filter, "me", sortBy);
 
   return (
     <div className="space-y-10">
       <PageHeader
         title="Top albums"
-        description="Albums with the strongest repeat listening."
+        description={`Albums with the strongest repeat listening. Ranked by ${topSortLabel(sortBy)}.`}
         periodLabel={filter.label}
       >
-        <Suspense>
-          <TimeRangeTabs />
-        </Suspense>
+        <TopListToolbar />
       </PageHeader>
 
       <Card className="border-border/50 bg-card/70">
@@ -43,6 +41,7 @@ export default async function TopAlbumsPage({
                 <RankedStreamRow
                   key={`${album.albumName}-${album.artistName}`}
                   rank={i + 1}
+                  sortBy={sortBy}
                   leading={
                     album.albumArt ? (
                       <Image

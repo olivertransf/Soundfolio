@@ -99,7 +99,15 @@ export async function getNowPlayingTrack(
   return mapTrack(track, new Date());
 }
 
-export async function getTrackArt(artist: string, track: string): Promise<string | null> {
+type LastFmTrackInfo = {
+  error?: number;
+  track?: {
+    duration?: string;
+    album?: { image?: { size?: string; "#text"?: string }[] };
+  };
+};
+
+async function fetchTrackInfo(artist: string, track: string): Promise<LastFmTrackInfo | null> {
   const apiKey = lastFmApiKey();
   if (!apiKey) return null;
   const params = new URLSearchParams({
@@ -110,11 +118,27 @@ export async function getTrackArt(artist: string, track: string): Promise<string
     format: "json",
   });
   const res = await fetch(`${BASE}?${params}`);
-  const data = (await safeJson(res)) as {
-    error?: number;
-    track?: { album?: { image?: { size?: string; "#text"?: string }[] } };
-  } | null;
+  const data = (await safeJson(res)) as LastFmTrackInfo | null;
   if (!data || data.error) return null;
+  return data;
+}
+
+/** Duration from Last.fm catalog metadata (seconds → ms), not how long you listened. */
+export async function getTrackDurationMs(
+  artist: string,
+  track: string
+): Promise<number | null> {
+  const data = await fetchTrackInfo(artist, track);
+  const raw = data?.track?.duration;
+  if (raw == null || raw === "") return null;
+  const seconds = parseInt(String(raw), 10);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return seconds * 1000;
+}
+
+export async function getTrackArt(artist: string, track: string): Promise<string | null> {
+  const data = await fetchTrackInfo(artist, track);
+  if (!data) return null;
   const album = data.track?.album;
   const imgs = Array.isArray(album?.image) ? album.image : [];
   const img =
@@ -122,6 +146,31 @@ export async function getTrackArt(artist: string, track: string): Promise<string
   const url = img?.["#text"];
   if (!url || url.length === 0 || isPlaceholderUrl(url)) return null;
   return url;
+}
+
+export function lastFmDefaultDurationMs(): number {
+  const raw = process.env.LASTFM_DEFAULT_DURATION_MS?.trim();
+  if (raw) {
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 180_000;
+}
+
+/** Resolve track length for scrobbles (cached per artist+track). */
+export async function resolveLastFmDurationMs(
+  artist: string,
+  track: string,
+  cache: Map<string, number>
+): Promise<number> {
+  const key = `${artist}\0${track}`;
+  const hit = cache.get(key);
+  if (hit != null) return hit;
+
+  const fromApi = await getTrackDurationMs(artist, track);
+  const ms = fromApi ?? lastFmDefaultDurationMs();
+  cache.set(key, ms);
+  return ms;
 }
 
 const PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";

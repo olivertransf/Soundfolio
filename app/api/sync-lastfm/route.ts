@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getRecentTracks, isLastFmConfigured } from "@/lib/lastfm";
+import { getRecentTracks, isLastFmConfigured, resolveLastFmDurationMs } from "@/lib/lastfm";
 import { isRequestAuthorized } from "@/lib/auth";
 import { lastFmTrackId } from "@/lib/stream-ids";
 
@@ -54,6 +54,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ synced: 0, fetched: tracks.length, message: "No current scrobbles ready" });
     }
 
+    const durationCache = new Map<string, number>();
+    const unique = new Map<string, { artist: string; name: string }>();
+    for (const t of readyTracks) {
+      const key = `${t.artist}\0${t.name}`;
+      if (!unique.has(key)) unique.set(key, { artist: t.artist, name: t.name });
+    }
+    const uniqueList = [...unique.values()];
+    const CONCURRENCY = 5;
+    for (let i = 0; i < uniqueList.length; i += CONCURRENCY) {
+      const batch = uniqueList.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        batch.map(({ artist, name }) => resolveLastFmDurationMs(artist, name, durationCache))
+      );
+    }
+
     const result = await db.stream.createMany({
       data: readyTracks.map((t) => ({
         trackId: lastFmTrackId(t.artist, t.name, t.album),
@@ -62,7 +77,7 @@ export async function POST(req: NextRequest) {
         artistArt: null,
         albumName: t.album,
         albumArt: t.image,
-        durationMs: 180000,
+        durationMs: durationCache.get(`${t.artist}\0${t.name}`)!,
         playedAt: t.playedAt,
         isDemo: false,
       })),

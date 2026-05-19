@@ -1,6 +1,5 @@
-import { Suspense } from "react";
-import { getTopArtists, parseTimeRange } from "@/lib/stats";
-import { TimeRangeTabs } from "@/components/time-range-tabs";
+import { getTopArtists, parseTimeRange, parseTopSortBy, topSortLabel } from "@/lib/stats";
+import { TopListToolbar } from "@/components/top-list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { RankedStreamRow } from "@/components/ranked-stream-row";
@@ -13,24 +12,23 @@ export const dynamic = "force-dynamic";
 export default async function TopArtistsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string; sort?: string }>;
 }) {
   const params = await searchParams;
   const cookieStore = await cookies();
   const viewerTimeZone = params.tz ?? cookieStore.get(VIEWER_TIMEZONE_COOKIE)?.value;
   const filter = parseTimeRange(params.range, params.from, params.to, viewerTimeZone);
-  const artists = await getTopArtists(50, filter);
+  const sortBy = parseTopSortBy(params.sort);
+  const artists = await getTopArtists(50, filter, "me", sortBy);
 
   return (
     <div className="space-y-10">
       <PageHeader
         title="Top artists"
-        description="The artists taking up the most space in your rotation."
+        description={`The artists taking up the most space in your rotation. Ranked by ${topSortLabel(sortBy)}.`}
         periodLabel={filter.label}
       >
-        <Suspense>
-          <TimeRangeTabs />
-        </Suspense>
+        <TopListToolbar />
       </PageHeader>
 
       <Card className="border-border/50 bg-card/70">
@@ -43,6 +41,7 @@ export default async function TopArtistsPage({
                 <RankedStreamRow
                   key={artist.artistName}
                   rank={i + 1}
+                  sortBy={sortBy}
                   leading={
                     <ArtistArt
                       src={artist.artistArt}
