@@ -154,7 +154,7 @@ export async function getTopTracks(
   const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
 
   const tracks = await db.stream.groupBy({
-    by: ["trackId", "trackName", "artistName"],
+    by: ["trackName", "artistName"],
     where,
     _count: { id: true },
     _sum: { durationMs: true },
@@ -162,25 +162,34 @@ export async function getTopTracks(
     take: limit,
   });
 
-  const trackIds = tracks.map((t) => t.trackId);
   const albumMeta = new Map<string, { albumName: string; albumArt: string | null }>();
-  if (trackIds.length > 0) {
+  if (tracks.length > 0) {
     const metaRows = await db.stream.findMany({
-      where: mergeScope({ trackId: { in: trackIds } }, scope),
-      select: { trackId: true, albumName: true, albumArt: true, playedAt: true },
+      where: mergeScope(
+        {
+          OR: tracks.map((t) => ({
+            trackName: t.trackName,
+            artistName: t.artistName,
+          })),
+        },
+        scope
+      ),
+      select: { trackName: true, artistName: true, albumName: true, albumArt: true, playedAt: true },
       orderBy: { playedAt: "desc" },
     });
     for (const row of metaRows) {
-      if (!albumMeta.has(row.trackId)) {
-        albumMeta.set(row.trackId, { albumName: row.albumName, albumArt: row.albumArt });
+      const key = `${row.trackName}\0${row.artistName}`;
+      if (!albumMeta.has(key)) {
+        albumMeta.set(key, { albumName: row.albumName, albumArt: row.albumArt });
       }
     }
   }
 
   return tracks.map((t) => {
-    const album = albumMeta.get(t.trackId);
+    const key = `${t.trackName}\0${t.artistName}`;
+    const album = albumMeta.get(key);
     return {
-      trackId: t.trackId,
+      trackId: key,
       trackName: t.trackName,
       artistName: t.artistName,
       albumName: album?.albumName ?? "",

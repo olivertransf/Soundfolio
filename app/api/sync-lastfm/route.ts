@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getRecentTracks, isLastFmConfigured, resolveLastFmDurationMs } from "@/lib/lastfm";
+import { getRecentTracks, isLastFmConfigured, lastFmScrobbleDurationMs } from "@/lib/lastfm";
 import { isRequestAuthorized } from "@/lib/auth";
-import { lastFmTrackId } from "@/lib/stream-ids";
+import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
 
 export const maxDuration = 30;
 
@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
   const username = process.env.LASTFM_USER?.trim();
   const apiKey = process.env.LASTFM_API_KEY?.trim();
   if (!isLastFmConfigured() || !username || !apiKey) {
-    // 200 (not 400): SyncOnLoad POSTs on every page load; missing env is expected until configured.
     const detail =
       !apiKey && !username
         ? "Set LASTFM_USER and LASTFM_API_KEY in .env"
@@ -54,30 +53,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ synced: 0, fetched: tracks.length, message: "No current scrobbles ready" });
     }
 
-    const durationCache = new Map<string, number>();
-    const unique = new Map<string, { artist: string; name: string }>();
-    for (const t of readyTracks) {
-      const key = `${t.artist}\0${t.name}`;
-      if (!unique.has(key)) unique.set(key, { artist: t.artist, name: t.name });
-    }
-    const uniqueList = [...unique.values()];
-    const CONCURRENCY = 5;
-    for (let i = 0; i < uniqueList.length; i += CONCURRENCY) {
-      const batch = uniqueList.slice(i, i + CONCURRENCY);
-      await Promise.all(
-        batch.map(({ artist, name }) => resolveLastFmDurationMs(artist, name, durationCache))
-      );
+    const playedAts = readyTracks.map((t) => t.playedAt);
+    const minPlayed = new Date(Math.min(...playedAts.map((d) => d.getTime())));
+    const maxPlayed = new Date(Math.max(...playedAts.map((d) => d.getTime())));
+
+    const existing = await db.stream.findMany({
+      where: {
+        isDemo: false,
+        playedAt: { gte: minPlayed, lte: maxPlayed },
+      },
+      select: { artistName: true, trackName: true, playedAt: true },
+    });
+    const seen = new Set(
+      existing.map((row) => scrobbleIdentityKey(row.artistName, row.trackName, row.playedAt))
+    );
+
+    const novel = readyTracks.filter(
+      (t) => !seen.has(scrobbleIdentityKey(t.artist, t.name, t.playedAt))
+    );
+
+    if (novel.length === 0) {
+      return NextResponse.json({
+        synced: 0,
+        fetched: tracks.length,
+        message: "No new scrobbles",
+      });
     }
 
+    const durationMs = lastFmScrobbleDurationMs();
+
     const result = await db.stream.createMany({
-      data: readyTracks.map((t) => ({
-        trackId: lastFmTrackId(t.artist, t.name, t.album),
+      data: novel.map((t) => ({
+        trackId: lastFmScrobbleStreamId(t.artist, t.name, t.playedAt),
         trackName: t.name,
         artistName: t.artist,
         artistArt: null,
         albumName: t.album,
         albumArt: t.image,
-        durationMs: durationCache.get(`${t.artist}\0${t.name}`)!,
+        durationMs,
         playedAt: t.playedAt,
         isDemo: false,
       })),

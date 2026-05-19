@@ -19,6 +19,8 @@
     "backfill-all": "npx tsx scripts/backfill-all.ts",
     "clear-placeholder-art": "npx tsx scripts/clear-placeholder-art.ts",
     "db:seed-demo": "npx tsx scripts/seed-demo.ts",
+    "db:repair-streams": "npx tsx scripts/repair-inflated-streams.ts",
+    "db:repair-streams:dry-run": "npx tsx scripts/repair-inflated-streams.ts --dry-run",
     "export-obsidian-stats": "npx tsx scripts/export-obsidian-stats.ts"
   },
   "dependencies": {

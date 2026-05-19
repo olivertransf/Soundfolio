@@ -123,7 +123,9 @@ async function fetchTrackInfo(artist: string, track: string): Promise<LastFmTrac
   return data;
 }
 
-/** Duration from Last.fm catalog metadata (seconds → ms), not how long you listened. */
+const MAX_SCROBBLE_MS = 15 * 60 * 1000;
+
+/** Duration from Last.fm catalog metadata (seconds → ms), not listen time. */
 export async function getTrackDurationMs(
   artist: string,
   track: string
@@ -131,9 +133,17 @@ export async function getTrackDurationMs(
   const data = await fetchTrackInfo(artist, track);
   const raw = data?.track?.duration;
   if (raw == null || raw === "") return null;
-  const seconds = parseInt(String(raw), 10);
-  if (!Number.isFinite(seconds) || seconds <= 0) return null;
-  return seconds * 1000;
+  const n = parseInt(String(raw), 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  // Last.fm uses seconds; very large values are sometimes ms mislabeled.
+  let ms = n > 7200 ? n : n * 1000;
+  if (ms > MAX_SCROBBLE_MS) ms = MAX_SCROBBLE_MS;
+  return ms;
+}
+
+/** Minutes credited per Last.fm scrobble (we don't get real listen time). */
+export function lastFmScrobbleDurationMs(): number {
+  return lastFmDefaultDurationMs();
 }
 
 export async function getTrackArt(artist: string, track: string): Promise<string | null> {
@@ -155,22 +165,6 @@ export function lastFmDefaultDurationMs(): number {
     if (Number.isFinite(n) && n > 0) return n;
   }
   return 180_000;
-}
-
-/** Resolve track length for scrobbles (cached per artist+track). */
-export async function resolveLastFmDurationMs(
-  artist: string,
-  track: string,
-  cache: Map<string, number>
-): Promise<number> {
-  const key = `${artist}\0${track}`;
-  const hit = cache.get(key);
-  if (hit != null) return hit;
-
-  const fromApi = await getTrackDurationMs(artist, track);
-  const ms = fromApi ?? lastFmDefaultDurationMs();
-  cache.set(key, ms);
-  return ms;
 }
 
 const PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
