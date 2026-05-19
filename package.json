@@ -2,30 +2,28 @@
   "name": "soundfolio",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "npx prisma generate && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:generate": "npx prisma generate",
-    "db:migrate": "npx prisma migrate dev",
-    "db:push": "npx prisma db push",
-    "db:studio": "npx prisma studio",
+    "db:indexes": "npx tsx scripts/ensure-indexes.ts",
+    "db:migrate:postgres": "npx tsx scripts/migrate-postgres-to-mongodb.ts",
+    "db:normalize-lastfm": "npx tsx scripts/normalize-lastfm-streams.ts",
+    "sync:lastfm": "npx tsx scripts/sync-lastfm.ts",
     "backfill-art": "npx tsx scripts/backfill-art.ts",
     "backfill-artists": "npx tsx scripts/backfill-artists.ts",
     "backfill-all": "npx tsx scripts/backfill-all.ts",
     "clear-placeholder-art": "npx tsx scripts/clear-placeholder-art.ts",
     "db:seed-demo": "npx tsx scripts/seed-demo.ts",
-    "remove-demo": "bash scripts/remove-demo.sh"
+    "export-obsidian-stats": "npx tsx scripts/export-obsidian-stats.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
-    "@netlify/functions": "^5.1.2",
-    "@netlify/plugin-nextjs": "^5.15.9",
-    "@prisma/adapter-pg": "^7.4.2",
-    "@prisma/client": "^7.4.2",
     "@types/adm-zip": "^0.5.7",
-    "@types/pg": "^8.18.0",
     "adm-zip": "^0.5.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -33,9 +31,8 @@
     "dotenv": "^17.3.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
+    "mongodb": "^7.2.0",
     "next": "16.1.6",
-    "pg": "^8.20.0",
-    "prisma": "^7.4.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.8.0",
@@ -46,12 +43,17 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.37",
+    "@types/pg": "^8.18.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "pg": "^8.20.0",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-darwin-arm64": "^4.2.1"
   }
 }

@@ -46,8 +46,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-/lib/generated/prisma
-
-# Local Netlify folder
-.netlify

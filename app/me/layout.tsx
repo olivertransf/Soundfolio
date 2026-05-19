@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
-const AUTH_COOKIE = "soundfolio_auth";
+import { AUTH_COOKIE } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 

@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 
 type LocalDateTimeProps = {
-  /** Prisma `Date` serializes to ISO when passed from a Server Component */
+  /** Dates serialize to ISO strings when passed from a Server Component. */
   date: string | Date;
   pattern: string;
   className?: string;

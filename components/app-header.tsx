@@ -1,17 +1,13 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, X, MoreHorizontal } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DisplayPreferences } from "@/components/display-preferences";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { LiveSyncStatus } from "@/components/live-sync-status";
 import { createNavLinks, type NavAppKind } from "@/lib/nav-links";
 import {
   defaultStatsNavQuery,
@@ -36,7 +32,6 @@ export function AppHeader({
   onMobileOpenChange: (open: boolean) => void;
 }) {
   const pathname = usePathname();
-  const [moreOpen, setMoreOpen] = useState(false);
   const [statsNavQuery, setStatsNavQuery] = useState(() => defaultStatsNavQuery());
 
   const navApp: NavAppKind = pathname.startsWith("/demo") ? "demo" : "main";
@@ -45,16 +40,10 @@ export function AppHeader({
     setStatsNavQuery(statsQueryFromStoredFilter(getStoredTimeFilter()));
   }, [pathname]);
 
-  const { main: NAV_MAIN, topRanked: NAV_TOP, more: NAV_LINKS_MORE, all: NAV_LINKS } =
-    createNavLinks(navApp, statsNavQuery);
+  const { all: NAV_LINKS } = createNavLinks(navApp, statsNavQuery);
 
   const homeHref =
     navApp === "demo" ? `/demo?${statsNavQuery}` : `/me?${statsNavQuery}`;
-
-  const moreActive = NAV_LINKS_MORE.some((l) => pathMatchesNav(pathname, l.href));
-  const showMore = NAV_LINKS_MORE.length > 0;
-  const [topOpen, setTopOpen] = useState(false);
-  const topRankActive = NAV_TOP.some((l) => pathMatchesNav(pathname, l.href));
 
   return (
     <>
@@ -75,97 +64,23 @@ export function AppHeader({
           >
             <div className="flex min-w-0 max-w-full justify-center overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden touch-pan-x py-2">
               <div className="flex w-max flex-nowrap items-center gap-0.5 sm:gap-1">
-                {NAV_MAIN.map((link, index) => {
+                {NAV_LINKS.map((link) => {
                   const { href, label, shortLabel, icon: Icon } = link;
                   const active = pathMatchesNav(pathname, href);
                   return (
-                    <Fragment key={href}>
-                      <Link href={href} className={navLinkClass(active)}>
-                        <Icon className="h-3.5 w-3.5 opacity-80" aria-hidden />
-                        <span className="hidden xl:inline">{label}</span>
-                        <span className="xl:hidden">{shortLabel}</span>
-                      </Link>
-                      {index === 0 ? (
-                        <Popover open={topOpen} onOpenChange={setTopOpen}>
-                          <PopoverTrigger
-                            type="button"
-                            className={cn(navLinkClass(topRankActive), "gap-1")}
-                            aria-expanded={topOpen}
-                            aria-haspopup="menu"
-                          >
-                            <span className="hidden xl:inline">Top</span>
-                            <span className="xl:hidden">Top</span>
-                            <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden />
-                          </PopoverTrigger>
-                          <PopoverContent className="w-52 p-1" align="start" sideOffset={6}>
-                            <div className="flex flex-col gap-0.5" role="menu">
-                              {NAV_TOP.map(({ href: th, label: tl, icon: TIcon }) => {
-                                const a = pathMatchesNav(pathname, th);
-                                return (
-                                  <Link
-                                    key={th}
-                                    href={th}
-                                    role="menuitem"
-                                    onClick={() => setTopOpen(false)}
-                                    className={cn(
-                                      "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
-                                      a
-                                        ? "bg-primary/12 text-primary"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                                    )}
-                                  >
-                                    <TIcon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                                    {tl}
-                                  </Link>
-                                );
-                              })}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      ) : null}
-                    </Fragment>
+                    <Link key={href} href={href} className={navLinkClass(active)}>
+                      <Icon className="h-3.5 w-3.5 opacity-80" aria-hidden />
+                      <span className="hidden 2xl:inline">{label}</span>
+                      <span className="2xl:hidden">{shortLabel}</span>
+                    </Link>
                   );
                 })}
-                {showMore ? (
-                  <Popover open={moreOpen} onOpenChange={setMoreOpen}>
-                    <PopoverTrigger
-                      type="button"
-                      className={cn(navLinkClass(moreActive), "gap-1.5")}
-                      aria-expanded={moreOpen}
-                    >
-                      <MoreHorizontal className="h-3.5 w-3.5 opacity-80" aria-hidden />
-                      <span>More</span>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-52 p-1" align="center" sideOffset={6}>
-                      <div className="flex flex-col gap-0.5">
-                        {NAV_LINKS_MORE.map(({ href, label, icon: Icon }) => {
-                          const active = pathMatchesNav(pathname, href);
-                          return (
-                            <Link
-                              key={href}
-                              href={href}
-                              onClick={() => setMoreOpen(false)}
-                              className={cn(
-                                "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
-                                active
-                                  ? "bg-primary/12 text-primary"
-                                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                              )}
-                            >
-                              <Icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                              {label}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                ) : null}
               </div>
             </div>
           </nav>
 
           <div className="flex items-center justify-self-end gap-1">
+            <LiveSyncStatus />
             <DisplayPreferences />
             <Button
               type="button"

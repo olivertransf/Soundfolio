@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ interface ImportResult {
 }
 
 export default function HistoryImportPage() {
+  const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export default function HistoryImportPage() {
           synced: data.synced ?? 0,
           message: data.synced > 0 ? `Added ${data.synced} scrobbles` : data.message ?? "No new scrobbles",
         });
+        if ((data.synced ?? 0) > 0) router.refresh();
       }
     } catch {
       setLastfmResult({ synced: 0, error: "Network error" });
@@ -84,6 +87,7 @@ export default function HistoryImportPage() {
       if (!res.ok) throw new Error(data.error ?? "Backfill failed");
       setBackfillResult({ updated: data.updated, total: data.total ?? 0, remaining: data.remaining });
       setBackfillStatus("done");
+      if ((data.updated ?? 0) > 0) router.refresh();
     } catch (e) {
       setBackfillStatus("error");
       const msg = e instanceof Error ? e.message : "Backfill failed";
@@ -126,6 +130,7 @@ export default function HistoryImportPage() {
       setResult(data);
       setStatus("success");
       setProgress(100);
+      if ((data.inserted ?? 0) > 0) router.refresh();
     } catch {
       setError("Network error. Please try again.");
       setStatus("error");
@@ -145,15 +150,16 @@ export default function HistoryImportPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Import Spotify data</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Data center</h1>
         <p className="mt-1 text-muted-foreground">
-          Upload your Spotify data export for history. New listens sync from Last.fm only (works without Spotify Premium).
+          Import history, sync new plays, and fill missing artwork from one place.
         </p>
       </div>
 
-      <Card>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
+      <Card className="lg:row-span-2">
         <CardHeader>
           <CardTitle className="text-base">How to get your data export</CardTitle>
           <CardDescription>Takes 1-5 days for Spotify to prepare</CardDescription>
@@ -288,6 +294,7 @@ export default function HistoryImportPage() {
           )}
         </CardContent>
       </Card>
+      </div>
 
       <Card>
         <CardHeader>

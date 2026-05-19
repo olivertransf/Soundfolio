@@ -13,13 +13,18 @@ export async function POST(req: NextRequest) {
   return runSync();
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   return runSync();
 }
 
 async function runSync() {
   try {
     const latest = await db.stream.findFirst({
+      where: { isDemo: false },
       orderBy: { playedAt: "desc" },
       select: { playedAt: true },
     });
@@ -48,6 +53,7 @@ async function runSync() {
         albumArt: item.track.album.images[0]?.url ?? null,
         durationMs: item.track.duration_ms,
         playedAt: new Date(item.played_at),
+        isDemo: false,
       })),
       skipDuplicates: true,
     });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import AdmZip from "adm-zip";
 import { db } from "@/lib/db";
+import { isRequestAuthorized } from "@/lib/auth";
 
 function parseSpotifyPlayedAt(ts: string): Date {
   const s = String(ts).trim();
@@ -25,6 +26,10 @@ interface SpotifyStreamEntry {
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  if (!isRequestAuthorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
