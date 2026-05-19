@@ -1,6 +1,6 @@
 /**
- * Inserts synthetic demo streams into Postgres (`isDemo: true`).
- * Run after `npm run db:push` / migrate so the `isDemo` column exists.
+ * Inserts synthetic demo streams into MongoDB (`isDemo: true`).
+ * Run after `npm run db:indexes`.
  *
  *   npx tsx scripts/seed-demo.ts
  */

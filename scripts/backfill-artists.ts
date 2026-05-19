@@ -54,7 +54,8 @@ async function run() {
 
 async function main() {
   let round = 0;
-  while (true) {
+  const maxRounds = Number(process.env.BACKFILL_MAX_ROUNDS ?? 10);
+  while (round < maxRounds) {
     round++;
     console.log(`--- Round ${round} ---`);
     const done = await run();
@@ -63,9 +64,16 @@ async function main() {
       break;
     }
   }
+  if (round >= maxRounds) {
+    console.log(`Stopped after ${maxRounds} rounds. Some artists may not have resolvable artwork.`);
+  }
 }
 
-main().catch((err) => {
-  console.error("Backfill error:", err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error("Backfill error:", err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await db.$disconnect();
+  });

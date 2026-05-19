@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getArtistArtFromDiscogs } from "@/lib/discogs";
 import { getArtistArtFromDeezer } from "@/lib/deezer";
 import { getArtistArt } from "@/lib/lastfm";
+import { isRequestAuthorized } from "@/lib/auth";
 
 export const maxDuration = 60;
 
@@ -17,7 +18,11 @@ async function getArtistImage(artistName: string): Promise<string | null> {
   return getArtistArt(artistName);
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  if (!isRequestAuthorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const missing = await db.stream.groupBy({
       by: ["artistName"],

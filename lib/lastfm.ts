@@ -1,7 +1,18 @@
 import { safeJson } from "@/lib/safe-json";
 
-const API_KEY = process.env.LASTFM_API_KEY!;
 const BASE = "https://ws.audioscrobbler.com/2.0/";
+
+function lastFmApiKey() {
+  return process.env.LASTFM_API_KEY?.trim() ?? "";
+}
+
+function lastFmUsername() {
+  return process.env.LASTFM_USER?.trim() ?? "";
+}
+
+export function isLastFmConfigured() {
+  return Boolean(lastFmApiKey() && lastFmUsername());
+}
 
 interface LastFmTrack {
   artist: { "#text": string };
@@ -9,6 +20,7 @@ interface LastFmTrack {
   album?: { "#text": string };
   date?: { uts: string };
   image?: { "#text": string; size: string }[];
+  "@attr"?: { nowplaying?: "true" };
 }
 
 interface LastFmResponse {
@@ -25,28 +37,22 @@ export async function getRecentTracks(
   limit = 50,
   fromTimestamp?: number
 ): Promise<{ artist: string; name: string; album: string; playedAt: Date; image: string | null }[]> {
+  const apiKey = lastFmApiKey();
+  if (!apiKey) return [];
+
   const params = new URLSearchParams({
     method: "user.getRecentTracks",
     user: username,
-    api_key: API_KEY,
+    api_key: apiKey,
     format: "json",
     limit: String(limit),
   });
   if (fromTimestamp) params.set("from", String(fromTimestamp));
 
-  const res = await fetch(`${BASE}?${params}`);
-  const text = await res.text();
-  let data: LastFmResponse;
-  try {
-    data = JSON.parse(text) as LastFmResponse;
-  } catch {
-    throw new Error(
-      `Last.fm returned non-JSON (HTTP ${res.status}). Check network or API status.`
-    );
-  }
-
-  if (data.error) {
-    throw new Error(data.message ?? `Last.fm API error ${data.error}`);
+  const res = await fetch(`${BASE}?${params}`, { cache: "no-store" });
+  const data = (await safeJson(res)) as LastFmResponse | null;
+  if (!data || data.error) {
+    throw new Error(data?.message ?? `Last.fm API error ${data?.error ?? res.status}`);
   }
 
   const raw = data.recenttracks?.track;
@@ -55,27 +61,52 @@ export async function getRecentTracks(
 
   return tracks
     .filter((t) => t.date?.uts)
-    .map((t) => {
-      const imgs = Array.isArray(t.image) ? t.image : [];
-      const img = imgs.find((i: { size?: string }) => i?.size === "extralarge" || i?.size === "large") ?? imgs[imgs.length - 1];
-      const imgUrl = img && typeof img === "object" && "#text" in img ? (img as { "#text": string })["#text"] : null;
-      return {
-        artist: (t.artist as { "#text"?: string })?.["#text"] ?? "Unknown",
-        name: t.name ?? "Unknown",
-        album: (t.album as { "#text"?: string })?.["#text"] ?? "",
-        playedAt: new Date(parseInt(t.date!.uts, 10) * 1000),
-        image: imgUrl && imgUrl.length > 0 ? imgUrl : null,
-      };
-    });
+    .map((t) => mapTrack(t, new Date(parseInt(t.date!.uts, 10) * 1000)));
+}
+
+function mapTrack(t: LastFmTrack, playedAt: Date) {
+  const imgs = Array.isArray(t.image) ? t.image : [];
+  const img = imgs.find((i: { size?: string }) => i?.size === "extralarge" || i?.size === "large") ?? imgs[imgs.length - 1];
+  const imgUrl = img && typeof img === "object" && "#text" in img ? (img as { "#text": string })["#text"] : null;
+  return {
+    artist: (t.artist as { "#text"?: string })?.["#text"] ?? "Unknown",
+    name: t.name ?? "Unknown",
+    album: (t.album as { "#text"?: string })?.["#text"] ?? "",
+    playedAt,
+    image: imgUrl && imgUrl.length > 0 ? imgUrl : null,
+  };
+}
+
+export async function getNowPlayingTrack(
+  username: string
+): Promise<ReturnType<typeof mapTrack> | null> {
+  const apiKey = lastFmApiKey();
+  if (!apiKey) return null;
+  const params = new URLSearchParams({
+    method: "user.getRecentTracks",
+    user: username,
+    api_key: apiKey,
+    format: "json",
+    limit: "1",
+  });
+
+  const res = await fetch(`${BASE}?${params}`, { cache: "no-store" });
+  const data = (await safeJson(res)) as LastFmResponse | null;
+  if (!data || data.error) return null;
+  const raw = data.recenttracks?.track;
+  const [track] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  if (!track || track["@attr"]?.nowplaying !== "true") return null;
+  return mapTrack(track, new Date());
 }
 
 export async function getTrackArt(artist: string, track: string): Promise<string | null> {
-  if (!API_KEY) return null;
+  const apiKey = lastFmApiKey();
+  if (!apiKey) return null;
   const params = new URLSearchParams({
     method: "track.getInfo",
     artist,
     track,
-    api_key: API_KEY,
+    api_key: apiKey,
     format: "json",
   });
   const res = await fetch(`${BASE}?${params}`);
@@ -100,11 +131,12 @@ function isPlaceholderUrl(url: string): boolean {
 }
 
 export async function getArtistArt(artist: string): Promise<string | null> {
-  if (!API_KEY) return null;
+  const apiKey = lastFmApiKey();
+  if (!apiKey) return null;
   const params = new URLSearchParams({
     method: "artist.getInfo",
     artist,
-    api_key: API_KEY,
+    api_key: apiKey,
     format: "json",
   });
   const res = await fetch(`${BASE}?${params}`);

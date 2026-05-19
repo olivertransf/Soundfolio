@@ -26,7 +26,8 @@ function runUntilDone(
   label: string
 ): void {
   let round = 0;
-  while (true) {
+  const maxRounds = Number(process.env.BACKFILL_MAX_ROUNDS ?? 10);
+  while (round < maxRounds) {
     round++;
     console.log(`\n--- ${label} round ${round} ---`);
     const { output, ok } = run(script);
@@ -40,6 +41,7 @@ function runUntilDone(
       process.exit(1);
     }
   }
+  console.log(`\n${label} stopped after ${maxRounds} rounds. Some artwork may not be resolvable.`);
 }
 
 async function main() {

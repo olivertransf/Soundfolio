@@ -4,7 +4,7 @@ This app is a **Next.js website** (runs in a browser). Obsidian does not execute
 
 ## 1. Embed the deployed site (simplest)
 
-After you deploy (e.g. Netlify/Vercel), install a community plugin that loads external URLs in a pane:
+After you deploy to Vercel, install a community plugin that loads external URLs in a pane:
 
 | Approach | Notes |
 |----------|--------|

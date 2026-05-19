@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { ChartXAxis } from "@/components/listening-chart";
+import type { ChartMetric, ChartXAxis } from "@/components/listening-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GroupBySelect, type GroupByMode } from "@/components/group-by-select";
 import { TimeRangeTabs } from "@/components/time-range-tabs";
@@ -48,17 +48,22 @@ export function ListeningActivity({
   periodLabel,
   historyApiPath = "/api/stats/history",
   compact = false,
+  className,
 }: {
   periodLabel: string;
   historyApiPath?: string;
   /** Denser layout and shorter chart for overview / dashboards. */
   compact?: boolean;
+  className?: string;
 }) {
   const searchParams = useSearchParams();
   const [granularity, setGranularity] = useState<GroupByMode>("weeks");
   const [data, setData] = useState<Point[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [timeZone, setTimeZone] = useState<string>("");
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [metric, setMetric] = useState<ChartMetric>("minutes");
 
   const range = searchParams.get("range") ?? "";
   const from = searchParams.get("from") ?? "";
@@ -67,9 +72,26 @@ export function ListeningActivity({
   useEffect(() => {
     try {
       setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+      const raw = window.localStorage.getItem("soundfolio:display-preferences");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { chartMetric?: ChartMetric };
+        if (parsed.chartMetric === "minutes" || parsed.chartMetric === "streams" || parsed.chartMetric === "both") {
+          setMetric(parsed.chartMetric);
+        }
+      }
     } catch {
       setTimeZone("");
     }
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setRefreshTick((tick) => tick + 1), 45_000);
+    const onFocus = () => setRefreshTick((tick) => tick + 1);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -78,6 +100,7 @@ export function ListeningActivity({
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     const params = new URLSearchParams({
       mode: granularityConfig[granularity].apiMode,
     });
@@ -91,13 +114,16 @@ export function ListeningActivity({
         setData(d.data ?? []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [granularity, range, from, to, timeZone, historyApiPath]);
+      .catch(() => {
+        setError("Could not load chart data.");
+        setLoading(false);
+      });
+  }, [granularity, range, from, to, timeZone, historyApiPath, refreshTick]);
 
   const cfg = granularityConfig[granularity];
 
-  const chartH = compact ? 200 : 300;
-  const loadH = compact ? 180 : 280;
+  const chartH = compact ? 220 : 300;
+  const loadH = compact ? 200 : 280;
 
   const filterRow = (
     <div
@@ -128,7 +154,7 @@ export function ListeningActivity({
   );
 
   return (
-    <div className={cn(compact ? "space-y-3" : "space-y-6")}>
+    <div className={cn(compact ? "space-y-3" : "space-y-6", className)}>
       {compact ? (
         <div className="rounded-2xl border border-border/40 bg-card/30 px-4 py-3">
           {filterRow}
@@ -139,10 +165,10 @@ export function ListeningActivity({
 
       <Card
         className={cn(
-          "overflow-hidden shadow-none",
+          "shadow-none",
           compact
             ? "rounded-2xl border border-border/40 bg-card/40 ring-0"
-            : "border-border/50 bg-card/60 ring-1 ring-border/40"
+            : "overflow-hidden border-border/50 bg-card/60 ring-1 ring-border/40"
         )}
       >
         <CardHeader
@@ -160,17 +186,24 @@ export function ListeningActivity({
             <p className="text-xs leading-relaxed text-muted-foreground">{periodLabel}</p>
           ) : (
             <p className="text-sm leading-relaxed text-muted-foreground">
-              {periodLabel}. Use the streams line toggle to compare play counts.
+              {periodLabel}. Compare minutes and plays in one view.
             </p>
           )}
         </CardHeader>
-        <CardContent className={cn("pt-0", compact ? "px-4 pb-4" : undefined)}>
+        <CardContent className={cn("pt-0", compact ? "px-4 pb-5" : undefined)}>
           {loading ? (
             <div
               className="flex items-center justify-center rounded-xl bg-secondary/20 text-sm text-muted-foreground"
               style={{ minHeight: loadH }}
             >
               Loading chart…
+            </div>
+          ) : error ? (
+            <div
+              className="flex items-center justify-center rounded-xl border border-destructive/30 bg-destructive/10 px-4 text-center text-sm text-destructive"
+              style={{ minHeight: loadH }}
+            >
+              {error}
             </div>
           ) : data.length === 0 ? (
             <div
@@ -183,8 +216,9 @@ export function ListeningActivity({
             <ListeningChart
               data={data}
               xAxis={cfg.xAxis}
-              metric="minutes"
+              metric={metric}
               height={chartH}
+              compact={compact}
             />
           )}
         </CardContent>

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ListeningActivity } from "@/components/listening-activity";
 import { HomePatternsSection } from "@/components/home-patterns-section";
+import { RecentPlaysList } from "@/components/recent-plays-list";
 import {
   getTotalStats,
   getTopTracks,
@@ -21,7 +22,6 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { AlbumArt } from "@/components/album-art";
 import { ArtistArt } from "@/components/artist-art";
-import { LocalDateTime } from "@/components/local-datetime";
 import { cookies } from "next/headers";
 import { VIEWER_TIMEZONE_COOKIE } from "@/lib/stats-timezone";
 
@@ -54,7 +54,7 @@ export default async function OverviewPage({
     getLatestPlayAt(),
     getListeningDiversity(filter),
     getListeningSpan(filter),
-    getRecentStreams(10),
+    getRecentStreams(7),
   ]);
 
   const days = calendarDaysInFilter(filter, span);
@@ -94,42 +94,61 @@ export default async function OverviewPage({
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 sm:space-y-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Overview</h1>
-            <Badge
-              variant="secondary"
-              className="rounded-md border-0 bg-muted/80 px-2.5 py-0.5 text-xs font-normal text-muted-foreground"
-            >
-              {filter.label}
-            </Badge>
+      <section className="overflow-hidden rounded-3xl border border-border/50 bg-card/55 p-5 shadow-2xl ring-1 ring-border/30 sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 text-primary">
+                {filter.label}
+              </Badge>
+              <Badge variant="outline" className="rounded-full border-border/60 text-muted-foreground">
+                Live stats
+              </Badge>
+            </div>
+            <div>
+              <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-5xl">
+                Your listening, tuned live.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                Explore the shape of your Spotify history with live refresh,
+                richer charts, and controls that stay out of your way.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-sm">
+              <Link href="#listening" className="rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90">
+                View chart
+              </Link>
+              <Link href="#patterns" className="rounded-full border border-border/60 bg-secondary/30 px-4 py-2 font-medium text-foreground hover:bg-secondary/50">
+                View patterns
+              </Link>
+            </div>
           </div>
-          <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Rankings for this period are below. Open{" "}
-            <Link href="#patterns" className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline">
-              patterns
-            </Link>{" "}
-            for when you listen, or{" "}
-            <Link href="/history" className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline">
-              history
-            </Link>{" "}
-            for the full chart, play log, and imports.
-          </p>
+          <div className="grid gap-2 rounded-2xl border border-border/50 bg-background/45 p-4 text-sm sm:min-w-64">
+            <div className="flex items-center justify-between gap-6">
+              <span className="text-muted-foreground">Last play</span>
+              <span className="font-medium tabular-nums text-foreground">
+                {latestPlayAt ? formatDistanceToNow(latestPlayAt, { addSuffix: true }) : "No plays"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-6">
+              <span className="text-muted-foreground">Average</span>
+              <span className="font-medium tabular-nums text-foreground">
+                {avgMinPerDay.toLocaleString()} min / day
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-6">
+              <span className="text-muted-foreground">Library</span>
+              <span className="font-medium tabular-nums text-foreground">
+                {diversity.uniqueTracks.toLocaleString()} tracks
+              </span>
+            </div>
+          </div>
         </div>
-        {latestPlayAt ? (
-          <p className="shrink-0 text-sm leading-relaxed text-muted-foreground sm:max-w-[14rem] sm:pt-0.5 sm:text-right">
-            Last play{" "}
-            <span className="font-medium tabular-nums text-foreground">
-              {formatDistanceToNow(latestPlayAt, { addSuffix: true })}
-            </span>
-          </p>
-        ) : null}
-      </div>
+      </section>
 
       <OverviewMetricsGrid metrics={metrics} />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_min(100%,15.5rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_min(100%,17.5rem)] xl:gap-5">
+      <div id="listening" className="grid scroll-mt-24 gap-4 lg:grid-cols-[minmax(0,1fr)_min(100%,15.5rem)] lg:items-stretch xl:grid-cols-[minmax(0,1fr)_min(100%,17.5rem)] xl:gap-5">
         <Suspense
           fallback={
             <Card className="rounded-2xl border border-border/40 bg-card/40 shadow-none ring-0">
@@ -142,12 +161,12 @@ export default async function OverviewPage({
           <ListeningActivity periodLabel={filter.label} compact />
         </Suspense>
 
-        <aside className="min-w-0 lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:self-start">
-          <div className="rounded-2xl border border-border/40 bg-border/15 p-px">
-            <div className="overflow-hidden rounded-[15px] bg-card/80">
+        <aside className="min-w-0 lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:self-stretch">
+          <div className="flex h-full min-h-0 flex-col rounded-2xl border border-border/40 bg-border/15 p-px">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[15px] bg-card/80">
               <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Recent plays
+                  Recent
                 </h2>
                 <Link
                   href="/history/recent"
@@ -156,45 +175,20 @@ export default async function OverviewPage({
                   View all
                 </Link>
               </div>
-              <div className="px-2 pb-3 pt-1">
-                {recentStreams.length === 0 ? (
-                  <p className="px-2 py-6 text-center text-sm leading-relaxed text-muted-foreground">
-                    Nothing yet.{" "}
-                    <Link href="/history/import" className="font-medium text-primary hover:underline">
-                      Import data
-                    </Link>
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-border/25">
-                    {recentStreams.map((stream) => (
-                      <li key={stream.id}>
-                        <div className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/25">
-                          <AlbumArt
-                            src={stream.albumArt}
-                            alt={stream.albumName}
-                            width={32}
-                            height={32}
-                            className="size-8 shrink-0 rounded-md ring-1 ring-border/25"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium leading-snug">{stream.trackName}</p>
-                            <p className="truncate text-xs leading-snug text-muted-foreground">
-                              {stream.artistName}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-xs tabular-nums leading-none text-muted-foreground">
-                              <LocalDateTime date={stream.playedAt} pattern="MMM d" />
-                            </p>
-                            <p className="text-xs tabular-nums leading-none text-muted-foreground">
-                              <LocalDateTime date={stream.playedAt} pattern="h:mm a" />
-                            </p>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+              <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
+                <RecentPlaysList
+                  compact
+                  limit={7}
+                  pollMs={20_000}
+                  initialStreams={recentStreams.map((stream) => ({
+                    id: stream.id,
+                    trackName: stream.trackName,
+                    artistName: stream.artistName,
+                    albumName: stream.albumName,
+                    albumArt: stream.albumArt,
+                    playedAt: stream.playedAt.toISOString(),
+                  }))}
+                />
               </div>
             </div>
           </div>

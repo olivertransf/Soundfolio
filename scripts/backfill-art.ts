@@ -68,7 +68,11 @@ async function main() {
   console.log(`Updated ${updated} streams. ${remaining} track groups remaining.`);
 }
 
-main().catch((err) => {
-  console.error("Backfill error:", err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error("Backfill error:", err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await db.$disconnect();
+  });

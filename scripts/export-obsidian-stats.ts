@@ -1,7 +1,7 @@
 /**
  * Export stats JSON for the Obsidian plugin "spotify-stats-view" (no auth).
  *
- * Usage (from repo root, DATABASE_URL in .env):
+ * Usage (from repo root, MONGODB_URI in .env.local):
  *   npx tsx scripts/export-obsidian-stats.ts [range] [output.json]
  *
  * range: ytd | all | 30d | 3m | 6m | 1y  (default: ytd)
@@ -11,6 +11,7 @@
 import "dotenv/config";
 import { writeFileSync } from "fs";
 import { format, parse } from "date-fns";
+import { db } from "../lib/db";
 import {
   parseTimeRange,
   getTotalStats,
@@ -68,7 +69,11 @@ async function main() {
   console.log(`Wrote ${outPath} (${filter.label})`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await db.$disconnect();
+  });

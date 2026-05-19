@@ -1,13 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getRecentTracks } from "@/lib/lastfm";
+import { getRecentTracks, isLastFmConfigured } from "@/lib/lastfm";
+import { isRequestAuthorized } from "@/lib/auth";
+import { lastFmTrackId } from "@/lib/stream-ids";
 
 export const maxDuration = 30;
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  if (!isRequestAuthorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const username = process.env.LASTFM_USER?.trim();
   const apiKey = process.env.LASTFM_API_KEY?.trim();
-  if (!username || !apiKey) {
+  if (!isLastFmConfigured() || !username || !apiKey) {
     // 200 (not 400): SyncOnLoad POSTs on every page load; missing env is expected until configured.
     const detail =
       !apiKey && !username
@@ -24,25 +30,33 @@ export async function POST() {
   }
 
   try {
+    const now = new Date();
     const latest = await db.stream.findFirst({
-      where: { isDemo: false },
+      where: { isDemo: false, playedAt: { lte: now } },
       orderBy: { playedAt: "desc" },
       select: { playedAt: true },
     });
 
     const fromTimestamp = latest?.playedAt
-      ? Math.floor(latest.playedAt.getTime() / 1000)
+      ? Math.max(0, Math.floor(latest.playedAt.getTime() / 1000) - 120)
       : undefined;
 
-    const tracks = await getRecentTracks(username, 50, fromTimestamp);
+    const tracks = await getRecentTracks(username, 200, fromTimestamp);
 
     if (tracks.length === 0) {
       return NextResponse.json({ synced: 0, message: "No new scrobbles" });
     }
 
+    const readyThroughMs = Date.now() + 5 * 60 * 1000;
+    const readyTracks = tracks.filter((track) => track.playedAt.getTime() <= readyThroughMs);
+
+    if (readyTracks.length === 0) {
+      return NextResponse.json({ synced: 0, fetched: tracks.length, message: "No current scrobbles ready" });
+    }
+
     const result = await db.stream.createMany({
-      data: tracks.map((t) => ({
-        trackId: `lfm-${t.playedAt.getTime()}`,
+      data: readyTracks.map((t) => ({
+        trackId: lastFmTrackId(t.artist, t.name, t.album),
         trackName: t.name,
         artistName: t.artist,
         artistArt: null,
@@ -67,5 +81,5 @@ export async function POST() {
 }
 
 export async function GET() {
-  return POST();
+  return NextResponse.json({ error: "Use POST" }, { status: 405 });
 }

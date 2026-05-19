@@ -1,9 +1,5 @@
-import type { Prisma } from "@/lib/generated/prisma";
 import { db } from "@/lib/db";
 import {
-  startOfYear,
-  startOfDay,
-  endOfDay,
   subMonths,
   subWeeks,
   subDays,
@@ -17,6 +13,9 @@ import {
   getHourInTimeZone,
   getDayOfWeekInTimeZone,
   formatCalendarDateInZone,
+  startOfCalendarDateInZone,
+  endOfCalendarDateInZone,
+  startOfYearInZone,
 } from "@/lib/stats-timezone";
 
 export type TimeRangePreset = "30d" | "3m" | "6m" | "1y" | "ytd" | "all";
@@ -32,10 +31,17 @@ export interface TimeRangeFilter {
 /** `me` = real library; `demo` = seeded preview rows (`isDemo: true`). */
 export type StatsScope = "me" | "demo";
 
-function mergeScope(
-  base: Prisma.StreamWhereInput,
-  scope: StatsScope
-): Prisma.StreamWhereInput {
+type StreamWhere = {
+  playedAt?: { gte?: Date; lte?: Date };
+  isDemo?: boolean;
+  artistName?: string | { in?: string[] };
+  artistArt?: string | null | { not?: null };
+  albumArt?: string | null;
+  trackId?: string;
+  albumName?: string;
+};
+
+function mergeScope(base: StreamWhere, scope: StatsScope): StreamWhere {
   return { ...base, isDemo: scope === "demo" };
 }
 
@@ -45,17 +51,17 @@ export function parseTimeRange(
   to?: string,
   timeZone?: string
 ): TimeRangeFilter {
-  resolveStatsTimeZone(timeZone);
+  const tz = resolveStatsTimeZone(timeZone);
   const now = new Date();
 
   if (from && to) {
     // HTML date inputs are yyyy-MM-dd; `new Date("yyyy-MM-dd")` is UTC midnight and shifts the calendar day in local timezones.
-    let since = startOfDay(parse(from, "yyyy-MM-dd", now));
-    let until = endOfDay(parse(to, "yyyy-MM-dd", now));
+    let since = startOfCalendarDateInZone(from, tz);
+    let until = endOfCalendarDateInZone(to, tz);
     if (!isNaN(since.getTime()) && !isNaN(until.getTime())) {
       if (since > until) {
-        since = startOfDay(parse(to, "yyyy-MM-dd", now));
-        until = endOfDay(parse(from, "yyyy-MM-dd", now));
+        since = startOfCalendarDateInZone(to, tz);
+        until = endOfCalendarDateInZone(from, tz);
       }
       return {
         since,
@@ -79,12 +85,12 @@ export function parseTimeRange(
     case "1y":
       return { since: subMonths(now, 12), until: now, label: "Last year" };
     case "ytd":
-      return { since: startOfYear(now), until: now, label: "This year" };
+      return { since: startOfYearInZone(now, tz), until: now, label: "This year" };
     case "all":
       return { label: "All time" };
     default:
       return {
-        since: startOfYear(now),
+        since: startOfYearInZone(now, tz),
         until: now,
         label: "This year",
       };
@@ -94,7 +100,7 @@ export function parseTimeRange(
 function buildWhere(filter: TimeRangeFilter) {
   const where: { playedAt?: { gte?: Date; lte?: Date } } = {};
   if (filter.since) where.playedAt = { ...where.playedAt, gte: filter.since };
-  if (filter.until) where.playedAt = { ...where.playedAt, lte: filter.until };
+  where.playedAt = { ...where.playedAt, lte: filter.until ?? new Date() };
   return Object.keys(where).length ? where : {};
 }
 
@@ -103,7 +109,7 @@ function resolveDateWhere(
   filter: TimeRangeFilter | undefined,
   fallbackSince: Date
 ) {
-  if (!filter) return { playedAt: { gte: fallbackSince } };
+  if (!filter) return { playedAt: { gte: fallbackSince, lte: new Date() } };
   if (filter.since || filter.until) return buildWhere(filter);
   return {};
 }
@@ -203,7 +209,7 @@ export async function getRecentStreams(
   scope: StatsScope = "me"
 ) {
   return db.stream.findMany({
-    where: mergeScope({}, scope),
+    where: mergeScope({ playedAt: { lte: new Date() } }, scope),
     orderBy: { playedAt: "desc" },
     take: limit,
   });
@@ -495,7 +501,7 @@ export async function getLatestPlayAt(
   scope: StatsScope = "me"
 ): Promise<Date | null> {
   const latest = await db.stream.findFirst({
-    where: mergeScope({}, scope),
+    where: mergeScope({ playedAt: { lte: new Date() } }, scope),
     orderBy: { playedAt: "desc" },
     select: { playedAt: true },
   });

@@ -3,8 +3,9 @@ import {
   LayoutDashboard,
   Music,
   Mic2,
-  History,
   Disc,
+  Clock3,
+  Upload,
 } from "lucide-react";
 import { defaultStatsNavQuery } from "@/lib/stats-session-preferences";
 
@@ -25,11 +26,11 @@ function statsSuffix(statsQuery: string): string {
 }
 
 export type NavLinksBundle = {
-  /** Overview and History (Top rankings live in a separate menu). */
+  /** Primary destinations. */
   main: NavLinkItem[];
   topRanked: NavLinkItem[];
   more: NavLinkItem[];
-  /** Flat order for mobile drawer: Overview, tracks, artists, albums, History. */
+  /** Flat order for desktop and mobile navigation. */
   all: NavLinkItem[];
 };
 
@@ -43,7 +44,6 @@ export function createNavLinks(
     const base = "/demo";
     const main: NavLinkItem[] = [
       { href: `${base}${s}`, label: "Overview", shortLabel: "Home", icon: LayoutDashboard },
-      { href: `${base}/history${s}`, label: "History", shortLabel: "History", icon: History },
     ];
     const topRanked: NavLinkItem[] = [
       { href: `${base}/top-tracks${s}`, label: "Top tracks", shortLabel: "Tracks", icon: Music },
@@ -51,28 +51,30 @@ export function createNavLinks(
       { href: `${base}/top-albums${s}`, label: "Top albums", shortLabel: "Albums", icon: Disc },
     ];
     const more: NavLinkItem[] = [];
-    const all = [main[0]!, ...topRanked, main[1]!];
+    const all = [main[0]!, ...topRanked];
     return { main, topRanked, more, all };
   }
 
   const main: NavLinkItem[] = [
     { href: `/me${s}`, label: "Overview", shortLabel: "Home", icon: LayoutDashboard },
-    { href: `/history${s}`, label: "History", shortLabel: "History", icon: History },
+    { href: "/history/recent", label: "Recent", shortLabel: "Recent", icon: Clock3 },
   ];
   const topRanked: NavLinkItem[] = [
     { href: `/top-tracks${s}`, label: "Top tracks", shortLabel: "Tracks", icon: Music },
     { href: `/top-artists${s}`, label: "Top artists", shortLabel: "Artists", icon: Mic2 },
     { href: `/top-albums${s}`, label: "Top albums", shortLabel: "Albums", icon: Disc },
   ];
-  const more: NavLinkItem[] = [];
-  const all = [main[0]!, ...topRanked, main[1]!];
+  const more: NavLinkItem[] = [
+    { href: "/history/import", label: "Import", shortLabel: "Import", icon: Upload },
+  ];
+  const all = [main[0]!, main[1]!, ...topRanked, ...more];
   return { main, topRanked, more, all };
 }
 
 const staticQuery = defaultStatsNavQuery();
 const staticBundle = createNavLinks("main", staticQuery);
 
-/** Primary bar: Overview + History only (Top opens from header popover). */
+/** Primary app destinations. */
 export const NAV_LINKS_MAIN: NavLinkItem[] = staticBundle.main;
 
 export const NAV_LINKS_TOP: NavLinkItem[] = staticBundle.topRanked;

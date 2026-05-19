@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
-const AUTH_COOKIE = "soundfolio_auth";
+import { AUTH_COOKIE } from "@/lib/auth";
 
 export function proxy(request: NextRequest) {
   const key = process.env.AUTH_KEY;
   if (!key) return NextResponse.next();
 
   const path = request.nextUrl.pathname;
-  const isMe = path === "/me" || path.startsWith("/me/");
-  if (!isMe) return NextResponse.next();
+  const protectedPath =
+    path === "/me" ||
+    path.startsWith("/me/") ||
+    path.startsWith("/history") ||
+    path.startsWith("/top-") ||
+    path.startsWith("/api/stats");
+  if (!protectedPath) return NextResponse.next();
 
   const cookie = request.cookies.get(AUTH_COOKIE)?.value;
   const queryKey = request.nextUrl.searchParams.get("key");
@@ -29,5 +33,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/me", "/me/:path*"],
+  matcher: ["/me", "/me/:path*", "/history", "/history/:path*", "/top-:path*", "/api/stats/:path*"],
 };

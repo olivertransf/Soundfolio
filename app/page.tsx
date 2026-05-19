@@ -18,10 +18,10 @@ export default function RootPage() {
             Open dashboard
           </a>
           <a
-            href="/demo?range=ytd"
+            href="/history/import"
             className="inline-flex h-10 items-center rounded-lg border border-border/70 bg-secondary/30 px-4 text-sm font-medium text-foreground transition-colors hover:bg-secondary/50"
           >
-            View demo
+            Import data
           </a>
         </div>
       </div>

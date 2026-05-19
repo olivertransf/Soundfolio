@@ -1,3 +1,0 @@
-# Python tooling for `scripts/*.py` (Obsidian / JSON bridges). Use with `.venv`.
-psycopg2-binary>=2.9.9
-python-dotenv>=1.0.0

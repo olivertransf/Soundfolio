@@ -25,7 +25,7 @@ export default async function TopTracksPage({
     <div className="space-y-10">
       <PageHeader
         title="Top tracks"
-        description="Ranked by stream count for the selected period."
+        description="The songs you came back to most in this period."
         periodLabel={filter.label}
       >
         <Suspense>
@@ -33,12 +33,12 @@ export default async function TopTracksPage({
         </Suspense>
       </PageHeader>
 
-      <Card className="border-border/80">
+      <Card className="border-border/50 bg-card/70">
         <CardContent className="pt-6">
           {tracks.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">No data for this time range.</p>
           ) : (
-            <div className="space-y-1">
+            <div className="grid gap-2 xl:grid-cols-2">
               {tracks.map((track, i) => (
                 <RankedStreamRow
                   key={`${track.trackId}-${i}`}

@@ -31,6 +31,7 @@ interface ListeningChartProps {
   xAxis: ChartXAxis;
   metric?: ChartMetric;
   height?: number;
+  compact?: boolean;
   streamsDisplay?: "line" | "bar";
   /** Default on for `both` / streams-line; off for `minutes` unless set. */
   defaultStreamsLineVisible?: boolean;
@@ -82,6 +83,7 @@ export function ListeningChart({
   xAxis,
   metric = "minutes",
   height = 300,
+  compact = false,
   streamsDisplay = "line",
   defaultStreamsLineVisible,
 }: ListeningChartProps) {
@@ -136,11 +138,11 @@ export function ListeningChart({
   };
 
   const dualMargin = narrow
-    ? { top: 6, right: 4, left: 4, bottom: 20 }
-    : { top: 12, right: 16, left: 8, bottom: 8 };
+    ? { top: 6, right: 4, left: 4, bottom: compact ? 24 : 20 }
+    : { top: 12, right: 16, left: 8, bottom: compact ? 20 : 8 };
   const singleMargin = narrow
-    ? { top: 6, right: 4, left: 4, bottom: 16 }
-    : { top: 12, right: 12, left: 8, bottom: 8 };
+    ? { top: 6, right: 4, left: 4, bottom: compact ? 22 : 16 }
+    : { top: 12, right: 12, left: 8, bottom: compact ? 18 : 8 };
 
   const toggleRow = showStreamsToggle ? (
     <div className="mb-2 flex justify-end">
@@ -149,7 +151,7 @@ export function ListeningChart({
   ) : null;
 
   const chartWrap = (chart: ReactNode) => (
-    <div className="w-full min-w-0 max-w-full">
+    <div className="w-full min-w-0 max-w-full overflow-visible">
       {toggleRow}
       {chart}
     </div>
@@ -157,7 +159,7 @@ export function ListeningChart({
 
   if (dualMode) {
     return chartWrap(
-      <div className="overflow-hidden rounded-2xl [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground">
+      <div className="overflow-visible rounded-2xl [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground">
         <ResponsiveContainer width="100%" height={height} minWidth={0}>
           <ComposedChart data={data} margin={dualMargin}>
             <defs>
@@ -235,7 +237,7 @@ export function ListeningChart({
 
   if (minutesBarsOnly) {
     return chartWrap(
-      <div className="overflow-hidden rounded-2xl [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground">
+      <div className="overflow-visible rounded-2xl [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground">
         <ResponsiveContainer width="100%" height={height} minWidth={0}>
           <BarChart data={data} margin={singleMargin}>
             <defs>
@@ -290,7 +292,7 @@ export function ListeningChart({
       );
     }
     return chartWrap(
-      <div className="overflow-hidden rounded-2xl [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground">
+      <div className="overflow-visible rounded-2xl [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground">
         <ResponsiveContainer width="100%" height={height} minWidth={0}>
           <LineChart data={data} margin={singleMargin}>
             <CartesianGrid strokeDasharray="3 6" stroke={gridStroke} strokeOpacity={0.45} vertical={false} />
