@@ -35,6 +35,88 @@ export function resolveStatsTimeZone(preferredTimeZone?: string | null): string 
   return getStatsTimeZone();
 }
 
+/**
+ * Spotify ZIP `ts` values have no offset; parse them as wall time in the listener zone.
+ * Use when importing new history (not for rows already stored as UTC instants).
+ */
+export function spotifyExportTsToUtc(ts: string, timeZone: string): Date {
+  const s = String(ts).trim();
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    return new Date(n > 1e12 ? n : n * 1000);
+  }
+  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(s)) {
+    return new Date(s);
+  }
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/);
+  if (m) {
+    const base = zonedDateTimeToUtc(
+      timeZone,
+      Number(m[1]),
+      Number(m[2]),
+      Number(m[3]),
+      Number(m[4]),
+      Number(m[5]),
+      Number(m[6])
+    );
+    const ms = m[7] ? Number(m[7].padEnd(3, "0").slice(0, 3)) : 0;
+    return new Date(base.getTime() + ms);
+  }
+  return new Date(s);
+}
+
+/** Heuristic: mis-parsed import rows cluster at fake “night” / “afternoon” UTC-as-local hours. */
+function spotifyImportLooksMisParsed(playedAt: Date, timeZone: string): boolean {
+  const h = getHourInTimeZone(playedAt, timeZone);
+  return h <= 6 || (h >= 14 && h <= 16);
+}
+
+/**
+ * Spotify ZIP imports often stored listener-local wall time as UTC.
+ * Last.fm uses unix timestamps and must not be adjusted.
+ */
+export function fixSpotifyImportPlayedAt(playedAt: Date, timeZone: string): Date {
+  const y = playedAt.getUTCFullYear();
+  const month = playedAt.getUTCMonth() + 1;
+  const day = playedAt.getUTCDate();
+  const hour = playedAt.getUTCHours();
+  const minute = playedAt.getUTCMinutes();
+  const second = playedAt.getUTCSeconds();
+  const ms = playedAt.getUTCMilliseconds();
+  const base = zonedDateTimeToUtc(timeZone, y, month, day, hour, minute, second);
+  return new Date(base.getTime() + ms);
+}
+
+/**
+ * When to bucket a play in hour-of-day / heatmap charts.
+ * Last.fm and Spotify ZIP import use end-of-play timestamps; Spotify sync uses start.
+ */
+export function getListenBucketInstant(
+  playedAt: Date,
+  durationMs: number,
+  trackId: string,
+  timeZone: string
+): Date {
+  if (trackId.startsWith("lfm-")) {
+    return new Date(playedAt.getTime() - Math.max(0, durationMs));
+  }
+
+  let anchor = playedAt;
+  if (
+    playedAt.getUTCMilliseconds() === 0 &&
+    spotifyImportLooksMisParsed(playedAt, timeZone)
+  ) {
+    anchor = fixSpotifyImportPlayedAt(playedAt, timeZone);
+  }
+
+  // Spotify recently-played API: `played_at` is start; `duration_ms` is full track length.
+  if (durationMs >= 120_000 && durationMs % 1000 === 0) {
+    return anchor;
+  }
+  // Spotify extended history import: `ts` is end, `ms_played` is actual listen time.
+  return new Date(anchor.getTime() - Math.max(0, durationMs));
+}
+
 /** Hour 0–23 in `timeZone` (same instant as `date`). */
 export function getHourInTimeZone(date: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {

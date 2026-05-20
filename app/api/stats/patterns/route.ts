@@ -21,10 +21,17 @@ export async function GET(req: NextRequest) {
     getListeningHeatmap(filter, "me", timeZone),
   ]);
 
-  return NextResponse.json({
-    timeZone,
-    byHour,
-    byDay,
-    heatmap,
-  });
+  return NextResponse.json(
+    {
+      timeZone,
+      byHour,
+      byDay,
+      heatmap,
+    },
+    {
+      headers: {
+        "Cache-Control": "private, no-store, max-age=0",
+      },
+    }
+  );
 }

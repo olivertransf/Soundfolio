@@ -5,6 +5,7 @@ import type { TopSortBy } from "@/lib/top-sort";
 import {
   resolveStatsTimeZone,
   getHourInTimeZone,
+  getListenBucketInstant,
   getDayOfWeekInTimeZone,
   formatCalendarDateInZone,
   startOfCalendarDateInZone,
@@ -321,14 +322,15 @@ export async function getStreamsByHour(
   const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
-    select: { playedAt: true, durationMs: true },
+    select: { playedAt: true, durationMs: true, trackId: true },
   });
 
   const byHour: Record<number, { streams: number; minutes: number }> = {};
   for (let h = 0; h < 24; h++) byHour[h] = { streams: 0, minutes: 0 };
 
   for (const s of streams) {
-    const h = getHourInTimeZone(s.playedAt, tz);
+    const instant = getListenBucketInstant(s.playedAt, s.durationMs, s.trackId, tz);
+    const h = getHourInTimeZone(instant, tz);
     byHour[h].streams++;
     byHour[h].minutes += Math.round(s.durationMs / 60000);
   }
@@ -349,7 +351,7 @@ export async function getStreamsByDayOfWeek(
   const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
-    select: { playedAt: true, durationMs: true },
+    select: { playedAt: true, durationMs: true, trackId: true },
   });
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -357,7 +359,8 @@ export async function getStreamsByDayOfWeek(
   for (let d = 0; d < 7; d++) byDay[d] = { streams: 0, minutes: 0 };
 
   for (const s of streams) {
-    const d = getDayOfWeekInTimeZone(s.playedAt, tz);
+    const instant = getListenBucketInstant(s.playedAt, s.durationMs, s.trackId, tz);
+    const d = getDayOfWeekInTimeZone(instant, tz);
     byDay[d].streams++;
     byDay[d].minutes += Math.round(s.durationMs / 60000);
   }
@@ -378,7 +381,7 @@ export async function getListeningHeatmap(
   const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
-    select: { playedAt: true },
+    select: { playedAt: true, durationMs: true, trackId: true },
   });
 
   const grid: { day: number; hour: number; count: number }[] = [];
@@ -392,8 +395,9 @@ export async function getListeningHeatmap(
   }
 
   for (const s of streams) {
-    const d = getDayOfWeekInTimeZone(s.playedAt, tz);
-    const h = getHourInTimeZone(s.playedAt, tz);
+    const instant = getListenBucketInstant(s.playedAt, s.durationMs, s.trackId, tz);
+    const d = getDayOfWeekInTimeZone(instant, tz);
+    const h = getHourInTimeZone(instant, tz);
     counts[`${d}-${h}`]++;
   }
 

@@ -2,15 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import AdmZip from "adm-zip";
 import { db } from "@/lib/db";
 import { isRequestAuthorized } from "@/lib/auth";
-
-function parseSpotifyPlayedAt(ts: string): Date {
-  const s = String(ts).trim();
-  if (/^\d+$/.test(s)) {
-    const n = Number(s);
-    return new Date(n > 1e12 ? n : n * 1000);
-  }
-  return new Date(s);
-}
+import {
+  resolveStatsTimeZone,
+  spotifyExportTsToUtc,
+} from "@/lib/stats-timezone";
 
 interface SpotifyStreamEntry {
   ts: string;
@@ -37,6 +32,10 @@ export async function POST(req: NextRequest) {
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
+
+    const timeZone = resolveStatsTimeZone(
+      (formData.get("tz") as string | null) ?? undefined
+    );
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const zip = new AdmZip(buffer);
@@ -69,7 +68,7 @@ export async function POST(req: NextRequest) {
       ) {
         return false;
       }
-      const playedAt = parseSpotifyPlayedAt(e.ts);
+      const playedAt = spotifyExportTsToUtc(e.ts, timeZone);
       return !Number.isNaN(playedAt.getTime());
     });
 
@@ -89,7 +88,7 @@ export async function POST(req: NextRequest) {
           albumName: e.master_metadata_album_album_name ?? "",
           albumArt: null,
           durationMs: e.ms_played,
-          playedAt: parseSpotifyPlayedAt(e.ts),
+          playedAt: spotifyExportTsToUtc(e.ts, timeZone),
           isDemo: false,
         })),
         skipDuplicates: true,
@@ -105,12 +104,13 @@ export async function POST(req: NextRequest) {
       valid: validStreams.length,
       inserted,
       skipped,
+      timeZone,
     });
   } catch (err) {
     console.error("Import error:", err);
     return NextResponse.json(
       { error: "Failed to process file. Make sure it's a valid Spotify data export ZIP." },
-      { status: 500 }
+      { status: 400 }
     );
   }
 }
