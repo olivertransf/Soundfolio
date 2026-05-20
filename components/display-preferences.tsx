@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import { BarChart3, Check, Monitor, Moon, Palette, Sparkles, Sun } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  VIEWER_TIMEZONE_COOKIE,
-  VIEWER_TIMEZONE_PARAM,
-  isValidTimeZone,
-} from "@/lib/stats-timezone";
+import { syncViewerTimeZoneCookie } from "@/lib/viewer-timezone-client";
 import {
   Popover,
   PopoverContent,
@@ -68,25 +64,6 @@ function applyPreferences(prefs: DisplayPreferences) {
   document.documentElement.dataset.theme = prefs.theme;
 }
 
-function setTimeZoneCookie() {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (!isValidTimeZone(tz)) return;
-    document.cookie = `${VIEWER_TIMEZONE_COOKIE}=${encodeURIComponent(
-      tz
-    )}; Max-Age=31536000; Path=/; SameSite=Lax`;
-
-    // Keep links shareable and API calls coherent when user reloads quickly.
-    const url = new URL(window.location.href);
-    if (url.searchParams.get(VIEWER_TIMEZONE_PARAM) !== tz) {
-      url.searchParams.set(VIEWER_TIMEZONE_PARAM, tz);
-      window.history.replaceState({}, "", url);
-    }
-  } catch {
-    // no-op
-  }
-}
-
 export function DisplayPreferences() {
   const [prefs, setPrefs] = useState<DisplayPreferences>(defaultPreferences);
 
@@ -118,7 +95,7 @@ export function DisplayPreferences() {
     } catch {
       applyPreferences(defaultPreferences);
     }
-    setTimeZoneCookie();
+    syncViewerTimeZoneCookie();
   }, []);
 
   useEffect(() => {

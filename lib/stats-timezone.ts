@@ -134,3 +134,92 @@ export function startOfYearInZone(now: Date, timeZone: string): Date {
   );
   return zonedDateTimeToUtc(timeZone, year, 1, 1);
 }
+
+/** Move a calendar date (yyyy-MM-dd in `timeZone`) by `deltaDays`. */
+export function addCalendarDaysInZone(
+  dateStr: string,
+  deltaDays: number,
+  timeZone: string
+): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const noon = zonedDateTimeToUtc(timeZone, year, month, day, 12);
+  const shifted = new Date(noon.getTime() + deltaDays * 86_400_000);
+  return formatCalendarDateInZone(shifted, timeZone);
+}
+
+/** Inclusive calendar-day span between two yyyy-MM-dd strings in `timeZone`. */
+export function calendarDaysBetweenInZone(from: string, to: string, timeZone: string): number {
+  const start = startOfCalendarDateInZone(from, timeZone).getTime();
+  const end = startOfCalendarDateInZone(to, timeZone).getTime();
+  return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
+}
+
+export type ChartDateLabelKind = "month" | "week" | "day" | "hour" | "weekday";
+
+function formatInstantInZone(instant: Date, timeZone: string, options: Intl.DateTimeFormatOptions) {
+  return new Intl.DateTimeFormat("en-US", { timeZone, ...options }).format(instant);
+}
+
+/** Format a bucket label for charts (labels are calendar buckets in `timeZone`). */
+export function formatChartAxisLabel(
+  value: string,
+  kind: ChartDateLabelKind,
+  timeZone: string
+): string {
+  if (kind === "hour") return value.includes(":") ? value.replace(":00", "h") : value;
+  if (kind === "weekday") return value;
+
+  if (kind === "month" && /^\d{4}-\d{2}$/.test(value)) {
+    const [y, m] = value.split("-").map(Number);
+    const instant = zonedDateTimeToUtc(timeZone, y, m, 1, 12);
+    return formatInstantInZone(instant, timeZone, { month: "short", year: "2-digit" });
+  }
+
+  if ((kind === "week" || kind === "day") && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split("-").map(Number);
+    const instant = zonedDateTimeToUtc(timeZone, y, m, d, 12);
+    return formatInstantInZone(instant, timeZone, { month: "short", day: "numeric" });
+  }
+
+  return value;
+}
+
+export function formatChartTooltipLabel(
+  value: string,
+  kind: ChartDateLabelKind,
+  timeZone: string
+): string {
+  if (kind === "hour") return `Hour starting ${value}`;
+  if (kind === "weekday") return value;
+
+  if (kind === "month" && /^\d{4}-\d{2}$/.test(value)) {
+    const [y, m] = value.split("-").map(Number);
+    const instant = zonedDateTimeToUtc(timeZone, y, m, 1, 12);
+    return formatInstantInZone(instant, timeZone, { month: "long", year: "numeric" });
+  }
+
+  if ((kind === "week" || kind === "day") && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split("-").map(Number);
+    const instant = zonedDateTimeToUtc(timeZone, y, m, d, 12);
+    const formatted = formatInstantInZone(instant, timeZone, {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    return kind === "week" ? `Week of ${formatted}` : formatted;
+  }
+
+  return value;
+}
+
+/** Human-readable calendar range for filters (yyyy-MM-dd bounds in `timeZone`). */
+export function formatCalendarRangeLabel(from: string, to: string, timeZone: string): string {
+  const [y1, m1, d1] = from.split("-").map(Number);
+  const [y2, m2, d2] = to.split("-").map(Number);
+  const start = zonedDateTimeToUtc(timeZone, y1, m1, d1, 12);
+  const end = zonedDateTimeToUtc(timeZone, y2, m2, d2, 12);
+  const a = formatInstantInZone(start, timeZone, { month: "short", day: "numeric", year: "numeric" });
+  const b = formatInstantInZone(end, timeZone, { month: "short", day: "numeric", year: "numeric" });
+  return `${a} – ${b}`;
+}

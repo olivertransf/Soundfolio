@@ -10,6 +10,10 @@ import { TimeRangeTabs } from "@/components/time-range-tabs";
 import { cn } from "@/lib/utils";
 import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
 import {
+  detectViewerTimeZone,
+  readViewerTimeZoneCookie,
+} from "@/lib/viewer-timezone-client";
+import {
   getStoredGroupBy,
   setStoredGroupBy,
 } from "@/lib/stats-session-preferences";
@@ -71,7 +75,7 @@ export function ListeningActivity({
 
   useEffect(() => {
     try {
-      setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+      setTimeZone(readViewerTimeZoneCookie() ?? detectViewerTimeZone() ?? "");
       const raw = window.localStorage.getItem("soundfolio:display-preferences");
       if (raw) {
         const parsed = JSON.parse(raw) as { chartMetric?: ChartMetric };
@@ -216,6 +220,7 @@ export function ListeningActivity({
             <ListeningChart
               data={data}
               xAxis={cfg.xAxis}
+              timeZone={timeZone || undefined}
               metric={metric}
               height={chartH}
               compact={compact}

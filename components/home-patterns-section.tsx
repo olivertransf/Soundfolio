@@ -4,6 +4,7 @@ import {
   getListeningHeatmap,
   type TimeRangeFilter,
 } from "@/lib/stats";
+import { resolveStatsTimeZone } from "@/lib/stats-timezone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListeningChart } from "@/components/listening-chart";
 import { ListeningHeatmap } from "@/components/listening-heatmap";
@@ -23,7 +24,7 @@ export async function HomePatternsSection({
   filter: TimeRangeFilter;
   viewerTimeZone?: string | null;
 }) {
-  const tz = viewerTimeZone ?? undefined;
+  const tz = resolveStatsTimeZone(viewerTimeZone);
   const [byHour, byDay, heatmap] = await Promise.all([
     getStreamsByHour(filter, "me", tz),
     getStreamsByDayOfWeek(filter, "me", tz),
@@ -95,7 +96,13 @@ export async function HomePatternsSection({
             <CardTitle className={panelTitle}>By hour of day</CardTitle>
           </CardHeader>
           <CardContent className={cardContentPad}>
-            <ListeningChart data={hourChartData} xAxis="hour" metric="both" height={CHART_H} />
+            <ListeningChart
+              data={hourChartData}
+              xAxis="hour"
+              timeZone={tz}
+              metric="both"
+              height={CHART_H}
+            />
           </CardContent>
         </Card>
         <Card className={cardShell}>
@@ -103,7 +110,13 @@ export async function HomePatternsSection({
             <CardTitle className={panelTitle}>By weekday</CardTitle>
           </CardHeader>
           <CardContent className={cardContentPad}>
-            <ListeningChart data={dayChartData} xAxis="weekday" metric="both" height={CHART_H} />
+            <ListeningChart
+              data={dayChartData}
+              xAxis="weekday"
+              timeZone={tz}
+              metric="both"
+              height={CHART_H}
+            />
           </CardContent>
         </Card>
       </div>

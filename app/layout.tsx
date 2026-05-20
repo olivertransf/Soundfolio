@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Outfit } from "next/font/google";
 import "./globals.css";
 import { LayoutWrapper } from "@/components/layout-wrapper";
 import { SyncOnLoad } from "@/components/sync-on-load";
+import { ViewerTimezoneSync } from "@/components/viewer-timezone-sync";
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -53,6 +54,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} font-sans antialiased min-h-dvh min-h-screen min-w-0 overflow-x-hidden pb-[env(safe-area-inset-bottom,0px)] [-webkit-tap-highlight-color:transparent]`}
       >
         <SyncOnLoad />
+        <ViewerTimezoneSync />
         <LayoutWrapper>{children}</LayoutWrapper>
       </body>
     </html>

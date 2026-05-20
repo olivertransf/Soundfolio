@@ -14,7 +14,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { format, parseISO } from "date-fns";
+import {
+  formatChartAxisLabel,
+  formatChartTooltipLabel,
+  type ChartDateLabelKind,
+} from "@/lib/stats-timezone";
 import { ChartStreamsToggle } from "@/components/chart-streams-toggle";
 
 export type ChartXAxis = "month" | "week" | "day" | "week" | "hour" | "weekday";
@@ -29,6 +33,8 @@ interface ChartData {
 interface ListeningChartProps {
   data: ChartData[];
   xAxis: ChartXAxis;
+  /** Calendar buckets from the server are in this IANA zone (defaults to browser). */
+  timeZone?: string;
   metric?: ChartMetric;
   height?: number;
   compact?: boolean;
@@ -37,56 +43,27 @@ interface ListeningChartProps {
   defaultStreamsLineVisible?: boolean;
 }
 
-function formatTick(value: string, xAxis: ChartXAxis): string {
+function resolveChartTimeZone(explicit?: string): string {
+  if (explicit) return explicit;
   try {
-    switch (xAxis) {
-      case "month":
-        return format(parseISO(`${value}-01`), "MMM yy");
-      case "week":
-      case "day":
-        return format(parseISO(value), "MMM d");
-      case "hour":
-        return value.includes(":") ? value.replace(":00", "h") : value;
-      case "weekday":
-        return value;
-      default:
-        return value;
-    }
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   } catch {
-    return value;
-  }
-}
-
-function formatTooltipLabel(value: string, xAxis: ChartXAxis): string {
-  try {
-    switch (xAxis) {
-      case "month":
-        return format(parseISO(`${value}-01`), "MMMM yyyy");
-      case "week":
-        return `Week of ${format(parseISO(value), "MMM d, yyyy")}`;
-      case "day":
-        return format(parseISO(value), "EEEE, MMM d, yyyy");
-      case "hour":
-        return `Hour starting ${value}`;
-      case "weekday":
-        return value;
-      default:
-        return value;
-    }
-  } catch {
-    return value;
+    return "UTC";
   }
 }
 
 export function ListeningChart({
   data,
   xAxis,
+  timeZone: timeZoneProp,
   metric = "minutes",
   height = 300,
   compact = false,
   streamsDisplay = "line",
   defaultStreamsLineVisible,
 }: ListeningChartProps) {
+  const timeZone = resolveChartTimeZone(timeZoneProp);
+  const labelKind = xAxis as ChartDateLabelKind;
   const narrow = useIsNarrowChart();
   const baseId = useId().replace(/:/g, "");
   const gradMinutes = `${baseId}-min`;
@@ -172,7 +149,7 @@ export function ListeningChart({
             <XAxis
               dataKey="label"
               {...commonAxis}
-              tickFormatter={(v) => formatTick(String(v), xAxis)}
+              tickFormatter={(v) => formatChartAxisLabel(String(v), labelKind, timeZone)}
               interval={data.length > 24 ? "preserveStartEnd" : 0}
               minTickGap={8}
             />
@@ -197,7 +174,7 @@ export function ListeningChart({
               cursor={false}
               contentStyle={tooltipStyles}
               labelStyle={{ color: "var(--foreground)", fontWeight: 600, marginBottom: 6 }}
-              labelFormatter={(v) => formatTooltipLabel(String(v), xAxis)}
+              labelFormatter={(v) => formatChartTooltipLabel(String(v), labelKind, timeZone)}
               formatter={(value, name) => {
                 if (name === "minutes") return [`${Number(value).toLocaleString()} min`, "Minutes"];
                 if (name === "streams") return [`${Number(value).toLocaleString()}`, "Streams"];
@@ -250,7 +227,7 @@ export function ListeningChart({
             <XAxis
               dataKey="label"
               {...commonAxis}
-              tickFormatter={(v) => formatTick(String(v), xAxis)}
+              tickFormatter={(v) => formatChartAxisLabel(String(v), labelKind, timeZone)}
               interval={data.length > 24 ? "preserveStartEnd" : 0}
               minTickGap={8}
             />
@@ -264,7 +241,7 @@ export function ListeningChart({
               cursor={false}
               contentStyle={tooltipStyles}
               labelStyle={{ color: "var(--foreground)", fontWeight: 600, marginBottom: 6 }}
-              labelFormatter={(v) => formatTooltipLabel(String(v), xAxis)}
+              labelFormatter={(v) => formatChartTooltipLabel(String(v), labelKind, timeZone)}
               formatter={(value) => [`${Number(value).toLocaleString()} min`, "Minutes"]}
             />
             <Bar
@@ -299,7 +276,7 @@ export function ListeningChart({
             <XAxis
               dataKey="label"
               {...commonAxis}
-              tickFormatter={(v) => formatTick(String(v), xAxis)}
+              tickFormatter={(v) => formatChartAxisLabel(String(v), labelKind, timeZone)}
               interval={data.length > 24 ? "preserveStartEnd" : 0}
               minTickGap={8}
             />
@@ -314,7 +291,7 @@ export function ListeningChart({
               cursor={false}
               contentStyle={tooltipStyles}
               labelStyle={{ color: "var(--foreground)", fontWeight: 600, marginBottom: 6 }}
-              labelFormatter={(v) => formatTooltipLabel(String(v), xAxis)}
+              labelFormatter={(v) => formatChartTooltipLabel(String(v), labelKind, timeZone)}
               formatter={(value) => [Number(value).toLocaleString(), "Streams"]}
             />
             <Line
@@ -355,7 +332,7 @@ export function ListeningChart({
           <XAxis
             dataKey="label"
             {...commonAxis}
-            tickFormatter={(v) => formatTick(String(v), xAxis)}
+            tickFormatter={(v) => formatChartAxisLabel(String(v), labelKind, timeZone)}
             interval={data.length > 24 ? "preserveStartEnd" : 0}
             minTickGap={8}
           />
@@ -374,7 +351,7 @@ export function ListeningChart({
             cursor={false}
             contentStyle={tooltipStyles}
             labelStyle={{ color: "var(--foreground)", fontWeight: 600, marginBottom: 6 }}
-            labelFormatter={(v) => formatTooltipLabel(String(v), xAxis)}
+            labelFormatter={(v) => formatChartTooltipLabel(String(v), labelKind, timeZone)}
             formatter={(value) => {
               const n = Number(value);
               if (metric === "streams") return [n.toLocaleString(), "Streams"];

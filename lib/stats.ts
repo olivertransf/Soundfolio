@@ -1,12 +1,5 @@
 import { db } from "@/lib/db";
-import {
-  subMonths,
-  subWeeks,
-  subDays,
-  format,
-  parse,
-  differenceInCalendarDays,
-} from "date-fns";
+import { subMonths, subWeeks, subDays } from "date-fns";
 import { DEFAULT_TIME_RANGE } from "@/lib/time-range";
 import type { TopSortBy } from "@/lib/top-sort";
 import {
@@ -17,6 +10,9 @@ import {
   startOfCalendarDateInZone,
   endOfCalendarDateInZone,
   startOfYearInZone,
+  addCalendarDaysInZone,
+  calendarDaysBetweenInZone,
+  formatCalendarRangeLabel,
 } from "@/lib/stats-timezone";
 
 export type { TopSortBy } from "@/lib/top-sort";
@@ -77,7 +73,7 @@ export function parseTimeRange(
       return {
         since,
         until,
-        label: `${format(since, "MMM d, yyyy")} – ${format(until, "MMM d, yyyy")}`,
+        label: formatCalendarRangeLabel(from, to, tz),
       };
     }
   }
@@ -421,10 +417,7 @@ export async function getStreamsByWeek(
     const localDate = formatCalendarDateInZone(s.playedAt, tz);
     const localWeekday = getDayOfWeekInTimeZone(s.playedAt, tz);
     const offsetFromMonday = (localWeekday + 6) % 7;
-    const weekStart = format(
-      subDays(parse(localDate, "yyyy-MM-dd", new Date()), offsetFromMonday),
-      "yyyy-MM-dd"
-    );
+    const weekStart = addCalendarDaysInZone(localDate, -offsetFromMonday, tz);
     if (!byWeek[weekStart]) byWeek[weekStart] = { streams: 0, minutes: 0 };
     byWeek[weekStart].streams++;
     byWeek[weekStart].minutes += Math.round(s.durationMs / 60000);
@@ -509,13 +502,23 @@ export async function getListeningSpan(
 /** Calendar days covered by the filter (for averages). All-time uses first→last play in data. */
 export function calendarDaysInFilter(
   filter: TimeRangeFilter,
-  span: { first: Date; last: Date } | null
+  span: { first: Date; last: Date } | null,
+  timeZone?: string
 ): number {
+  const tz = resolveStatsTimeZone(timeZone);
   if (filter.since && filter.until) {
-    return Math.max(1, differenceInCalendarDays(filter.until, filter.since) + 1);
+    return calendarDaysBetweenInZone(
+      formatCalendarDateInZone(filter.since, tz),
+      formatCalendarDateInZone(filter.until, tz),
+      tz
+    );
   }
   if (span) {
-    return Math.max(1, differenceInCalendarDays(span.last, span.first) + 1);
+    return calendarDaysBetweenInZone(
+      formatCalendarDateInZone(span.first, tz),
+      formatCalendarDateInZone(span.last, tz),
+      tz
+    );
   }
   return 1;
 }

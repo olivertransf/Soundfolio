@@ -60,7 +60,7 @@ export default async function OverviewPage({
     getRecentStreams(7),
   ]);
 
-  const days = calendarDaysInFilter(filter, span);
+  const days = calendarDaysInFilter(filter, span, viewerTimeZone);
   const avgMinPerDay = Math.round(stats.totalMinutes / days);
   const avgStreamsPerDay = Math.round(stats.totalStreams / days);
 
