@@ -1,7 +1,11 @@
 import "dotenv/config";
 import { db } from "../lib/db";
-import { getRecentTracks, isLastFmConfigured, lastFmScrobbleDurationMs } from "../lib/lastfm";
-import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "../lib/stream-ids";
+import { getRecentTracks, isLastFmConfigured } from "../lib/lastfm";
+import {
+  filterNovelScrobbles,
+  insertLastFmScrobbles,
+  loadExistingInPlayWindow,
+} from "../lib/lastfm-sync";
 
 async function main() {
   const username = process.env.LASTFM_USER?.trim();
@@ -28,37 +32,13 @@ async function main() {
     return;
   }
 
-  const playedAts = readyTracks.map((t) => t.playedAt);
-  const minPlayed = new Date(Math.min(...playedAts.map((d) => d.getTime())));
-  const maxPlayed = new Date(Math.max(...playedAts.map((d) => d.getTime())));
-  const existing = await db.stream.findMany({
-    where: { isDemo: false, playedAt: { gte: minPlayed, lte: maxPlayed } },
-    select: { artistName: true, trackName: true, playedAt: true },
-  });
-  const seen = new Set(
-    existing.map((r) => scrobbleIdentityKey(r.artistName, r.trackName, r.playedAt))
-  );
-  const novel = readyTracks.filter(
-    (t) => !seen.has(scrobbleIdentityKey(t.artist, t.name, t.playedAt))
-  );
+  const existing = await loadExistingInPlayWindow(readyTracks);
+  const novel = filterNovelScrobbles(readyTracks, existing);
+  const { inserted, durationUpdates } = await insertLastFmScrobbles(novel);
 
-  const durationMs = lastFmScrobbleDurationMs();
-  const result = await db.stream.createMany({
-    data: novel.map((t) => ({
-      trackId: lastFmScrobbleStreamId(t.artist, t.name, t.playedAt),
-      trackName: t.name,
-      artistName: t.artist,
-      artistArt: null,
-      albumName: t.album,
-      albumArt: t.image,
-      durationMs,
-      playedAt: t.playedAt,
-      isDemo: false,
-    })),
-    skipDuplicates: true,
-  });
-
-  console.log(`Synced ${result.count} new scrobbles (${novel.length} novel / ${readyTracks.length} ready).`);
+  console.log(
+    `Synced ${inserted} new scrobbles (${novel.length} novel / ${readyTracks.length} ready). Adjusted ${durationUpdates} listen durations.`
+  );
 }
 
 main()

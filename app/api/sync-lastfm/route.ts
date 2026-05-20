@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { getRecentTracks, isLastFmConfigured, lastFmScrobbleDurationMs } from "@/lib/lastfm";
+import { getRecentTracks, isLastFmConfigured } from "@/lib/lastfm";
+import {
+  filterNovelScrobbles,
+  insertLastFmScrobbles,
+  loadExistingInPlayWindow,
+} from "@/lib/lastfm-sync";
 import { isRequestAuthorized } from "@/lib/auth";
-import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
+import { db } from "@/lib/db";
 
 export const maxDuration = 30;
 
@@ -53,24 +57,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ synced: 0, fetched: tracks.length, message: "No current scrobbles ready" });
     }
 
-    const playedAts = readyTracks.map((t) => t.playedAt);
-    const minPlayed = new Date(Math.min(...playedAts.map((d) => d.getTime())));
-    const maxPlayed = new Date(Math.max(...playedAts.map((d) => d.getTime())));
-
-    const existing = await db.stream.findMany({
-      where: {
-        isDemo: false,
-        playedAt: { gte: minPlayed, lte: maxPlayed },
-      },
-      select: { artistName: true, trackName: true, playedAt: true },
-    });
-    const seen = new Set(
-      existing.map((row) => scrobbleIdentityKey(row.artistName, row.trackName, row.playedAt))
-    );
-
-    const novel = readyTracks.filter(
-      (t) => !seen.has(scrobbleIdentityKey(t.artist, t.name, t.playedAt))
-    );
+    const existing = await loadExistingInPlayWindow(readyTracks);
+    const novel = filterNovelScrobbles(readyTracks, existing);
 
     if (novel.length === 0) {
       return NextResponse.json({
@@ -80,26 +68,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const durationMs = lastFmScrobbleDurationMs();
-
-    const result = await db.stream.createMany({
-      data: novel.map((t) => ({
-        trackId: lastFmScrobbleStreamId(t.artist, t.name, t.playedAt),
-        trackName: t.name,
-        artistName: t.artist,
-        artistArt: null,
-        albumName: t.album,
-        albumArt: t.image,
-        durationMs,
-        playedAt: t.playedAt,
-        isDemo: false,
-      })),
-      skipDuplicates: true,
-    });
+    const { inserted, durationUpdates } = await insertLastFmScrobbles(novel);
 
     return NextResponse.json({
-      synced: result.count,
+      synced: inserted,
       fetched: tracks.length,
+      durationUpdates,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Sync failed";

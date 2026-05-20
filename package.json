@@ -21,6 +21,10 @@
     "db:seed-demo": "npx tsx scripts/seed-demo.ts",
     "db:repair-streams": "npx tsx scripts/repair-inflated-streams.ts",
     "db:repair-streams:dry-run": "npx tsx scripts/repair-inflated-streams.ts --dry-run",
+    "db:backfill-lfm-duration": "npx tsx scripts/backfill-lastfm-catalog-duration.ts",
+    "db:backfill-lfm-duration:dry-run": "npx tsx scripts/backfill-lastfm-catalog-duration.ts --dry-run",
+    "db:recompute-lfm-listen": "npx tsx scripts/recompute-lastfm-listen-duration.ts",
+    "db:recompute-lfm-listen:dry-run": "npx tsx scripts/recompute-lastfm-listen-duration.ts --dry-run",
     "export-obsidian-stats": "npx tsx scripts/export-obsidian-stats.ts"
   },
   "dependencies": {

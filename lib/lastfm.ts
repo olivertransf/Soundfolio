@@ -123,7 +123,9 @@ async function fetchTrackInfo(artist: string, track: string): Promise<LastFmTrac
   return data;
 }
 
-const MAX_SCROBBLE_MS = 15 * 60 * 1000;
+/** Sanity bounds for catalog length (classical movements can be long; block bad metadata). */
+export const LASTFM_MIN_CATALOG_MS = 30_000;
+export const LASTFM_MAX_CATALOG_MS = 90 * 60 * 1000;
 
 /** Duration from Last.fm catalog metadata (seconds → ms), not listen time. */
 export async function getTrackDurationMs(
@@ -137,13 +139,28 @@ export async function getTrackDurationMs(
   if (!Number.isFinite(n) || n <= 0) return null;
   // Last.fm uses seconds; very large values are sometimes ms mislabeled.
   let ms = n > 7200 ? n : n * 1000;
-  if (ms > MAX_SCROBBLE_MS) ms = MAX_SCROBBLE_MS;
-  return ms;
+  return normalizeCatalogDurationMs(ms);
 }
 
-/** Minutes credited per Last.fm scrobble (we don't get real listen time). */
-export function lastFmScrobbleDurationMs(): number {
-  return lastFmDefaultDurationMs();
+export function normalizeCatalogDurationMs(ms: number): number {
+  if (!Number.isFinite(ms) || ms <= 0) return lastFmDefaultDurationMs();
+  return Math.min(Math.max(ms, LASTFM_MIN_CATALOG_MS), LASTFM_MAX_CATALOG_MS);
+}
+
+/** Catalog track length for a scrobble (cached per artist + track). */
+export async function resolveLastFmCatalogDurationMs(
+  artist: string,
+  track: string,
+  cache: Map<string, number>
+): Promise<number> {
+  const key = `${artist}\0${track}`;
+  const hit = cache.get(key);
+  if (hit != null) return hit;
+
+  const fromApi = await getTrackDurationMs(artist, track);
+  const ms = normalizeCatalogDurationMs(fromApi ?? lastFmDefaultDurationMs());
+  cache.set(key, ms);
+  return ms;
 }
 
 export async function getTrackArt(artist: string, track: string): Promise<string | null> {
@@ -158,11 +175,12 @@ export async function getTrackArt(artist: string, track: string): Promise<string
   return url;
 }
 
+/** Fallback when Last.fm has no catalog duration for a track. */
 export function lastFmDefaultDurationMs(): number {
   const raw = process.env.LASTFM_DEFAULT_DURATION_MS?.trim();
   if (raw) {
     const n = parseInt(raw, 10);
-    if (Number.isFinite(n) && n > 0) return n;
+    if (Number.isFinite(n) && n > 0) return normalizeCatalogDurationMs(n);
   }
   return 180_000;
 }

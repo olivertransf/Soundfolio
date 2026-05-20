@@ -1,5 +1,10 @@
 import { randomUUID } from "crypto";
 import {
+  lastFmDefaultDurationMs,
+  LASTFM_MAX_CATALOG_MS,
+  LASTFM_MIN_CATALOG_MS,
+} from "@/lib/lastfm";
+import {
   MongoClient,
   type Collection,
   type Db,
@@ -129,6 +134,20 @@ function fromDocument(doc: StreamDocument): Stream {
   return { id: _id, ...rest };
 }
 
+const ABSOLUTE_MAX_DURATION_MS = 60 * 60 * 1000;
+
+function normalizeDurationMs(stream: Partial<Stream>): number {
+  const trackId = stream.trackId ?? "";
+  let ms = stream.durationMs ?? 0;
+  if (trackId.startsWith("lfm-")) {
+    const v = ms || lastFmDefaultDurationMs();
+    return Math.min(Math.max(v, LASTFM_MIN_CATALOG_MS), LASTFM_MAX_CATALOG_MS);
+  }
+  if (ms <= 0) return 0;
+  if (ms > ABSOLUTE_MAX_DURATION_MS) ms = ABSOLUTE_MAX_DURATION_MS;
+  return ms;
+}
+
 function prepareDocument(stream: Partial<Stream>): StreamDocument {
   const now = new Date();
   return {
@@ -139,7 +158,7 @@ function prepareDocument(stream: Partial<Stream>): StreamDocument {
     artistArt: stream.artistArt ?? null,
     albumName: stream.albumName ?? "",
     albumArt: stream.albumArt ?? null,
-    durationMs: stream.durationMs ?? 0,
+    durationMs: normalizeDurationMs(stream),
     playedAt: stream.playedAt ?? now,
     isDemo: stream.isDemo ?? false,
     createdAt: stream.createdAt ?? now,

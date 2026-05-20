@@ -2,7 +2,7 @@
  * Fixes inflated recent stats from duplicate Last.fm rows and catalog-length durations.
  *
  * 1. Groups real streams by artist + track + playedAt; keeps one row per group.
- * 2. Caps Last.fm row durationMs to LASTFM_DEFAULT (or 3 min).
+ * 2. Caps absurd durationMs values (bad Last.fm metadata).
  *
  * Usage: MONGODB_URI=... npx tsx scripts/repair-inflated-streams.ts
  * Add --dry-run to preview without writes.
@@ -13,11 +13,10 @@ if (!globalThis.crypto) globalThis.crypto = webcrypto as Crypto;
 import "dotenv/config";
 import type { Document, Filter } from "mongodb";
 import { mongoDb } from "../lib/db";
-import { lastFmScrobbleDurationMs } from "../lib/lastfm";
+import { LASTFM_MAX_CATALOG_MS } from "../lib/lastfm";
 import { scrobbleIdentityKey } from "../lib/stream-ids";
 
 const dryRun = process.argv.includes("--dry-run");
-const capMs = lastFmScrobbleDurationMs();
 
 async function main() {
   const db = await mongoDb();
@@ -62,19 +61,17 @@ async function main() {
       });
       for (const dup of list.slice(1)) toDelete.push(dup._id);
     }
-    const keep = list[0];
-    if (keep.durationMs > capMs) toCap.add(keep._id);
   }
 
   const inflated = await col
-    .find({ isDemo: false, durationMs: { $gt: capMs } })
+    .find({ isDemo: false, durationMs: { $gt: LASTFM_MAX_CATALOG_MS } })
     .project({ _id: 1 })
     .toArray();
   for (const row of inflated) toCap.add(row._id);
 
   console.log(
     dryRun ? "[dry-run] " : "",
-    `Would delete ${toDelete.length} duplicate rows, cap duration on ${toCap.size} rows (${capMs / 1000}s per play).`
+    `Would delete ${toDelete.length} duplicate rows, cap ${toCap.size} rows above catalog max.`
   );
 
   if (dryRun) return;
@@ -88,9 +85,9 @@ async function main() {
   if (capIds.length > 0) {
     const upd = await col.updateMany(
       { _id: { $in: capIds } } as unknown as Filter<Document>,
-      { $set: { durationMs: capMs, updatedAt: new Date() } }
+      { $set: { durationMs: LASTFM_MAX_CATALOG_MS, updatedAt: new Date() } }
     );
-    console.log(`Capped duration on ${upd.modifiedCount} rows.`);
+    console.log(`Capped ${upd.modifiedCount} rows to ${LASTFM_MAX_CATALOG_MS / 60000} min max.`);
   }
 }
 
