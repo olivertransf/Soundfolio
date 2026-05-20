@@ -1,7 +1,7 @@
 import { getAlbumArtFromCoverArtArchive } from "@/lib/coverartarchive";
 import { getArtistArtFromDeezer } from "@/lib/deezer";
 import { getArtistArtFromDiscogs } from "@/lib/discogs";
-import { getAlbumArtFromItunes } from "@/lib/itunes";
+import { getAlbumArtFromItunes, getSongArtFromItunes } from "@/lib/itunes";
 import {
   getAlbumArt,
   getArtistArt,
@@ -35,6 +35,13 @@ export async function resolveAlbumArt(m: {
         // fall through
       }
     }
+  }
+
+  try {
+    const fromSong = await getSongArtFromItunes(m.artistName, m.trackName);
+    if (fromSong) return fromSong;
+  } catch {
+    // fall through
   }
 
   try {

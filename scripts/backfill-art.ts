@@ -1,47 +1,26 @@
 /**
- * Backfill album art for streams missing artwork.
- * Tries Last.fm (scrobble / track / album) → iTunes → Cover Art Archive.
+ * Backfill album art for streams missing artwork (newest plays first).
  *
  * Usage: npx tsx scripts/backfill-art.ts
  */
 
 import "dotenv/config";
 import { db } from "../lib/db";
-import { resolveAlbumArt } from "../lib/resolve-art";
+import { backfillAlbumArtBatch, countMissingAlbumArtGroups } from "../lib/backfill-art-queue";
 
 const MAX_PER_RUN = 500;
 const DELAY_MS = 350;
 
 async function main() {
-  const missing = await db.stream.groupBy({
-    by: ["trackId", "trackName", "artistName", "albumName"],
-    where: { albumArt: null },
-  });
-
-  if (missing.length === 0) {
+  const total = await countMissingAlbumArtGroups();
+  if (total === 0) {
     console.log("No tracks missing album artwork.");
     process.exit(0);
   }
 
-  const toProcess = missing.slice(0, MAX_PER_RUN);
-  const remaining = missing.length - toProcess.length;
-  let updated = 0;
-
-  console.log(`Processing ${toProcess.length} track groups (${remaining} more after this batch)...`);
-
-  for (const m of toProcess) {
-    const art = await resolveAlbumArt(m);
-    if (art) {
-      const result = await db.stream.updateMany({
-        where: { trackId: m.trackId, albumArt: null },
-        data: { albumArt: art },
-      });
-      updated += result.count;
-    }
-    await new Promise((r) => setTimeout(r, DELAY_MS));
-  }
-
-  console.log(`Updated ${updated} streams. ${remaining} track groups remaining.`);
+  console.log(`Processing up to ${MAX_PER_RUN} of ${total} track groups (newest first)...`);
+  const { updated, processed, remaining } = await backfillAlbumArtBatch(MAX_PER_RUN, DELAY_MS);
+  console.log(`Updated ${updated} streams (${processed} groups). ${remaining} groups still missing art.`);
 }
 
 main()

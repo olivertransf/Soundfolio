@@ -5,6 +5,7 @@ import {
   type LastFmTimelineRow,
 } from "@/lib/lastfm-listen-duration";
 import { resolveLastFmCatalogDurationMs } from "@/lib/lastfm";
+import { backfillAlbumArtBatch } from "@/lib/backfill-art-queue";
 import { resolveAlbumArt, resolveArtistArt } from "@/lib/resolve-art";
 import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
 
@@ -65,12 +66,12 @@ export async function filterInsertableLastFmScrobbles(
 
 export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
   if (novel.length === 0) {
-    return { inserted: 0, durationUpdates: 0, ignored: 0 };
+    return { inserted: 0, durationUpdates: 0, artUpdated: 0, ignored: 0 };
   }
 
   const insertable = await filterInsertableLastFmScrobbles(novel);
   if (insertable.length === 0) {
-    return { inserted: 0, durationUpdates: 0, ignored: novel.length };
+    return { inserted: 0, durationUpdates: 0, artUpdated: 0, ignored: novel.length };
   }
 
   const sorted = [...insertable].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
@@ -117,9 +118,17 @@ export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
   const insertResult = await db.stream.createMany({ data: rowsToInsert, skipDuplicates: true });
   const durationUpdates = await recomputeLastFmDurationsAround(minPlayed, maxPlayed);
 
+  let artUpdated = 0;
+  const needsArt = rowsToInsert.some((r) => !r.albumArt);
+  if (needsArt && insertResult.count > 0) {
+    const batch = await backfillAlbumArtBatch(Math.min(10, insertResult.count + 5), 200);
+    artUpdated = batch.updated;
+  }
+
   return {
     inserted: insertResult.count,
     durationUpdates,
+    artUpdated,
     ignored: novel.length - insertable.length,
   };
 }

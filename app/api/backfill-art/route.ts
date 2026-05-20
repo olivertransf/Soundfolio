@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { resolveAlbumArt } from "@/lib/resolve-art";
+import { backfillAlbumArtBatch, countMissingAlbumArtGroups } from "@/lib/backfill-art-queue";
 import { isRequestAuthorized } from "@/lib/auth";
 
 export const maxDuration = 60;
@@ -14,12 +13,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const missing = await db.stream.groupBy({
-      by: ["trackId", "trackName", "artistName", "albumName"],
-      where: { albumArt: null },
-    });
-
-    if (missing.length === 0) {
+    const totalMissing = await countMissingAlbumArtGroups();
+    if (totalMissing === 0) {
       return NextResponse.json({
         updated: 0,
         total: 0,
@@ -28,27 +23,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const toProcess = missing.slice(0, MAX_PER_RUN);
-    const remaining = missing.length - toProcess.length;
-    let updated = 0;
-
-    for (const m of toProcess) {
-      const art = await resolveAlbumArt(m);
-      if (art) {
-        const result = await db.stream.updateMany({
-          where: { trackId: m.trackId, albumArt: null },
-          data: { albumArt: art },
-        });
-        updated += result.count;
-      }
-      await new Promise((r) => setTimeout(r, DELAY_MS));
-    }
+    const { updated, processed, remaining } = await backfillAlbumArtBatch(
+      MAX_PER_RUN,
+      DELAY_MS
+    );
 
     return NextResponse.json({
       updated,
-      total: toProcess.length,
+      total: processed,
       remaining,
-      source: "lastfm_itunes_coverartarchive",
+      source: "lastfm_itunes_song_coverartarchive",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Backfill failed";
