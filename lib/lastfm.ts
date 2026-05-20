@@ -64,16 +64,29 @@ export async function getRecentTracks(
     .map((t) => mapTrack(t, new Date(parseInt(t.date!.uts, 10) * 1000)));
 }
 
+export type LastFmImage = { size?: string; "#text"?: string };
+
+export function isLastFmPlaceholderUrl(url: string): boolean {
+  return url.includes(PLACEHOLDER_HASH);
+}
+
+/** Best album/track image from a Last.fm `image` array (skips empty placeholders). */
+export function pickLastFmImageUrl(images: LastFmImage[] | undefined): string | null {
+  const imgs = Array.isArray(images) ? images : [];
+  const img =
+    imgs.find((i) => i?.size === "extralarge" || i?.size === "large") ?? imgs[imgs.length - 1];
+  const url = img?.["#text"];
+  if (!url || url.length === 0 || isLastFmPlaceholderUrl(url)) return null;
+  return url;
+}
+
 function mapTrack(t: LastFmTrack, playedAt: Date) {
-  const imgs = Array.isArray(t.image) ? t.image : [];
-  const img = imgs.find((i: { size?: string }) => i?.size === "extralarge" || i?.size === "large") ?? imgs[imgs.length - 1];
-  const imgUrl = img && typeof img === "object" && "#text" in img ? (img as { "#text": string })["#text"] : null;
   return {
     artist: (t.artist as { "#text"?: string })?.["#text"] ?? "Unknown",
     name: t.name ?? "Unknown",
     album: (t.album as { "#text"?: string })?.["#text"] ?? "",
     playedAt,
-    image: imgUrl && imgUrl.length > 0 ? imgUrl : null,
+    image: pickLastFmImageUrl(t.image),
   };
 }
 
@@ -103,8 +116,13 @@ type LastFmTrackInfo = {
   error?: number;
   track?: {
     duration?: string;
-    album?: { image?: { size?: string; "#text"?: string }[] };
+    album?: { image?: LastFmImage[] };
   };
+};
+
+type LastFmAlbumInfo = {
+  error?: number;
+  album?: { image?: LastFmImage[] };
 };
 
 async function fetchTrackInfo(artist: string, track: string): Promise<LastFmTrackInfo | null> {
@@ -166,13 +184,23 @@ export async function resolveLastFmCatalogDurationMs(
 export async function getTrackArt(artist: string, track: string): Promise<string | null> {
   const data = await fetchTrackInfo(artist, track);
   if (!data) return null;
-  const album = data.track?.album;
-  const imgs = Array.isArray(album?.image) ? album.image : [];
-  const img =
-    imgs.find((i) => i?.size === "extralarge" || i?.size === "large") ?? imgs[imgs.length - 1];
-  const url = img?.["#text"];
-  if (!url || url.length === 0 || isPlaceholderUrl(url)) return null;
-  return url;
+  return pickLastFmImageUrl(data.track?.album?.image);
+}
+
+export async function getAlbumArt(artist: string, album: string): Promise<string | null> {
+  const apiKey = lastFmApiKey();
+  if (!apiKey || !album.trim()) return null;
+  const params = new URLSearchParams({
+    method: "album.getInfo",
+    artist,
+    album,
+    api_key: apiKey,
+    format: "json",
+  });
+  const res = await fetch(`${BASE}?${params}`);
+  const data = (await safeJson(res)) as LastFmAlbumInfo | null;
+  if (!data || data.error) return null;
+  return pickLastFmImageUrl(data.album?.image);
 }
 
 /** Fallback when Last.fm has no catalog duration for a track. */
@@ -187,10 +215,6 @@ export function lastFmDefaultDurationMs(): number {
 
 const PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
 
-function isPlaceholderUrl(url: string): boolean {
-  return url.includes(PLACEHOLDER_HASH);
-}
-
 export async function getArtistArt(artist: string): Promise<string | null> {
   const apiKey = lastFmApiKey();
   if (!apiKey) return null;
@@ -203,13 +227,8 @@ export async function getArtistArt(artist: string): Promise<string | null> {
   const res = await fetch(`${BASE}?${params}`);
   const data = (await safeJson(res)) as {
     error?: number;
-    artist?: { image?: { size?: string; "#text"?: string }[] };
+    artist?: { image?: LastFmImage[] };
   } | null;
   if (!data || data.error) return null;
-  const imgs = Array.isArray(data.artist?.image) ? data.artist.image : [];
-  const img =
-    imgs.find((i) => i?.size === "extralarge" || i?.size === "large") ?? imgs[imgs.length - 1];
-  const url = img?.["#text"];
-  if (!url || url.length === 0 || isPlaceholderUrl(url)) return null;
-  return url;
+  return pickLastFmImageUrl(data.artist?.image);
 }

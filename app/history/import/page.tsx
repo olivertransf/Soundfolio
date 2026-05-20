@@ -303,7 +303,7 @@ export default function HistoryImportPage() {
             Backfill album artwork
           </CardTitle>
           <CardDescription>
-            Imported streams don&apos;t include images. This looks up cover art via iTunes, Last.fm (if configured), and Cover Art Archive.
+            Imported streams don&apos;t include images. This looks up cover art via Last.fm (if configured), then iTunes and Cover Art Archive.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

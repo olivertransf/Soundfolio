@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getArtistArtFromDiscogs } from "@/lib/discogs";
-import { getArtistArtFromDeezer } from "@/lib/deezer";
-import { getArtistArt } from "@/lib/lastfm";
+import { resolveArtistArt } from "@/lib/resolve-art";
 import { isRequestAuthorized } from "@/lib/auth";
 
 export const maxDuration = 60;
 
 const MAX_PER_RUN = 25;
 const DELAY_MS = 2100;
-
-async function getArtistImage(artistName: string): Promise<string | null> {
-  const discogs = await getArtistArtFromDiscogs(artistName);
-  if (discogs) return discogs;
-  const deezer = await getArtistArtFromDeezer(artistName);
-  if (deezer) return deezer;
-  return getArtistArt(artistName);
-}
 
 export async function POST(req: NextRequest) {
   if (!isRequestAuthorized(req)) {
@@ -45,7 +35,7 @@ export async function POST(req: NextRequest) {
     for (const m of toProcess) {
       let art: string | null = null;
       try {
-        art = await getArtistImage(m.artistName);
+        art = await resolveArtistArt(m.artistName);
       } catch (e) {
         console.warn("Artist image lookup failed:", m.artistName, e);
       }
@@ -63,6 +53,7 @@ export async function POST(req: NextRequest) {
       updated,
       total: toProcess.length,
       remaining,
+      source: "lastfm_discogs_deezer",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Backfill failed";

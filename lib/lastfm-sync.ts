@@ -5,6 +5,7 @@ import {
   type LastFmTimelineRow,
 } from "@/lib/lastfm-listen-duration";
 import { resolveLastFmCatalogDurationMs } from "@/lib/lastfm";
+import { resolveAlbumArt, resolveArtistArt } from "@/lib/resolve-art";
 import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
 
 export type IncomingScrobble = {
@@ -77,16 +78,18 @@ export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
   const maxPlayed = sorted[sorted.length - 1].playedAt;
 
   const catalogCache = new Map<string, number>();
+  const artistArtCache = new Map<string, string | null>();
   const insertData = sorted.map((t) => ({
     trackId: lastFmScrobbleStreamId(t.artist, t.name, t.playedAt),
     trackName: t.name,
     artistName: t.artist,
-    artistArt: null,
+    artistArt: null as string | null,
     albumName: t.album,
-    albumArt: t.image,
+    albumArt: null as string | null,
     durationMs: 0,
     playedAt: t.playedAt,
     isDemo: false as const,
+    _scrobbleImage: t.image,
   }));
 
   for (const row of insertData) {
@@ -95,9 +98,23 @@ export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
       row.trackName,
       catalogCache
     );
+    row.albumArt = await resolveAlbumArt({
+      artistName: row.artistName,
+      trackName: row.trackName,
+      albumName: row.albumName,
+      scrobbleImage: row._scrobbleImage,
+    });
+    let artistArt = artistArtCache.get(row.artistName);
+    if (artistArt === undefined) {
+      artistArt = await resolveArtistArt(row.artistName);
+      artistArtCache.set(row.artistName, artistArt);
+    }
+    row.artistArt = artistArt;
   }
 
-  const insertResult = await db.stream.createMany({ data: insertData, skipDuplicates: true });
+  const rowsToInsert = insertData.map(({ _scrobbleImage: _, ...row }) => row);
+
+  const insertResult = await db.stream.createMany({ data: rowsToInsert, skipDuplicates: true });
   const durationUpdates = await recomputeLastFmDurationsAround(minPlayed, maxPlayed);
 
   return {

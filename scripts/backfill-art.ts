@@ -1,40 +1,16 @@
 /**
  * Backfill album art for streams missing artwork.
- * Tries iTunes → Last.fm (if LASTFM_API_KEY) → Cover Art Archive.
+ * Tries Last.fm (scrobble / track / album) → iTunes → Cover Art Archive.
  *
  * Usage: npx tsx scripts/backfill-art.ts
  */
 
 import "dotenv/config";
 import { db } from "../lib/db";
-import { getAlbumArtFromItunes } from "../lib/itunes";
-import { getAlbumArtFromCoverArtArchive } from "../lib/coverartarchive";
-import { getTrackArt } from "../lib/lastfm";
+import { resolveAlbumArt } from "../lib/resolve-art";
 
 const MAX_PER_RUN = 500;
 const DELAY_MS = 350;
-
-async function resolveAlbumArt(m: {
-  trackName: string;
-  artistName: string;
-  albumName: string;
-}): Promise<string | null> {
-  let art: string | null = null;
-  try {
-    art = await getAlbumArtFromItunes(m.artistName, m.albumName);
-  } catch {}
-  if (!art && process.env.LASTFM_API_KEY) {
-    try {
-      art = await getTrackArt(m.artistName, m.trackName);
-    } catch {}
-  }
-  if (!art) {
-    try {
-      art = await getAlbumArtFromCoverArtArchive(m.artistName, m.albumName);
-    } catch {}
-  }
-  return art;
-}
 
 async function main() {
   const missing = await db.stream.groupBy({

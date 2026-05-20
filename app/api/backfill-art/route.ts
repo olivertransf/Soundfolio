@@ -1,36 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAlbumArtFromItunes } from "@/lib/itunes";
-import { getAlbumArtFromCoverArtArchive } from "@/lib/coverartarchive";
-import { getTrackArt } from "@/lib/lastfm";
+import { resolveAlbumArt } from "@/lib/resolve-art";
 import { isRequestAuthorized } from "@/lib/auth";
 
 export const maxDuration = 60;
 
 const MAX_PER_RUN = 45;
 const DELAY_MS = 350;
-
-async function resolveAlbumArt(m: {
-  trackName: string;
-  artistName: string;
-  albumName: string;
-}): Promise<string | null> {
-  let art: string | null = null;
-  try {
-    art = await getAlbumArtFromItunes(m.artistName, m.albumName);
-  } catch {}
-  if (!art && process.env.LASTFM_API_KEY) {
-    try {
-      art = await getTrackArt(m.artistName, m.trackName);
-    } catch {}
-  }
-  if (!art) {
-    try {
-      art = await getAlbumArtFromCoverArtArchive(m.artistName, m.albumName);
-    } catch {}
-  }
-  return art;
-}
 
 export async function POST(req: NextRequest) {
   if (!isRequestAuthorized(req)) {
@@ -72,7 +48,7 @@ export async function POST(req: NextRequest) {
       updated,
       total: toProcess.length,
       remaining,
-      source: "itunes_lastfm_coverartarchive",
+      source: "lastfm_itunes_coverartarchive",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Backfill failed";

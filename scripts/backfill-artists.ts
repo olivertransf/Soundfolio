@@ -1,26 +1,16 @@
 /**
  * Backfill artist images for streams missing artwork.
- * Tries Discogs → Deezer → Last.fm (LASTFM_API_KEY helps Last.fm).
+ * Tries Last.fm → Discogs → Deezer.
  *
  * Usage: npx tsx scripts/backfill-artists.ts
  */
 
 import "dotenv/config";
 import { db } from "../lib/db";
-import { getArtistArtFromDiscogs } from "../lib/discogs";
-import { getArtistArtFromDeezer } from "../lib/deezer";
-import { getArtistArt } from "../lib/lastfm";
+import { resolveArtistArt } from "../lib/resolve-art";
 
 const MAX_PER_RUN = 25;
 const DELAY_MS = 2100;
-
-async function getArtistImage(artistName: string): Promise<string | null> {
-  const discogs = await getArtistArtFromDiscogs(artistName);
-  if (discogs) return discogs;
-  const deezer = await getArtistArtFromDeezer(artistName);
-  if (deezer) return deezer;
-  return getArtistArt(artistName);
-}
 
 async function run() {
   const missing = await db.stream.groupBy({
@@ -37,7 +27,7 @@ async function run() {
   console.log(`Processing ${toProcess.length} artists (${remaining} remaining)...`);
 
   for (const m of toProcess) {
-    const art = await getArtistImage(m.artistName);
+    const art = await resolveArtistArt(m.artistName);
     if (art) {
       const result = await db.stream.updateMany({
         where: { artistName: m.artistName, artistArt: null },

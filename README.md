@@ -52,7 +52,7 @@ The migration script bulk-upserts streams into MongoDB and preserves existing ID
 3. Connect Spotify to Last.fm in the Spotify app so new plays scrobble.
 4. Use **Sync from Last.fm** on the import page, or let the app run a lightweight background sync on load.
 
-Backfill album artwork from iTunes, Last.fm, and Cover Art Archive. Backfill artist images from Discogs, Deezer, and Last.fm.
+Backfill album artwork from Last.fm (then iTunes and Cover Art Archive). Backfill artist images from Last.fm (then Discogs and Deezer).
 
 ## Vercel
 

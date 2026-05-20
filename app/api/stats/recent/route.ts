@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecentStreams } from "@/lib/stats";
 import { getNowPlayingTrack } from "@/lib/lastfm";
+import { resolveAlbumArt, resolveArtistArt } from "@/lib/resolve-art";
 import { lastFmTrackId } from "@/lib/stream-ids";
 
 export async function GET(req: NextRequest) {
@@ -18,8 +19,13 @@ export async function GET(req: NextRequest) {
         trackName: nowPlaying.name,
         artistName: nowPlaying.artist,
         albumName: nowPlaying.album,
-        albumArt: nowPlaying.image,
-        artistArt: null,
+        albumArt: await resolveAlbumArt({
+          artistName: nowPlaying.artist,
+          trackName: nowPlaying.name,
+          albumName: nowPlaying.album,
+          scrobbleImage: nowPlaying.image,
+        }),
+        artistArt: await resolveArtistArt(nowPlaying.artist),
         durationMs: 0,
         isDemo: false,
         createdAt: nowPlaying.playedAt.toISOString(),
