@@ -88,7 +88,11 @@ function toMongoFilter(where: StreamWhere = {}): Filter<StreamDocument> {
     if (key === "OR") continue;
     if (value === undefined) continue;
     if (key === "id") {
-      filter._id = value as string;
+      if (value && typeof value === "object" && !Array.isArray(value) && "in" in value) {
+        filter._id = { $in: (value as { in: string[] }).in };
+      } else {
+        filter._id = value as string;
+      }
       continue;
     }
     if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {

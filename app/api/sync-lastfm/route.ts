@@ -68,12 +68,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { inserted, durationUpdates } = await insertLastFmScrobbles(novel);
+    const { inserted, durationUpdates, ignored } = await insertLastFmScrobbles(novel);
 
     return NextResponse.json({
       synced: inserted,
       fetched: tracks.length,
       durationUpdates,
+      ignored,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Sync failed";

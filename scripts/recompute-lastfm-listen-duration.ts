@@ -42,15 +42,22 @@ async function main() {
     durationMs: r.durationMs,
   }));
 
-  const updates = await recomputeLastFmListenDurations(timeline);
+  const { updates, deleteIds } = await recomputeLastFmListenDurations(timeline);
   const lfmCount = timeline.filter((r) => isLastFmStream(r.trackId)).length;
 
   console.log(
     dryRun ? "[dry-run] " : "",
-    `${updates.size} of ${lfmCount} Last.fm rows need new listen durations.`
+    `${updates.size} duration updates, ${deleteIds.length} short-gap scrobbles to remove (${lfmCount} Last.fm rows).`
   );
 
-  if (dryRun || updates.size === 0) return;
+  if (dryRun) return;
+
+  if (deleteIds.length > 0) {
+    const del = await col.deleteMany({ _id: { $in: deleteIds } } as unknown as Filter<Document>);
+    console.log(`Deleted ${del.deletedCount} rows (<10s to next play).`);
+  }
+
+  if (updates.size === 0) return;
 
   let modified = 0;
   for (const [id, durationMs] of updates) {

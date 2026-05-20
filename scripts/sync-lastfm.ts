@@ -34,10 +34,10 @@ async function main() {
 
   const existing = await loadExistingInPlayWindow(readyTracks);
   const novel = filterNovelScrobbles(readyTracks, existing);
-  const { inserted, durationUpdates } = await insertLastFmScrobbles(novel);
+  const { inserted, durationUpdates, ignored } = await insertLastFmScrobbles(novel);
 
   console.log(
-    `Synced ${inserted} new scrobbles (${novel.length} novel / ${readyTracks.length} ready). Adjusted ${durationUpdates} listen durations.`
+    `Synced ${inserted} new scrobbles (${novel.length} novel / ${readyTracks.length} ready, ${ignored} ignored <10s gap). Adjusted ${durationUpdates} listen durations.`
   );
 }
 

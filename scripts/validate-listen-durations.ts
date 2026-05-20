@@ -8,12 +8,12 @@ if (!globalThis.crypto) globalThis.crypto = webcrypto as Crypto;
 
 import "dotenv/config";
 import { mongoDb } from "../lib/db";
-import { inferLastFmListenDurationMs, isLastFmStream } from "../lib/lastfm-listen-duration";
 import {
-  LASTFM_MAX_CATALOG_MS,
-  LASTFM_MIN_CATALOG_MS,
-  normalizeCatalogDurationMs,
-} from "../lib/lastfm";
+  inferLastFmListenDurationMs,
+  isLastFmStream,
+  shouldIgnoreLastFmScrobble,
+} from "../lib/lastfm-listen-duration";
+import { LASTFM_MAX_CATALOG_MS, normalizeCatalogDurationMs } from "../lib/lastfm";
 
 async function main() {
   const col = (await mongoDb()).collection("streams");
@@ -25,7 +25,7 @@ async function main() {
 
   let lfm = 0;
   let ruleMismatch = 0;
-  let underMin = 0;
+  let shortGapRows = 0;
   let overCap = 0;
 
   for (let i = 0; i < rows.length; i++) {
@@ -33,10 +33,14 @@ async function main() {
     if (!isLastFmStream(row.trackId)) continue;
     lfm++;
 
-    if (row.durationMs < LASTFM_MIN_CATALOG_MS - 1) underMin++;
     if (row.durationMs > LASTFM_MAX_CATALOG_MS) overCap++;
 
     const next = rows[i + 1];
+    if (shouldIgnoreLastFmScrobble(row.playedAt, next?.playedAt)) {
+      shortGapRows++;
+      continue;
+    }
+
     const catalog = normalizeCatalogDurationMs(row.durationMs);
     const expected = inferLastFmListenDurationMs(
       catalog,
@@ -62,9 +66,18 @@ async function main() {
     .toArray();
 
   console.log("Last.fm rows:", lfm);
-  console.log("Rule mismatches (±1.5s):", ruleMismatch, "| under 30s min:", underMin, "| over 90m cap:", overCap);
+  console.log(
+    "Rule mismatches (±1.5s):",
+    ruleMismatch,
+    "| short-gap rows still stored:",
+    shortGapRows,
+    "| over 90m cap:",
+    overCap
+  );
   console.log("Last 7d totals:", week[0] ?? "none");
-  if (ruleMismatch === 0 && overCap === 0) console.log("OK — Last.fm durations match gap + catalog rule.");
+  if (ruleMismatch === 0 && shortGapRows === 0 && overCap === 0) {
+    console.log("OK — Last.fm durations match gap + catalog rule.");
+  }
 }
 
 main().catch((e) => {
