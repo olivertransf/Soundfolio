@@ -1,8 +1,8 @@
 /**
- * Set durationMs on Last.fm rows to catalog track length (from track.getInfo).
+ * @deprecated Use scripts/recompute-lastfm-listen-duration.ts instead.
+ * That script applies full catalog length capped by gap to the next scrobble.
  *
- * Usage: MONGODB_URI=... npx tsx scripts/backfill-lastfm-catalog-duration.ts
- * Add --dry-run to preview.
+ * This file only sets raw catalog length (ignores skips / next play timing).
  */
 import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto as Crypto;

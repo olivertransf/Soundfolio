@@ -46,7 +46,13 @@ export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
   }
 
   const insertResult = await db.stream.createMany({ data: insertData, skipDuplicates: true });
+  const durationUpdates = await recomputeLastFmDurationsAround(minPlayed, maxPlayed);
 
+  return { inserted: insertResult.count, durationUpdates };
+}
+
+/** Recompute Last.fm listen times in a window (full catalog unless next play is sooner). */
+export async function recomputeLastFmDurationsAround(minPlayed: Date, maxPlayed: Date) {
   const [neighborBefore, inRange, neighborAfter] = await Promise.all([
     db.stream.findFirst({
       where: { isDemo: false, playedAt: { lt: minPlayed } },
@@ -83,8 +89,7 @@ export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
     await db.stream.updateMany({ where: { id }, data: { durationMs } });
     durationUpdates++;
   }
-
-  return { inserted: insertResult.count, durationUpdates };
+  return durationUpdates;
 }
 
 export function filterNovelScrobbles(

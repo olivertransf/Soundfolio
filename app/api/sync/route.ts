@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { recomputeLastFmDurationsAround } from "@/lib/lastfm-sync";
 import { getRecentlyPlayed } from "@/lib/spotify";
 
 export const maxDuration = 30;
@@ -43,24 +44,33 @@ async function runSync() {
       });
     }
 
-    const result = await db.stream.createMany({
-      data: data.items.map((item) => ({
-        trackId: item.track.id,
-        trackName: item.track.name,
-        artistName: item.track.artists[0]?.name ?? "Unknown",
-        artistArt: null,
-        albumName: item.track.album.name,
-        albumArt: item.track.album.images[0]?.url ?? null,
-        durationMs: item.track.duration_ms,
-        playedAt: new Date(item.played_at),
-        isDemo: false,
-      })),
-      skipDuplicates: true,
-    });
+    const items = data.items.map((item) => ({
+      trackId: item.track.id,
+      trackName: item.track.name,
+      artistName: item.track.artists[0]?.name ?? "Unknown",
+      artistArt: null,
+      albumName: item.track.album.name,
+      albumArt: item.track.album.images[0]?.url ?? null,
+      durationMs: item.track.duration_ms,
+      playedAt: new Date(item.played_at),
+      isDemo: false,
+    }));
+
+    const result = await db.stream.createMany({ data: items, skipDuplicates: true });
+
+    let durationUpdates = 0;
+    if (result.count > 0) {
+      const playedAts = items.map((i) => i.playedAt.getTime());
+      durationUpdates = await recomputeLastFmDurationsAround(
+        new Date(Math.min(...playedAts)),
+        new Date(Math.max(...playedAts))
+      );
+    }
 
     return NextResponse.json({
       synced: result.count,
       fetched: data.items.length,
+      durationUpdates,
       lastStream: data.items[0]?.played_at ?? null,
     });
   } catch (err) {

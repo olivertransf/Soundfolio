@@ -25,6 +25,7 @@
     "db:backfill-lfm-duration:dry-run": "npx tsx scripts/backfill-lastfm-catalog-duration.ts --dry-run",
     "db:recompute-lfm-listen": "npx tsx scripts/recompute-lastfm-listen-duration.ts",
     "db:recompute-lfm-listen:dry-run": "npx tsx scripts/recompute-lastfm-listen-duration.ts --dry-run",
+    "db:validate-listen": "npx tsx scripts/validate-listen-durations.ts",
     "export-obsidian-stats": "npx tsx scripts/export-obsidian-stats.ts"
   },
   "dependencies": {

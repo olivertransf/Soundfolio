@@ -260,9 +260,19 @@ class StreamRepository {
 
   async updateMany({ where = {}, data }: { where?: StreamWhere; data: Partial<Stream> }) {
     const collection = await this.collection();
-    const result = await collection.updateMany(toMongoFilter(where), {
-      $set: { ...data, updatedAt: new Date() },
-    });
+    const patch = { ...data, updatedAt: new Date() };
+    if (data.durationMs != null) {
+      const rows = await collection
+        .find(toMongoFilter(where), { projection: { trackId: 1 } })
+        .toArray();
+      if (rows.length === 1) {
+        patch.durationMs = normalizeDurationMs({
+          trackId: rows[0].trackId,
+          durationMs: data.durationMs,
+        });
+      }
+    }
+    const result = await collection.updateMany(toMongoFilter(where), { $set: patch });
     return { count: result.modifiedCount };
   }
 
