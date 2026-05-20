@@ -7,6 +7,7 @@ import { resolveLastFmCatalogDurationMs } from "@/lib/lastfm";
 import { backfillAlbumArtBatch } from "@/lib/backfill-art-queue";
 import { resolveAlbumArt, resolveArtistArt } from "@/lib/resolve-art";
 import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
+import { correctLastFmPlayedAt, resolveStatsTimeZone } from "@/lib/stats-timezone";
 
 export type IncomingScrobble = {
   artist: string;
@@ -16,12 +17,21 @@ export type IncomingScrobble = {
   image: string | null;
 };
 
-export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
+export async function insertLastFmScrobbles(
+  novel: IncomingScrobble[],
+  timeZone?: string
+) {
   if (novel.length === 0) {
     return { inserted: 0, durationUpdates: 0, artUpdated: 0 };
   }
 
-  const sorted = [...novel].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
+  const tz = resolveStatsTimeZone(timeZone);
+  const normalized = novel.map((t) => {
+    const playedAt = correctLastFmPlayedAt(t.playedAt, tz);
+    return { ...t, playedAt };
+  });
+
+  const sorted = [...normalized].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
   const minPlayed = sorted[0].playedAt;
   const maxPlayed = sorted[sorted.length - 1].playedAt;
 

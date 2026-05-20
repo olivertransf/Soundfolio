@@ -65,17 +65,17 @@ export function spotifyExportTsToUtc(ts: string, timeZone: string): Date {
   return new Date(s);
 }
 
-/** Heuristic: mis-parsed import rows cluster at fake “night” / “afternoon” UTC-as-local hours. */
+/** Spotify ZIP imports often land at fake night / afternoon hours when local wall time was stored as UTC. */
 function spotifyImportLooksMisParsed(playedAt: Date, timeZone: string): boolean {
   const h = getHourInTimeZone(playedAt, timeZone);
   return h <= 6 || (h >= 14 && h <= 16);
 }
 
 /**
- * Spotify ZIP imports often stored listener-local wall time as UTC.
- * Last.fm uses unix timestamps and must not be adjusted.
+ * Some clients store the listener's wall clock (hour/minute) as a UTC instant.
+ * Rebuild the real instant by reading those digits in `timeZone` instead.
  */
-export function fixSpotifyImportPlayedAt(playedAt: Date, timeZone: string): Date {
+export function fixWallTimeStoredAsUtc(playedAt: Date, timeZone: string): Date {
   const y = playedAt.getUTCFullYear();
   const month = playedAt.getUTCMonth() + 1;
   const day = playedAt.getUTCDate();
@@ -85,6 +85,23 @@ export function fixSpotifyImportPlayedAt(playedAt: Date, timeZone: string): Date
   const ms = playedAt.getUTCMilliseconds();
   const base = zonedDateTimeToUtc(timeZone, y, month, day, hour, minute, second);
   return new Date(base.getTime() + ms);
+}
+
+/** @deprecated Use {@link fixWallTimeStoredAsUtc}. */
+export const fixSpotifyImportPlayedAt = fixWallTimeStoredAsUtc;
+
+/**
+ * Last.fm scrobbles that used local wall digits as UTC show up as ~2–6 AM Pacific
+ * when the listen was actually daytime / evening.
+ */
+export function lastFmLooksWallTimeAsUtc(playedAt: Date, timeZone: string): boolean {
+  const h = getHourInTimeZone(playedAt, timeZone);
+  return h <= 6;
+}
+
+export function correctLastFmPlayedAt(playedAt: Date, timeZone: string): Date {
+  if (!lastFmLooksWallTimeAsUtc(playedAt, timeZone)) return playedAt;
+  return fixWallTimeStoredAsUtc(playedAt, timeZone);
 }
 
 /**
@@ -97,16 +114,17 @@ export function getListenBucketInstant(
   trackId: string,
   timeZone: string
 ): Date {
+  let anchor = playedAt;
   if (trackId.startsWith("lfm-")) {
-    return new Date(playedAt.getTime() - Math.max(0, durationMs));
+    anchor = correctLastFmPlayedAt(playedAt, timeZone);
+    return new Date(anchor.getTime() - Math.max(0, durationMs));
   }
 
-  let anchor = playedAt;
   if (
     playedAt.getUTCMilliseconds() === 0 &&
     spotifyImportLooksMisParsed(playedAt, timeZone)
   ) {
-    anchor = fixSpotifyImportPlayedAt(playedAt, timeZone);
+    anchor = fixWallTimeStoredAsUtc(playedAt, timeZone);
   }
 
   // Spotify recently-played API: `played_at` is start; `duration_ms` is full track length.

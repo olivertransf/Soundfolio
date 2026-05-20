@@ -7,6 +7,11 @@ import {
 } from "@/lib/lastfm-sync";
 import { isRequestAuthorized } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  VIEWER_TIMEZONE_COOKIE,
+  VIEWER_TIMEZONE_PARAM,
+  resolveStatsTimeZone,
+} from "@/lib/stats-timezone";
 
 export const maxDuration = 30;
 
@@ -68,7 +73,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { inserted, durationUpdates, artUpdated } = await insertLastFmScrobbles(novel);
+    const timeZone = resolveStatsTimeZone(
+      req.nextUrl.searchParams.get(VIEWER_TIMEZONE_PARAM) ??
+        req.cookies.get(VIEWER_TIMEZONE_COOKIE)?.value
+    );
+    const { inserted, durationUpdates, artUpdated } = await insertLastFmScrobbles(
+      novel,
+      timeZone
+    );
 
     return NextResponse.json({
       synced: inserted,
