@@ -68,13 +68,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { inserted, durationUpdates, ignored, artUpdated } = await insertLastFmScrobbles(novel);
+    const { inserted, durationUpdates, artUpdated } = await insertLastFmScrobbles(novel);
 
     return NextResponse.json({
       synced: inserted,
       fetched: tracks.length,
       durationUpdates,
-      ignored,
       artUpdated,
     });
   } catch (err) {

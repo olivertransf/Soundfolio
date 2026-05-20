@@ -3,7 +3,7 @@ import {
   resolveLastFmCatalogDurationMs,
 } from "@/lib/lastfm";
 
-/** Ignore Last.fm scrobbles when the next play starts sooner than this (skips / double scrobbles). */
+/** Next play sooner than this → zero listen credit (row kept for recents). */
 export const LASTFM_MIN_SROBBLE_GAP_MS = 10_000;
 
 export type LastFmTimelineRow = {
@@ -15,8 +15,8 @@ export type LastFmTimelineRow = {
   durationMs: number;
 };
 
-/** Drop scrobbles whose next play (any source) is under {@link LASTFM_MIN_SROBBLE_GAP_MS}. */
-export function shouldIgnoreLastFmScrobble(
+/** True when the next play starts under {@link LASTFM_MIN_SROBBLE_GAP_MS} (skip / double scrobble). */
+export function isLastFmShortGapScrobble(
   playedAt: Date,
   nextPlayedAt: Date | null | undefined
 ): boolean {
@@ -25,26 +25,55 @@ export function shouldIgnoreLastFmScrobble(
   return gap < LASTFM_MIN_SROBBLE_GAP_MS;
 }
 
+/** @deprecated Use {@link isLastFmShortGapScrobble}. */
+export const shouldIgnoreLastFmScrobble = isLastFmShortGapScrobble;
+
+export type LastFmListenNeighbors = {
+  prevPlayedAt?: Date | null;
+  nextPlayedAt?: Date | null;
+};
+
 /**
- * Full catalog length unless the next scrobble (any source) happens sooner.
- * `playedAt` is Last.fm scrobble time, so this is an estimate, not wall-clock listen time.
+ * Estimate listen time from timeline gaps (any source), capped at catalog length.
+ *
+ * - Next play &lt; {@link LASTFM_MIN_SROBBLE_GAP_MS} → 0 (skip / double scrobble).
+ * - Otherwise credit the smaller of: catalog, time since previous play, time until next play.
+ *   (Both gaps matter: Last.fm `playedAt` is scrobble time, so "since previous" catches
+ *   short skips; "until next" catches Spotify-style start timestamps in the same timeline.)
  */
 export function inferLastFmListenDurationMs(
   catalogMs: number,
   playedAt: Date,
-  nextPlayedAt: Date | null | undefined
+  neighbors: LastFmListenNeighbors | Date | null | undefined
 ): number {
   const catalog = normalizeCatalogDurationMs(catalogMs);
-  if (!nextPlayedAt) return catalog;
+  const { prevPlayedAt, nextPlayedAt } =
+    neighbors instanceof Date || neighbors == null
+      ? { prevPlayedAt: undefined, nextPlayedAt: neighbors ?? undefined }
+      : neighbors;
 
-  const gap = nextPlayedAt.getTime() - playedAt.getTime();
-  if (gap < LASTFM_MIN_SROBBLE_GAP_MS) return 0;
-  return Math.min(catalog, gap);
+  if (nextPlayedAt) {
+    const gapToNext = nextPlayedAt.getTime() - playedAt.getTime();
+    if (gapToNext < LASTFM_MIN_SROBBLE_GAP_MS) return 0;
+  }
+
+  const candidates: number[] = [catalog];
+
+  if (prevPlayedAt) {
+    const gapFromPrev = playedAt.getTime() - prevPlayedAt.getTime();
+    if (gapFromPrev >= LASTFM_MIN_SROBBLE_GAP_MS) candidates.push(gapFromPrev);
+  }
+
+  if (nextPlayedAt) {
+    const gapToNext = nextPlayedAt.getTime() - playedAt.getTime();
+    if (gapToNext >= LASTFM_MIN_SROBBLE_GAP_MS) candidates.push(gapToNext);
+  }
+
+  return Math.min(...candidates);
 }
 
 export type LastFmDurationRecompute = {
   updates: Map<string, number>;
-  deleteIds: string[];
 };
 
 export function isLastFmStream(trackId: string): boolean {
@@ -56,8 +85,7 @@ export async function recomputeLastFmListenDurations(
   timeline: LastFmTimelineRow[]
 ): Promise<LastFmDurationRecompute> {
   const updates = new Map<string, number>();
-  const deleteIds: string[] = [];
-  if (timeline.length === 0) return { updates, deleteIds };
+  if (timeline.length === 0) return { updates };
 
   const sorted = [...timeline].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
   const catalogCache = new Map<string, number>();
@@ -80,15 +108,12 @@ export async function recomputeLastFmListenDurations(
     const row = sorted[i];
     if (!isLastFmStream(row.trackId)) continue;
 
-    const nextPlayedAt = sorted[i + 1]?.playedAt ?? null;
-    if (shouldIgnoreLastFmScrobble(row.playedAt, nextPlayedAt)) {
-      deleteIds.push(row.id);
-      continue;
-    }
-
-    const listenMs = inferLastFmListenDurationMs(catalogByIndex[i], row.playedAt, nextPlayedAt);
+    const listenMs = inferLastFmListenDurationMs(catalogByIndex[i], row.playedAt, {
+      prevPlayedAt: sorted[i - 1]?.playedAt ?? null,
+      nextPlayedAt: sorted[i + 1]?.playedAt ?? null,
+    });
     if (row.durationMs !== listenMs) updates.set(row.id, listenMs);
   }
 
-  return { updates, deleteIds };
+  return { updates };
 }

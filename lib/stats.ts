@@ -39,6 +39,7 @@ export type StatsScope = "me" | "demo";
 
 type StreamWhere = {
   playedAt?: { gte?: Date; lte?: Date };
+  durationMs?: { gt?: number };
   isDemo?: boolean;
   artistName?: string | { in?: string[] };
   artistArt?: string | null | { not?: null };
@@ -50,6 +51,15 @@ type StreamWhere = {
 
 function mergeScope(base: StreamWhere, scope: StatsScope): StreamWhere {
   return { ...base, isDemo: scope === "demo" };
+}
+
+/** Rows with zero listen credit (e.g. Last.fm short-gap scrobbles) stay in recents but skip stats. */
+function withListenCredit(base: StreamWhere): StreamWhere {
+  return { ...base, durationMs: { gt: 0 } };
+}
+
+function statsWhere(base: StreamWhere, scope: StatsScope): StreamWhere {
+  return mergeScope(withListenCredit(base), scope);
 }
 
 export function parseTimeRange(
@@ -125,7 +135,7 @@ export async function getTotalStats(
   filter?: TimeRangeFilter,
   scope: StatsScope = "me"
 ) {
-  const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
+  const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
 
   const result = await db.stream.aggregate({
     where,
@@ -147,7 +157,7 @@ export async function getTopTracks(
   scope: StatsScope = "me",
   sortBy: TopSortBy = "minutes"
 ) {
-  const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
+  const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
 
   const tracks = await db.stream.groupBy({
     by: ["trackName", "artistName"],
@@ -202,7 +212,7 @@ export async function getTopArtists(
   scope: StatsScope = "me",
   sortBy: TopSortBy = "minutes"
 ) {
-  const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
+  const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
 
   const artists = await db.stream.groupBy({
     by: ["artistName"],
@@ -257,7 +267,7 @@ export async function getTopAlbums(
   scope: StatsScope = "me",
   sortBy: TopSortBy = "minutes"
 ) {
-  const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
+  const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
 
   const albums = await db.stream.groupBy({
     by: ["albumName", "artistName"],
@@ -308,7 +318,7 @@ export async function getStreamsByHour(
   timeZone?: string
 ) {
   const tz = resolveStatsTimeZone(timeZone);
-  const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
+  const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
     select: { playedAt: true, durationMs: true },
@@ -336,7 +346,7 @@ export async function getStreamsByDayOfWeek(
   timeZone?: string
 ) {
   const tz = resolveStatsTimeZone(timeZone);
-  const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
+  const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
     select: { playedAt: true, durationMs: true },
@@ -365,7 +375,7 @@ export async function getListeningHeatmap(
   timeZone?: string
 ) {
   const tz = resolveStatsTimeZone(timeZone);
-  const where = mergeScope(filter ? buildWhere(filter) : {}, scope);
+  const where = statsWhere(filter ? buildWhere(filter) : {}, scope);
   const streams = await db.stream.findMany({
     where,
     select: { playedAt: true },
@@ -404,7 +414,7 @@ export async function getStreamsByWeek(
 ) {
   const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subWeeks(new Date(), weeksBack);
-  const where = mergeScope(resolveDateWhere(filter, defaultSince), scope);
+  const where = statsWhere(resolveDateWhere(filter, defaultSince), scope);
   const streams = await db.stream.findMany({
     where,
     select: { playedAt: true, durationMs: true },
@@ -434,7 +444,7 @@ export async function getStreamsByMonth(
 ) {
   const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subMonths(new Date(), monthsBack);
-  const where = mergeScope(resolveDateWhere(filter, defaultSince), scope);
+  const where = statsWhere(resolveDateWhere(filter, defaultSince), scope);
   const streams = await db.stream.findMany({
     where,
     select: { playedAt: true, durationMs: true },
@@ -460,7 +470,7 @@ export async function getStreamsByDay(
 ) {
   const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subDays(new Date(), 90);
-  const where = mergeScope(resolveDateWhere(filter, defaultSince), scope);
+  const where = statsWhere(resolveDateWhere(filter, defaultSince), scope);
   const streams = await db.stream.findMany({
     where,
     select: { playedAt: true, durationMs: true },
@@ -532,7 +542,7 @@ export async function getListeningDiversity(
       ? buildWhere(filter)
       : {}
     : {};
-  const where = mergeScope(base, scope);
+  const where = statsWhere(base, scope);
   const [tracks, artists] = await Promise.all([
     db.stream.groupBy({
       by: ["trackId"],
@@ -552,7 +562,7 @@ export async function getActivityHeatmap(scope: StatsScope = "me", timeZone?: st
   const tz = resolveStatsTimeZone(timeZone);
   const since = subMonths(new Date(), 12);
   const streams = await db.stream.findMany({
-    where: mergeScope({ playedAt: { gte: since } }, scope),
+    where: statsWhere({ playedAt: { gte: since } }, scope),
     select: { playedAt: true },
   });
 

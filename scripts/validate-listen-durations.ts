@@ -11,7 +11,7 @@ import { mongoDb } from "../lib/db";
 import {
   inferLastFmListenDurationMs,
   isLastFmStream,
-  shouldIgnoreLastFmScrobble,
+  isLastFmShortGapScrobble,
 } from "../lib/lastfm-listen-duration";
 import { LASTFM_MAX_CATALOG_MS, normalizeCatalogDurationMs } from "../lib/lastfm";
 
@@ -26,6 +26,7 @@ async function main() {
   let lfm = 0;
   let ruleMismatch = 0;
   let shortGapRows = 0;
+  let shortGapNonZero = 0;
   let overCap = 0;
 
   for (let i = 0; i < rows.length; i++) {
@@ -35,25 +36,27 @@ async function main() {
 
     if (row.durationMs > LASTFM_MAX_CATALOG_MS) overCap++;
 
+    const prev = rows[i - 1];
     const next = rows[i + 1];
-    if (shouldIgnoreLastFmScrobble(row.playedAt, next?.playedAt)) {
+    const shortGap = isLastFmShortGapScrobble(row.playedAt, next?.playedAt);
+    if (shortGap) {
       shortGapRows++;
+      if (row.durationMs !== 0) shortGapNonZero++;
       continue;
     }
 
     const catalog = normalizeCatalogDurationMs(row.durationMs);
-    const expected = inferLastFmListenDurationMs(
-      catalog,
-      row.playedAt,
-      next?.playedAt ?? null
-    );
+    const expected = inferLastFmListenDurationMs(catalog, row.playedAt, {
+      prevPlayedAt: prev?.playedAt ?? null,
+      nextPlayedAt: next?.playedAt ?? null,
+    });
     if (Math.abs(row.durationMs - expected) > 1500) ruleMismatch++;
   }
 
   const since7d = new Date(Date.now() - 7 * 86400000);
   const week = await col
     .aggregate([
-      { $match: { isDemo: false, playedAt: { $gte: since7d } } },
+      { $match: { isDemo: false, playedAt: { $gte: since7d }, durationMs: { $gt: 0 } } },
       {
         $group: {
           _id: null,
@@ -69,13 +72,15 @@ async function main() {
   console.log(
     "Rule mismatches (±1.5s):",
     ruleMismatch,
-    "| short-gap rows still stored:",
+    "| short-gap rows:",
     shortGapRows,
+    "| short-gap with non-zero duration:",
+    shortGapNonZero,
     "| over 90m cap:",
     overCap
   );
-  console.log("Last 7d totals:", week[0] ?? "none");
-  if (ruleMismatch === 0 && shortGapRows === 0 && overCap === 0) {
+  console.log("Last 7d listen-credit totals:", week[0] ?? "none");
+  if (ruleMismatch === 0 && shortGapNonZero === 0 && overCap === 0) {
     console.log("OK — Last.fm durations match gap + catalog rule.");
   }
 }

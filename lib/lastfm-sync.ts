@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
 import {
-  shouldIgnoreLastFmScrobble,
   recomputeLastFmListenDurations,
   type LastFmTimelineRow,
 } from "@/lib/lastfm-listen-duration";
@@ -17,64 +16,12 @@ export type IncomingScrobble = {
   image: string | null;
 };
 
-export async function filterInsertableLastFmScrobbles(
-  novel: IncomingScrobble[]
-): Promise<IncomingScrobble[]> {
-  if (novel.length === 0) return [];
-
-  const sorted = [...novel].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
-  const minPlayed = sorted[0].playedAt;
-  const maxPlayed = sorted[sorted.length - 1].playedAt;
-
-  const [neighborBefore, inRange, neighborAfter] = await Promise.all([
-    db.stream.findFirst({
-      where: { isDemo: false, playedAt: { lt: minPlayed } },
-      orderBy: { playedAt: "desc" },
-      select: { playedAt: true },
-    }),
-    db.stream.findMany({
-      where: { isDemo: false, playedAt: { gte: minPlayed, lte: maxPlayed } },
-      orderBy: { playedAt: "asc" },
-      select: { playedAt: true },
-    }),
-    db.stream.findFirst({
-      where: { isDemo: false, playedAt: { gt: maxPlayed } },
-      orderBy: { playedAt: "asc" },
-      select: { playedAt: true },
-    }),
-  ]);
-
-  type TimelinePoint =
-    | { kind: "db"; playedAt: Date }
-    | { kind: "novel"; playedAt: Date; scrobble: IncomingScrobble };
-
-  const timeline: TimelinePoint[] = [];
-  if (neighborBefore) timeline.push({ kind: "db", playedAt: neighborBefore.playedAt });
-  for (const row of inRange) timeline.push({ kind: "db", playedAt: row.playedAt });
-  for (const scrobble of sorted) {
-    timeline.push({ kind: "novel", playedAt: scrobble.playedAt, scrobble });
-  }
-  if (neighborAfter) timeline.push({ kind: "db", playedAt: neighborAfter.playedAt });
-  timeline.sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
-
-  return sorted.filter((scrobble) => {
-    const idx = timeline.findIndex((p) => p.kind === "novel" && p.scrobble === scrobble);
-    const next = timeline[idx + 1]?.playedAt;
-    return !shouldIgnoreLastFmScrobble(scrobble.playedAt, next);
-  });
-}
-
 export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
   if (novel.length === 0) {
-    return { inserted: 0, durationUpdates: 0, artUpdated: 0, ignored: 0 };
+    return { inserted: 0, durationUpdates: 0, artUpdated: 0 };
   }
 
-  const insertable = await filterInsertableLastFmScrobbles(novel);
-  if (insertable.length === 0) {
-    return { inserted: 0, durationUpdates: 0, artUpdated: 0, ignored: novel.length };
-  }
-
-  const sorted = [...insertable].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
+  const sorted = [...novel].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
   const minPlayed = sorted[0].playedAt;
   const maxPlayed = sorted[sorted.length - 1].playedAt;
 
@@ -129,7 +76,6 @@ export async function insertLastFmScrobbles(novel: IncomingScrobble[]) {
     inserted: insertResult.count,
     durationUpdates,
     artUpdated,
-    ignored: novel.length - insertable.length,
   };
 }
 
@@ -165,10 +111,7 @@ export async function recomputeLastFmDurationsAround(minPlayed: Date, maxPlayed:
     });
   }
 
-  const { updates, deleteIds } = await recomputeLastFmListenDurations(timeline);
-  if (deleteIds.length > 0) {
-    await db.stream.deleteMany({ where: { id: { in: deleteIds } } });
-  }
+  const { updates } = await recomputeLastFmListenDurations(timeline);
   let durationUpdates = 0;
   for (const [id, durationMs] of updates) {
     await db.stream.updateMany({ where: { id }, data: { durationMs } });

@@ -1,6 +1,6 @@
 /**
  * Recompute Last.fm listen durations: full track length unless the next
- * scrobble (any source) happens sooner.
+ * scrobble (any source) happens sooner; short-gap rows get durationMs 0.
  *
  * Usage: MONGODB_URI=... npx tsx scripts/recompute-lastfm-listen-duration.ts
  */
@@ -42,21 +42,16 @@ async function main() {
     durationMs: r.durationMs,
   }));
 
-  const { updates, deleteIds } = await recomputeLastFmListenDurations(timeline);
+  const { updates } = await recomputeLastFmListenDurations(timeline);
   const lfmCount = timeline.filter((r) => isLastFmStream(r.trackId)).length;
+  const zeroDuration = [...updates.values()].filter((ms) => ms === 0).length;
 
   console.log(
     dryRun ? "[dry-run] " : "",
-    `${updates.size} duration updates, ${deleteIds.length} short-gap scrobbles to remove (${lfmCount} Last.fm rows).`
+    `${updates.size} duration updates (${zeroDuration} short-gap → 0 ms) across ${lfmCount} Last.fm rows.`
   );
 
   if (dryRun) return;
-
-  if (deleteIds.length > 0) {
-    const del = await col.deleteMany({ _id: { $in: deleteIds } } as unknown as Filter<Document>);
-    console.log(`Deleted ${del.deletedCount} rows (<10s to next play).`);
-  }
-
   if (updates.size === 0) return;
 
   let modified = 0;

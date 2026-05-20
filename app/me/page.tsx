@@ -326,7 +326,7 @@ export default async function OverviewPage({
           </div>
         }
       >
-        <HomePatternsSection filter={filter} viewerTimeZone={viewerTimeZone} />
+        <HomePatternsSection periodLabel={filter.label} />
       </Suspense>
     </div>
   );
