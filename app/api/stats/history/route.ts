@@ -5,6 +5,7 @@ import {
   getStreamsByDay,
   parseTimeRange,
 } from "@/lib/stats";
+import { requireStatsApiAuth } from "@/lib/stats-api-auth";
 import {
   VIEWER_TIMEZONE_COOKIE,
   VIEWER_TIMEZONE_PARAM,
@@ -12,6 +13,9 @@ import {
 } from "@/lib/stats-timezone";
 
 export async function GET(req: NextRequest) {
+  const denied = requireStatsApiAuth(req);
+  if (denied) return denied;
+
   const mode = req.nextUrl.searchParams.get("mode") ?? "months";
   const range = req.nextUrl.searchParams.get("range") ?? undefined;
   const from = req.nextUrl.searchParams.get("from") ?? undefined;

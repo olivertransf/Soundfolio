@@ -5,9 +5,13 @@ import {
   getStreamsByHour,
   parseTimeRange,
 } from "@/lib/stats";
+import { requireStatsApiAuth } from "@/lib/stats-api-auth";
 import { VIEWER_TIMEZONE_PARAM, resolveStatsTimeZone } from "@/lib/stats-timezone";
 
 export async function GET(req: NextRequest) {
+  const denied = requireStatsApiAuth(req);
+  if (denied) return denied;
+
   const sp = req.nextUrl.searchParams;
   const range = sp.get("range") ?? undefined;
   const from = sp.get("from") ?? undefined;

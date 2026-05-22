@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStatsApiAuth } from "@/lib/stats-api-auth";
 import { getRecentStreams } from "@/lib/stats";
 import { getNowPlayingTrack } from "@/lib/lastfm";
 import { resolveAlbumArt, resolveArtistArt } from "@/lib/resolve-art";
@@ -11,6 +12,9 @@ import {
 } from "@/lib/stats-timezone";
 
 export async function GET(req: NextRequest) {
+  const denied = requireStatsApiAuth(req);
+  if (denied) return denied;
+
   const limit = Math.min(
     Math.max(Number(req.nextUrl.searchParams.get("limit") ?? 100), 1),
     200
