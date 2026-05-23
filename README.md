@@ -12,6 +12,11 @@ Soundfolio is not affiliated with Spotify. Spotify is a trademark of Spotify AB.
 - MongoDB Atlas via the native MongoDB Node driver
 - Recharts visualizations
 - Vercel deployment
+- Native **iOS / iPadOS** app in [`ios/`](ios/) (SwiftUI)
+
+## iOS app
+
+See [`ios/README.md`](ios/README.md). Open `ios/Soundfolio.xcodeproj` in Xcode. The mobile client uses the same `/api/stats/*` routes as the web dashboard.
 
 ## Setup
 
