@@ -1,0 +1,7 @@
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Local secrets
+Config/Secrets.xcconfig

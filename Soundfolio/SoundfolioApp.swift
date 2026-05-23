@@ -1,17 +1,13 @@
-//
-//  SoundfolioApp.swift
-//  Soundfolio
-//
-//  Created by Oliver Tran on 5/22/26.
-//
-
 import SwiftUI
 
 @main
 struct SoundfolioApp: App {
+    @State private var appState = AppState(preferences: StatsPreferences())
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView(preferences: appState.preferences)
+                .environment(appState)
         }
     }
 }
