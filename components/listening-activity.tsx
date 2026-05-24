@@ -66,7 +66,6 @@ export function ListeningActivity({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeZone, setTimeZone] = useState<string>("");
-  const [refreshTick, setRefreshTick] = useState(0);
   const [metric, setMetric] = useState<ChartMetric>("minutes");
 
   const range = searchParams.get("range") ?? "";
@@ -86,16 +85,6 @@ export function ListeningActivity({
     } catch {
       setTimeZone("");
     }
-  }, []);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setRefreshTick((tick) => tick + 1), 45_000);
-    const onFocus = () => setRefreshTick((tick) => tick + 1);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
   }, []);
 
   useEffect(() => {
@@ -122,7 +111,7 @@ export function ListeningActivity({
         setError("Could not load chart data.");
         setLoading(false);
       });
-  }, [granularity, range, from, to, timeZone, historyApiPath, refreshTick]);
+  }, [granularity, range, from, to, timeZone, historyApiPath]);
 
   const cfg = granularityConfig[granularity];
 

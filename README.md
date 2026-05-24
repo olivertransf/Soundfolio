@@ -66,7 +66,7 @@ Backfill album artwork from Last.fm (then iTunes and Cover Art Archive). Backfil
 3. Build command: `npm run build`.
 4. Run `npm run db:indexes` locally or from a trusted one-off environment after changing index definitions.
 
-For cron-driven Spotify sync, schedule `GET /api/sync` or call `POST /api/sync` with `Authorization: Bearer <CRON_SECRET>`.
+Spotify sync is manual: call `POST /api/sync` with `Authorization: Bearer <CRON_SECRET>` from a script or CI when you want it. The web app does not run scheduled sync.
 
 ## Scripts
 

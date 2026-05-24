@@ -181,8 +181,6 @@ export default async function OverviewPage({
               <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
                 <RecentPlaysList
                   compact
-                  limit={7}
-                  pollMs={20_000}
                   initialStreams={recentStreams.map((stream) => ({
                     id: stream.id,
                     trackName: stream.trackName,

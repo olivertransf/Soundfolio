@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AlbumArt } from "@/components/album-art";
 import { LocalDateTime } from "@/components/local-datetime";
 import { cn } from "@/lib/utils";
@@ -18,60 +16,12 @@ type RecentStream = {
 
 export function RecentPlaysList({
   initialStreams,
-  limit = 100,
   compact = false,
-  pollMs = 20_000,
 }: {
   initialStreams: RecentStream[];
-  limit?: number;
   compact?: boolean;
-  pollMs?: number;
 }) {
-  const router = useRouter();
-  const [streams, setStreams] = useState(initialStreams);
-  const latestKeyRef = useRef(getLatestKey(initialStreams));
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function refresh() {
-      try {
-        await fetch("/api/sync-lastfm", {
-          method: "POST",
-          credentials: "same-origin",
-        });
-      } catch {
-        // Sync is best-effort; recent API still returns stored plays.
-      }
-
-      const response = await fetch(`/api/stats/recent?limit=${limit}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      if (!response.ok || cancelled) return;
-
-      const data = (await response.json()) as { streams?: RecentStream[] };
-      const nextStreams = data.streams ?? [];
-      const nextKey = getLatestKey(nextStreams);
-
-      if (cancelled) return;
-      setStreams(nextStreams);
-
-      if (nextKey && nextKey !== latestKeyRef.current) {
-        latestKeyRef.current = nextKey;
-        router.refresh();
-      }
-    }
-
-    void refresh();
-    const interval = window.setInterval(refresh, pollMs);
-    window.addEventListener("focus", refresh);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", refresh);
-    };
-  }, [limit, pollMs, router]);
+  const streams = initialStreams;
 
   if (streams.length === 0) {
     return (
@@ -178,10 +128,4 @@ export function RecentPlaysList({
       ))}
     </div>
   );
-}
-
-function getLatestKey(streams: RecentStream[]) {
-  const first = streams[0];
-  if (!first) return "";
-  return `${first.id}:${first.playedAt}:${first.isNowPlaying ? "1" : "0"}`;
 }
