@@ -140,6 +140,8 @@ struct FreshnessResponse: Codable {
 struct LastFmSyncResponse: Codable {
     let synced: Int?
     let skipped: Bool?
+    let hasMore: Bool?
+    let pending: Int?
     let message: String?
     let detail: String?
     let error: String?

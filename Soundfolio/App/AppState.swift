@@ -30,24 +30,44 @@ final class AppState {
         isSyncing = true
         defer { isSyncing = false }
         reloadClient()
-        let result = try await client.syncLastFm()
-        if let error = result.error ?? result.detail {
-            lastSyncMessage = error
-            throw APIClientError.server(error)
+
+        var totalSynced = 0
+        var lastResult: LastFmSyncResponse?
+
+        for _ in 0 ..< 40 {
+            let result = try await client.syncLastFm()
+            lastResult = result
+            if let error = result.error ?? result.detail {
+                lastSyncMessage = error
+                throw APIClientError.server(error)
+            }
+            if result.skipped == true {
+                lastSyncMessage = result.detail ?? result.message ?? "Last.fm sync is not configured on the server."
+                await refreshFreshness()
+                return result
+            }
+            let synced = result.synced ?? 0
+            totalSynced += synced
+            if result.hasMore != true || synced == 0 {
+                break
+            }
         }
-        if result.skipped == true {
-            lastSyncMessage = result.detail ?? result.message ?? "Last.fm sync is not configured on the server."
+
+        guard let lastResult else {
+            throw APIClientError.server("Sync did not return a response.")
+        }
+
+        if totalSynced > 0 {
+            lastSyncMessage = "Added \(totalSynced) scrobbles"
         } else {
-            let count = result.synced ?? 0
-            lastSyncMessage = count > 0
-                ? "Added \(count) scrobbles"
-                : (result.message ?? "No new scrobbles")
+            lastSyncMessage = lastResult.message ?? "No new scrobbles"
         }
+
         await refreshFreshness()
         #if canImport(UIKit)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         #endif
-        return result
+        return lastResult
     }
 
     func refreshFreshness() async {
