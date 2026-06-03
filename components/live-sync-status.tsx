@@ -42,10 +42,15 @@ export function LiveSyncStatus() {
         void (async () => {
           setLoading(true);
           try {
-            await fetch("/api/sync-lastfm", {
-              method: "POST",
-              credentials: "same-origin",
-            });
+            for (let i = 0; i < 40; i++) {
+              const res = await fetch("/api/sync-lastfm", {
+                method: "POST",
+                credentials: "same-origin",
+              });
+              if (!res.ok) break;
+              const data = (await res.json()) as { hasMore?: boolean; synced?: number };
+              if (!data.hasMore || (data.synced ?? 0) === 0) break;
+            }
             await loadFreshness();
             router.refresh();
           } finally {

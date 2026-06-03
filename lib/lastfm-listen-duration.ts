@@ -1,4 +1,5 @@
 import {
+  LASTFM_MIN_CATALOG_MS,
   normalizeCatalogDurationMs,
   resolveLastFmCatalogDurationMs,
 } from "@/lib/lastfm";
@@ -99,7 +100,12 @@ export async function recomputeLastFmListenDurations(
     const key = `${row.artistName}\0${row.trackName}`;
     let catalog = catalogCache.get(key);
     if (catalog == null) {
-      catalog = await resolveLastFmCatalogDurationMs(row.artistName, row.trackName, catalogCache);
+      if (row.durationMs >= LASTFM_MIN_CATALOG_MS) {
+        catalog = normalizeCatalogDurationMs(row.durationMs);
+      } else {
+        catalog = await resolveLastFmCatalogDurationMs(row.artistName, row.trackName, catalogCache);
+      }
+      catalogCache.set(key, catalog);
     }
     catalogByIndex.push(catalog);
   }

@@ -34,11 +34,27 @@ async function main() {
 
   const existing = await loadExistingInPlayWindow(readyTracks);
   const novel = filterNovelScrobbles(readyTracks, existing);
-  const { inserted, durationUpdates } = await insertLastFmScrobbles(novel);
+  const batch = [...novel].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
+  let totalInserted = 0;
+  let totalDurationUpdates = 0;
+  const BATCH = 40;
+
+  for (let offset = 0; offset < batch.length; offset += BATCH) {
+    const slice = batch.slice(offset, offset + BATCH);
+    const { inserted, durationUpdates } = await insertLastFmScrobbles(slice, undefined, {
+      fast: true,
+    });
+    totalInserted += inserted;
+    totalDurationUpdates += durationUpdates;
+    if (inserted === 0) break;
+  }
 
   console.log(
-    `Synced ${inserted} new scrobbles (${novel.length} novel / ${readyTracks.length} ready). Adjusted ${durationUpdates} listen durations.`
+    `Synced ${totalInserted} new scrobbles (${novel.length} novel / ${readyTracks.length} ready). Adjusted ${totalDurationUpdates} listen durations.`
   );
+  if (novel.length > totalInserted) {
+    console.log("Run again to import remaining scrobbles.");
+  }
 }
 
 main()

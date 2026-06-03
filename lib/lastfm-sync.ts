@@ -3,7 +3,11 @@ import {
   recomputeLastFmListenDurations,
   type LastFmTimelineRow,
 } from "@/lib/lastfm-listen-duration";
-import { resolveLastFmCatalogDurationMs } from "@/lib/lastfm";
+import {
+  isLastFmPlaceholderUrl,
+  lastFmDefaultDurationMs,
+  resolveLastFmCatalogDurationMs,
+} from "@/lib/lastfm";
 import { backfillAlbumArtBatch } from "@/lib/backfill-art-queue";
 import { resolveAlbumArt, resolveArtistArt } from "@/lib/resolve-art";
 import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
@@ -17,9 +21,15 @@ export type IncomingScrobble = {
   image: string | null;
 };
 
+export type InsertLastFmOptions = {
+  /** Skip per-track Last.fm/iTunes art lookups (safe for serverless sync). */
+  fast?: boolean;
+};
+
 export async function insertLastFmScrobbles(
   novel: IncomingScrobble[],
-  timeZone?: string
+  timeZone?: string,
+  options?: InsertLastFmOptions
 ) {
   if (novel.length === 0) {
     return { inserted: 0, durationUpdates: 0, artUpdated: 0 };
@@ -35,6 +45,8 @@ export async function insertLastFmScrobbles(
   const minPlayed = sorted[0].playedAt;
   const maxPlayed = sorted[sorted.length - 1].playedAt;
 
+  const fast = options?.fast === true;
+  const defaultDurationMs = lastFmDefaultDurationMs();
   const catalogCache = new Map<string, number>();
   const artistArtCache = new Map<string, string | null>();
   const insertData = sorted.map((t) => ({
@@ -51,6 +63,15 @@ export async function insertLastFmScrobbles(
   }));
 
   for (const row of insertData) {
+    if (fast) {
+      row.durationMs = defaultDurationMs;
+      const image = row._scrobbleImage;
+      row.albumArt =
+        image && !isLastFmPlaceholderUrl(image) ? image : null;
+      row.artistArt = null;
+      continue;
+    }
+
     row.durationMs = await resolveLastFmCatalogDurationMs(
       row.artistName,
       row.trackName,
@@ -76,7 +97,7 @@ export async function insertLastFmScrobbles(
   const durationUpdates = await recomputeLastFmDurationsAround(minPlayed, maxPlayed);
 
   let artUpdated = 0;
-  const needsArt = rowsToInsert.some((r) => !r.albumArt);
+  const needsArt = !fast && rowsToInsert.some((r) => !r.albumArt);
   if (needsArt && insertResult.count > 0) {
     const batch = await backfillAlbumArtBatch(Math.min(10, insertResult.count + 5), 200);
     artUpdated = batch.updated;

@@ -51,22 +51,35 @@ export default function HistoryImportPage() {
     setLastfmResult(null);
     setLastfmLoading(true);
     try {
-      const res = await fetch("/api/sync-lastfm", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setLastfmResult({ synced: 0, error: data.detail ?? data.error ?? "Sync failed" });
-      } else if (data.skipped) {
-        setLastfmResult({
-          synced: 0,
-          message: data.detail ?? data.message ?? "Add LASTFM_USER and LASTFM_API_KEY to .env",
-        });
-      } else {
-        setLastfmResult({
-          synced: data.synced ?? 0,
-          message: data.synced > 0 ? `Added ${data.synced} scrobbles` : data.message ?? "No new scrobbles",
-        });
-        if ((data.synced ?? 0) > 0) router.refresh();
+      let totalSynced = 0;
+      let lastMessage: string | undefined;
+      for (let i = 0; i < 40; i++) {
+        const res = await fetch("/api/sync-lastfm", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) {
+          setLastfmResult({ synced: totalSynced, error: data.detail ?? data.error ?? "Sync failed" });
+          return;
+        }
+        if (data.skipped) {
+          setLastfmResult({
+            synced: totalSynced,
+            message: data.detail ?? data.message ?? "Add LASTFM_USER and LASTFM_API_KEY to .env",
+          });
+          return;
+        }
+        const synced = data.synced ?? 0;
+        totalSynced += synced;
+        lastMessage = data.message;
+        if (!data.hasMore || synced === 0) break;
       }
+      setLastfmResult({
+        synced: totalSynced,
+        message:
+          totalSynced > 0
+            ? `Added ${totalSynced} scrobbles`
+            : lastMessage ?? "No new scrobbles",
+      });
+      if (totalSynced > 0) router.refresh();
     } catch {
       setLastfmResult({ synced: 0, error: "Network error" });
     } finally {

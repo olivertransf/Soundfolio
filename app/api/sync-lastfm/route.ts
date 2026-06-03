@@ -15,6 +15,9 @@ import {
 
 export const maxDuration = 30;
 
+/** Keep each invocation under Vercel's 30s limit when catching up large gaps. */
+const SYNC_BATCH_SIZE = 40;
+
 export async function POST(req: NextRequest) {
   if (!isRequestAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -77,14 +80,22 @@ export async function POST(req: NextRequest) {
       req.nextUrl.searchParams.get(VIEWER_TIMEZONE_PARAM) ??
         req.cookies.get(VIEWER_TIMEZONE_COOKIE)?.value
     );
+    const batch = [...novel].sort(
+      (a, b) => a.playedAt.getTime() - b.playedAt.getTime()
+    ).slice(0, SYNC_BATCH_SIZE);
+
     const { inserted, durationUpdates, artUpdated } = await insertLastFmScrobbles(
-      novel,
-      timeZone
+      batch,
+      timeZone,
+      { fast: true }
     );
+    const hasMore = novel.length > batch.length && inserted > 0;
 
     return NextResponse.json({
       synced: inserted,
       fetched: tracks.length,
+      pending: novel.length - batch.length,
+      hasMore,
       durationUpdates,
       artUpdated,
     });
