@@ -17,6 +17,8 @@ export const maxDuration = 30;
 
 /** Keep each invocation under Vercel's 30s limit when catching up large gaps. */
 const SYNC_BATCH_SIZE = 40;
+/** Re-fetch this window so middle gaps still import after a partial sync. */
+const SYNC_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   if (!isRequestAuthorized(req)) {
@@ -49,10 +51,13 @@ export async function POST(req: NextRequest) {
     });
 
     const fromTimestamp = latest?.playedAt
-      ? Math.max(0, Math.floor(latest.playedAt.getTime() / 1000) - 120)
+      ? Math.max(
+          0,
+          Math.floor((latest.playedAt.getTime() - SYNC_LOOKBACK_MS) / 1000)
+        )
       : undefined;
 
-    const tracks = await getRecentTracks(username, 200, fromTimestamp);
+    const tracks = await getRecentTracks(username, 6000, fromTimestamp);
 
     if (tracks.length === 0) {
       return NextResponse.json({ synced: 0, message: "No new scrobbles" });

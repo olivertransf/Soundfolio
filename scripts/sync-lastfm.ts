@@ -1,3 +1,6 @@
+import { webcrypto } from "node:crypto";
+if (!globalThis.crypto) globalThis.crypto = webcrypto as Crypto;
+
 import "dotenv/config";
 import { db } from "../lib/db";
 import { getRecentTracks, isLastFmConfigured } from "../lib/lastfm";
@@ -21,11 +24,12 @@ async function main() {
     select: { playedAt: true },
   });
 
+  const SYNC_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
   const fromTimestamp = latest?.playedAt
-    ? Math.max(0, Math.floor(latest.playedAt.getTime() / 1000) - 120)
+    ? Math.max(0, Math.floor((latest.playedAt.getTime() - SYNC_LOOKBACK_MS) / 1000))
     : undefined;
 
-  const tracks = await getRecentTracks(username, 200, fromTimestamp);
+  const tracks = await getRecentTracks(username, 6000, fromTimestamp);
   const readyTracks = tracks.filter((track) => track.playedAt.getTime() <= Date.now() + 5 * 60 * 1000);
   if (readyTracks.length === 0) {
     console.log("No scrobbles ready to import.");
