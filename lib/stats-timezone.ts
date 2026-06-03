@@ -96,7 +96,8 @@ export const fixSpotifyImportPlayedAt = fixWallTimeStoredAsUtc;
  */
 export function lastFmLooksWallTimeAsUtc(playedAt: Date, timeZone: string): boolean {
   const h = getHourInTimeZone(playedAt, timeZone);
-  return h <= 6;
+  // Real midnight listens are hour 0–1; ghost plays from wall-as-UTC land around 2–6 AM.
+  return h >= 2 && h <= 6;
 }
 
 export function correctLastFmPlayedAt(playedAt: Date, timeZone: string): Date {

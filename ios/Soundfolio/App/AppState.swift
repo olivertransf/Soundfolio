@@ -35,7 +35,7 @@ final class AppState {
         var lastResult: LastFmSyncResponse?
 
         for _ in 0 ..< 40 {
-            let result = try await client.syncLastFm()
+            let result = try await client.syncLastFm(timeZone: TimeZone.current.identifier)
             lastResult = result
             if let error = result.error ?? result.detail {
                 lastSyncMessage = error

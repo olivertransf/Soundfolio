@@ -11,7 +11,7 @@ import {
 import { backfillAlbumArtBatch } from "@/lib/backfill-art-queue";
 import { resolveAlbumArt, resolveArtistArt } from "@/lib/resolve-art";
 import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
-import { correctLastFmPlayedAt, resolveStatsTimeZone } from "@/lib/stats-timezone";
+import { resolveStatsTimeZone } from "@/lib/stats-timezone";
 
 export type IncomingScrobble = {
   artist: string;
@@ -36,10 +36,8 @@ export async function insertLastFmScrobbles(
   }
 
   const tz = resolveStatsTimeZone(timeZone);
-  const normalized = novel.map((t) => {
-    const playedAt = correctLastFmPlayedAt(t.playedAt, tz);
-    return { ...t, playedAt };
-  });
+  // Store Last.fm UTC instants as returned by the API; correction runs when serving stats.
+  const normalized = novel.map((t) => ({ ...t, playedAt: t.playedAt }));
 
   const sorted = [...normalized].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
   const minPlayed = sorted[0].playedAt;
