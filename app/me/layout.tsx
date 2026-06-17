@@ -1,12 +1,5 @@
-import { requireOnboardedSession } from "@/lib/auth-server";
+import { DashboardShell } from "@/components/dashboard-shell";
 
-export const dynamic = "force-dynamic";
-
-export default async function MeLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  await requireOnboardedSession("/me");
-  return <>{children}</>;
+export default function MeLayout({ children }: { children: React.ReactNode }) {
+  return <DashboardShell>{children}</DashboardShell>;
 }

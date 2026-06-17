@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/firebase/admin";
+import { formatFirebaseAdminError } from "@/lib/firebase/errors";
 import {
   SESSION_COOKIE,
   establishUserSession,
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     res.cookies.set(SESSION_COOKIE, sessionCookie, sessionCookieOptions());
     return res;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Invalid token";
+    const message = formatFirebaseAdminError(err);
     return NextResponse.json({ error: message }, { status: 401 });
   }
 }

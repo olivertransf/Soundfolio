@@ -17,6 +17,8 @@ import {
   getStoredGroupBy,
   setStoredGroupBy,
 } from "@/lib/stats-session-preferences";
+import { historyChartData, parseChartFilter } from "@/lib/stats-chart-data";
+import { useStreams } from "@/components/streams-provider";
 
 const ListeningChart = dynamic(
   () =>
@@ -50,16 +52,15 @@ const granularityConfig: Record<
 
 export function ListeningActivity({
   periodLabel,
-  historyApiPath = "/api/stats/history",
   compact = false,
   className,
 }: {
   periodLabel: string;
-  historyApiPath?: string;
   /** Denser layout and shorter chart for overview / dashboards. */
   compact?: boolean;
   className?: string;
 }) {
+  const { streams, loading: streamsLoading } = useStreams();
   const searchParams = useSearchParams();
   const [granularity, setGranularity] = useState<GroupByMode>("weeks");
   const [data, setData] = useState<Point[]>([]);
@@ -92,26 +93,19 @@ export function ListeningActivity({
   }, []);
 
   useEffect(() => {
+    if (!timeZone || streamsLoading) return;
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({
-      mode: granularityConfig[granularity].apiMode,
-    });
-    if (range) params.set("range", range);
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-    if (timeZone) params.set(VIEWER_TIMEZONE_PARAM, timeZone);
-    fetch(`${historyApiPath}?${params}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d.data ?? []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError("Could not load chart data.");
-        setLoading(false);
-      });
-  }, [granularity, range, from, to, timeZone, historyApiPath]);
+    try {
+      const filter = parseChartFilter(range, from, to, timeZone);
+      const mode = granularityConfig[granularity].apiMode as "months" | "weeks" | "days";
+      setData(historyChartData(streams, mode, filter, timeZone));
+    } catch {
+      setError("Could not load chart data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [granularity, range, from, to, timeZone, streams, streamsLoading]);
 
   const cfg = granularityConfig[granularity];
 
@@ -184,7 +178,7 @@ export function ListeningActivity({
           )}
         </CardHeader>
         <CardContent className={cn("pt-0", compact ? "px-4 pb-5" : undefined)}>
-          {loading ? (
+          {loading || streamsLoading ? (
             <div
               className="flex items-center justify-center rounded-xl bg-secondary/20 text-sm text-muted-foreground"
               style={{ minHeight: loadH }}

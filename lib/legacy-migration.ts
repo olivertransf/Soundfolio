@@ -1,26 +1,29 @@
-import { mongoDb } from "@/lib/db";
+import { db } from "@/lib/db";
 import { getUserProfile, updateUserLastfmUsername } from "@/lib/users";
 
 export async function countLegacyStreams() {
-  const db = await mongoDb();
-  return db.collection("streams").countDocuments({
-    isDemo: false,
-    userId: { $exists: false },
-  });
+  const rows = await db.stream.findMany({ where: { isDemo: false } });
+  return rows.filter((row) => !row.userId).length;
 }
 
 export async function assignLegacyStreamsToUser(uid: string) {
-  const db = await mongoDb();
-  const now = new Date();
-  const result = await db.collection("streams").updateMany(
-    { isDemo: false, userId: { $exists: false } },
-    { $set: { userId: uid, updatedAt: now } }
-  );
+  const rows = await db.stream.findMany({ where: { isDemo: false } });
+  const legacyIds = rows.filter((row) => !row.userId).map((row) => row.id);
+  if (legacyIds.length === 0) {
+    return { matched: 0, modified: 0 };
+  }
 
-  return {
-    matched: result.matchedCount,
-    modified: result.modifiedCount,
-  };
+  let modified = 0;
+  for (let i = 0; i < legacyIds.length; i += 450) {
+    const slice = legacyIds.slice(i, i + 450);
+    const result = await db.stream.updateMany({
+      where: { id: { in: slice } },
+      data: { userId: uid },
+    });
+    modified += result.count;
+  }
+
+  return { matched: legacyIds.length, modified };
 }
 
 export async function claimLegacyStreamsIfEligible(uid: string, email: string | null | undefined) {

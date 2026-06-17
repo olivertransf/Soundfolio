@@ -1,28 +1,28 @@
 import "dotenv/config";
-import { db } from "../lib/db";
 import { getRecentTracks, isLastFmConfigured } from "../lib/lastfm";
 import {
   filterNovelScrobbles,
-  insertLastFmScrobbles,
-  loadExistingInPlayWindow,
+  prepareLastFmScrobbleStreams,
 } from "../lib/lastfm-sync";
+import { getAdminFirestore } from "../lib/firebase/admin";
+import { streamDocumentId } from "../lib/types/stream";
+import { Timestamp } from "firebase-admin/firestore";
 
 async function main() {
   const username = process.env.LASTFM_USER?.trim();
-  if (!isLastFmConfigured() || !username) {
-    console.error("Set LASTFM_USER and LASTFM_API_KEY in .env");
+  const uid = process.env.LEGACY_USER_ID?.trim();
+  if (!isLastFmConfigured() || !username || !uid) {
+    console.error("Set LASTFM_USER, LASTFM_API_KEY, and LEGACY_USER_ID in .env");
     process.exit(1);
   }
 
-  const now = new Date();
-  const latest = await db.stream.findFirst({
-    where: { isDemo: false, playedAt: { lte: now } },
-    orderBy: { playedAt: "desc" },
-    select: { playedAt: true },
-  });
+  const firestore = getAdminFirestore();
+  const streamsRef = firestore.collection("users").doc(uid).collection("streams");
+  const latestSnap = await streamsRef.orderBy("playedAt", "desc").limit(1).get();
+  const latest = latestSnap.docs[0]?.data()?.playedAt as Timestamp | undefined;
 
-  const fromTimestamp = latest?.playedAt
-    ? Math.max(0, Math.floor(latest.playedAt.getTime() / 1000) - 120)
+  const fromTimestamp = latest
+    ? Math.max(0, latest.toDate().getTime() / 1000 - 120)
     : undefined;
 
   const tracks = await getRecentTracks(username, 200, fromTimestamp);
@@ -32,36 +32,48 @@ async function main() {
     return;
   }
 
-  const existing = await loadExistingInPlayWindow(readyTracks);
+  const existingSnap = await streamsRef
+    .where("playedAt", ">=", readyTracks.reduce((min, t) => (t.playedAt < min ? t.playedAt : min), readyTracks[0].playedAt))
+    .get();
+  const existing = existingSnap.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      artistName: String(data.artistName ?? ""),
+      trackName: String(data.trackName ?? ""),
+      playedAt: (data.playedAt as Timestamp).toDate(),
+    };
+  });
+
   const novel = filterNovelScrobbles(readyTracks, existing);
   const batch = [...novel].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
-  let totalInserted = 0;
-  let totalDurationUpdates = 0;
-  const BATCH = 40;
+  const prepared = prepareLastFmScrobbleStreams(batch, undefined, { fast: true });
+  let totalWritten = 0;
+  const BATCH = 450;
+  let writeBatch = firestore.batch();
+  let batchCount = 0;
 
-  for (let offset = 0; offset < batch.length; offset += BATCH) {
-    const slice = batch.slice(offset, offset + BATCH);
-    const { inserted, durationUpdates } = await insertLastFmScrobbles(slice, undefined, {
-      fast: true,
-    });
-    totalInserted += inserted;
-    totalDurationUpdates += durationUpdates;
-    if (inserted === 0) break;
+  for (const stream of prepared) {
+    const id = streamDocumentId({ userId: uid, trackId: stream.trackId, playedAt: stream.playedAt });
+    writeBatch.set(streamsRef.doc(id), {
+      ...stream,
+      playedAt: Timestamp.fromDate(stream.playedAt),
+      createdAt: Timestamp.fromDate(stream.playedAt),
+      updatedAt: Timestamp.fromDate(stream.playedAt),
+    }, { merge: true });
+    batchCount += 1;
+    totalWritten += 1;
+    if (batchCount >= BATCH) {
+      await writeBatch.commit();
+      writeBatch = firestore.batch();
+      batchCount = 0;
+    }
   }
+  if (batchCount > 0) await writeBatch.commit();
 
-  console.log(
-    `Synced ${totalInserted} new scrobbles (${novel.length} novel / ${readyTracks.length} ready). Adjusted ${totalDurationUpdates} listen durations.`
-  );
-  if (novel.length > totalInserted) {
-    console.log("Run again to import remaining scrobbles.");
-  }
+  console.log(`Synced ${totalWritten} new scrobbles (${novel.length} novel / ${readyTracks.length} ready).`);
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await db.$disconnect();
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

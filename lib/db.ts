@@ -1,17 +1,15 @@
-import { randomUUID } from "crypto";
+import { getAdminFirestore } from "@/lib/firebase/admin";
 import {
   lastFmDefaultDurationMs,
   LASTFM_MAX_CATALOG_MS,
   LASTFM_MIN_CATALOG_MS,
 } from "@/lib/lastfm";
 import {
-  MongoClient,
-  type Collection,
-  type Db,
-  type Document,
-  type Filter,
-  type Sort,
-} from "mongodb";
+  FieldPath,
+  FieldValue,
+  Timestamp,
+  type Query,
+} from "firebase-admin/firestore";
 
 export interface Stream {
   id: string;
@@ -29,119 +27,40 @@ export interface Stream {
   updatedAt: Date;
 }
 
-type StreamDocument = Omit<Stream, "id"> & { _id: string };
-type StreamWhere = Partial<Record<keyof Stream, unknown>> & {
+export type StreamWhere = Partial<Record<keyof Stream, unknown>> & {
   OR?: StreamWhere[];
 };
+
 type StreamSelect = Partial<Record<keyof Stream, boolean>>;
 type StreamOrderBy = Partial<Record<keyof Stream, "asc" | "desc">>;
 
-const DEFAULT_DB_NAME = "soundfolio";
+type StreamRecord = Omit<Stream, "id">;
 
-const globalForMongo = globalThis as unknown as {
-  mongoClientPromise?: Promise<MongoClient>;
+const STREAMS_COLLECTION = "streams";
+const ABSOLUTE_MAX_DURATION_MS = 60 * 60 * 1000;
+const BATCH_LIMIT = 450;
+
+const globalForDb = globalThis as unknown as {
   soundfolioDb?: SoundfolioDb;
 };
 
-function getMongoUri() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    throw new Error("Missing MONGODB_URI. Add it to .env.local and Vercel environment variables.");
-  }
-  return uri;
+function streamsCollection() {
+  return getAdminFirestore().collection(STREAMS_COLLECTION);
 }
 
-function clientPromise() {
-  if (!globalForMongo.mongoClientPromise) {
-    globalForMongo.mongoClientPromise = new MongoClient(getMongoUri(), {
-      appName: "Soundfolio",
-      maxPoolSize: 5,
-      minPoolSize: 0,
-      maxIdleTimeMS: 30_000,
-      serverSelectionTimeoutMS: 5_000,
-    })
-      .connect()
-      .catch((error) => {
-        globalForMongo.mongoClientPromise = undefined;
-        throw error;
-      });
-  }
-  return globalForMongo.mongoClientPromise;
+function toTimestamp(value: Date | Timestamp | undefined | null) {
+  if (!value) return null;
+  if (value instanceof Timestamp) return value;
+  return Timestamp.fromDate(value);
 }
 
-export async function mongoClient() {
-  return clientPromise();
+function fromTimestamp(value: Timestamp | Date | undefined | null) {
+  if (!value) return new Date(0);
+  if (value instanceof Date) return value;
+  return value.toDate();
 }
 
-export async function mongoDb(): Promise<Db> {
-  const client = await clientPromise();
-  return client.db(process.env.MONGODB_DB || DEFAULT_DB_NAME);
-}
-
-function toMongoFilter(where: StreamWhere = {}): Filter<StreamDocument> {
-  if ("OR" in where && Array.isArray(where.OR)) {
-    return { $or: where.OR.map((clause) => toMongoFilter(clause)) };
-  }
-
-  const filter: Filter<StreamDocument> = {};
-
-  for (const [key, value] of Object.entries(where)) {
-    if (key === "OR") continue;
-    if (value === undefined) continue;
-    if (key === "id") {
-      if (value && typeof value === "object" && !Array.isArray(value) && "in" in value) {
-        filter._id = { $in: (value as { in: string[] }).in };
-      } else {
-        filter._id = value as string;
-      }
-      continue;
-    }
-    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
-      const condition = value as Record<string, unknown>;
-      const mongoCondition: Document = {};
-      if ("gte" in condition) mongoCondition.$gte = condition.gte;
-      if ("lte" in condition) mongoCondition.$lte = condition.lte;
-      if ("gt" in condition) mongoCondition.$gt = condition.gt;
-      if ("lt" in condition) mongoCondition.$lt = condition.lt;
-      if ("in" in condition) mongoCondition.$in = condition.in;
-      if ("not" in condition) mongoCondition.$ne = condition.not;
-      if ("contains" in condition) mongoCondition.$regex = condition.contains;
-      filter[key as keyof StreamDocument] = mongoCondition as never;
-      continue;
-    }
-    filter[key as keyof StreamDocument] = value as never;
-  }
-
-  return filter;
-}
-
-function toMongoSort(orderBy?: StreamOrderBy): Sort {
-  if (!orderBy) return {};
-  return Object.fromEntries(
-    Object.entries(orderBy).map(([key, direction]) => [
-      key === "id" ? "_id" : key,
-      direction === "desc" ? -1 : 1,
-    ])
-  );
-}
-
-function toProjection(select?: StreamSelect): Document | undefined {
-  if (!select) return undefined;
-  const projection = Object.fromEntries(
-    Object.entries(select).map(([key, enabled]) => [key === "id" ? "_id" : key, enabled ? 1 : 0])
-  );
-  if (select.id) projection._id = 1;
-  return projection;
-}
-
-function fromDocument(doc: StreamDocument): Stream {
-  const { _id, ...rest } = doc;
-  return { id: _id, ...rest };
-}
-
-const ABSOLUTE_MAX_DURATION_MS = 60 * 60 * 1000;
-
-function normalizeDurationMs(stream: Partial<Stream>): number {
+export function normalizeDurationMs(stream: Partial<Stream>): number {
   const trackId = stream.trackId ?? "";
   let ms = stream.durationMs ?? 0;
   if (trackId.startsWith("lfm-")) {
@@ -153,72 +72,256 @@ function normalizeDurationMs(stream: Partial<Stream>): number {
   return ms;
 }
 
-function prepareDocument(stream: Partial<Stream>): StreamDocument {
+function prepareDocument(stream: Partial<Stream>): StreamRecord & { id: string } {
   const now = new Date();
+  const playedAt = stream.playedAt ?? now;
+  const trackId = stream.trackId ?? "";
+  const userId = stream.userId;
+  const id =
+    stream.id ??
+    `${userId ?? "legacy"}__${trackId}__${playedAt.getTime()}`;
   return {
-    _id: stream.id ?? randomUUID(),
-    trackId: stream.trackId ?? "",
+    id,
+    userId,
+    trackId,
     trackName: stream.trackName ?? "",
     artistName: stream.artistName ?? "",
     artistArt: stream.artistArt ?? null,
     albumName: stream.albumName ?? "",
     albumArt: stream.albumArt ?? null,
     durationMs: normalizeDurationMs(stream),
-    playedAt: stream.playedAt ?? now,
+    playedAt,
     isDemo: stream.isDemo ?? false,
     createdAt: stream.createdAt ?? now,
     updatedAt: stream.updatedAt ?? now,
   };
 }
 
-class StreamRepository {
-  private collectionPromise?: Promise<Collection<StreamDocument>>;
+function toFirestoreData(stream: StreamRecord) {
+  const data: Record<string, unknown> = {
+    trackId: stream.trackId,
+    trackName: stream.trackName,
+    artistName: stream.artistName,
+    artistArt: stream.artistArt,
+    albumName: stream.albumName,
+    albumArt: stream.albumArt,
+    durationMs: stream.durationMs,
+    playedAt: toTimestamp(stream.playedAt),
+    isDemo: stream.isDemo,
+    createdAt: toTimestamp(stream.createdAt),
+    updatedAt: toTimestamp(stream.updatedAt),
+  };
+  if (stream.userId) data.userId = stream.userId;
+  return data;
+}
 
-  private collection() {
-    this.collectionPromise ??= mongoDb().then((database) =>
-      database.collection<StreamDocument>("streams")
-    );
-    return this.collectionPromise;
+function fromFirestoreDoc(id: string, data: FirebaseFirestore.DocumentData): Stream {
+  return {
+    id,
+    userId: (data.userId as string | undefined) ?? undefined,
+    trackId: String(data.trackId ?? ""),
+    trackName: String(data.trackName ?? ""),
+    artistName: String(data.artistName ?? ""),
+    artistArt: (data.artistArt as string | null | undefined) ?? null,
+    albumName: String(data.albumName ?? ""),
+    albumArt: (data.albumArt as string | null | undefined) ?? null,
+    durationMs: Number(data.durationMs ?? 0),
+    playedAt: fromTimestamp(data.playedAt as Timestamp | undefined),
+    isDemo: Boolean(data.isDemo),
+    createdAt: fromTimestamp(data.createdAt as Timestamp | undefined),
+    updatedAt: fromTimestamp(data.updatedAt as Timestamp | undefined),
+  };
+}
+
+function pickFields(stream: Stream, select?: StreamSelect): Stream {
+  if (!select) return stream;
+  const picked = { ...stream };
+  for (const key of Object.keys(stream) as Array<keyof Stream>) {
+    if (select[key] === false) {
+      delete (picked as Partial<Stream>)[key];
+    }
+  }
+  return picked;
+}
+
+function compareValues(a: unknown, b: unknown) {
+  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+  if (typeof a === "string" && typeof b === "string") return a.localeCompare(b);
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b));
+}
+
+function matchesCondition(value: unknown, condition: unknown): boolean {
+  if (condition === undefined) return true;
+  if (condition === null) return value === null || value === undefined;
+  if (condition instanceof Date) return value instanceof Date && value.getTime() === condition.getTime();
+  if (typeof condition !== "object" || Array.isArray(condition)) {
+    return value === condition;
   }
 
+  const rules = condition as Record<string, unknown>;
+  if ("in" in rules) {
+    const options = rules.in as unknown[];
+    return options.includes(value);
+  }
+  if ("contains" in rules && typeof value === "string") {
+    return value.includes(String(rules.contains));
+  }
+  if ("not" in rules) {
+    if (rules.not === null) return value != null;
+    return value !== rules.not;
+  }
+  if ("gte" in rules && compareValues(value, rules.gte) < 0) return false;
+  if ("gt" in rules && compareValues(value, rules.gt) <= 0) return false;
+  if ("lte" in rules && compareValues(value, rules.lte) > 0) return false;
+  if ("lt" in rules && compareValues(value, rules.lt) >= 0) return false;
+  return true;
+}
+
+function matchesWhere(stream: Stream, where: StreamWhere = {}): boolean {
+  if ("OR" in where && Array.isArray(where.OR)) {
+    return where.OR.some((clause) => matchesWhere(stream, clause));
+  }
+
+  for (const [key, condition] of Object.entries(where)) {
+    if (key === "OR") continue;
+    const field = key as keyof Stream;
+    if (field === "id") {
+      if (!matchesCondition(stream.id, condition)) return false;
+      continue;
+    }
+    if (field === "userId" && condition === undefined) {
+      if (stream.userId != null) return false;
+      continue;
+    }
+    if (!matchesCondition(stream[field], condition)) return false;
+  }
+
+  return true;
+}
+
+function sortStreams(rows: Stream[], orderBy?: StreamOrderBy) {
+  if (!orderBy) return rows;
+  const entries = Object.entries(orderBy);
+  return [...rows].sort((a, b) => {
+    for (const [field, direction] of entries) {
+      const key = field as keyof Stream;
+      const cmp = compareValues(a[key], b[key]);
+      if (cmp !== 0) return direction === "desc" ? -cmp : cmp;
+    }
+    return 0;
+  });
+}
+
+function distinctStreams(rows: Stream[], field: keyof Stream) {
+  const seen = new Set<string>();
+  const out: Stream[] = [];
+  for (const row of rows) {
+    const key = String(row[field]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+async function queryStreams(where: StreamWhere = {}) {
+  if ("OR" in where && Array.isArray(where.OR)) {
+    const merged = new Map<string, Stream>();
+    for (const clause of where.OR) {
+      for (const row of await queryStreams(clause)) {
+        merged.set(row.id, row);
+      }
+    }
+    return [...merged.values()];
+  }
+
+  let query: Query = streamsCollection();
+
+  if (where.id && typeof where.id === "string") {
+    const doc = await streamsCollection().doc(where.id).get();
+    return doc.exists ? [fromFirestoreDoc(doc.id, doc.data()!)] : [];
+  }
+
+  if (where.id && typeof where.id === "object" && where.id !== null && "in" in where.id) {
+    const ids = (where.id as { in: string[] }).in;
+    const chunks: Stream[] = [];
+    for (let i = 0; i < ids.length; i += 30) {
+      const slice = ids.slice(i, i + 30);
+      const snap = await streamsCollection().where(FieldPath.documentId(), "in", slice).get();
+      chunks.push(...snap.docs.map((doc) => fromFirestoreDoc(doc.id, doc.data())));
+    }
+    const rest = { ...where };
+    delete rest.id;
+    return chunks.filter((row) => matchesWhere(row, rest));
+  }
+
+  if (typeof where.isDemo === "boolean") {
+    query = query.where("isDemo", "==", where.isDemo);
+  }
+  if (typeof where.userId === "string") {
+    query = query.where("userId", "==", where.userId);
+  }
+  if (typeof where.trackId === "string") {
+    query = query.where("trackId", "==", where.trackId);
+  }
+  if (typeof where.artistName === "string") {
+    query = query.where("artistName", "==", where.artistName);
+  }
+  if (typeof where.albumName === "string") {
+    query = query.where("albumName", "==", where.albumName);
+  }
+  if (where.albumArt === null) {
+    query = query.where("albumArt", "==", null);
+  }
+  if (where.artistArt === null) {
+    query = query.where("artistArt", "==", null);
+  }
+
+  const snap = await query.get();
+  let rows = snap.docs.map((doc) => fromFirestoreDoc(doc.id, doc.data()));
+
+  if (where.userId === undefined && !("userId" in where)) {
+    // no-op
+  } else if (!("userId" in where) && where.isDemo === false) {
+    // legacy rows may omit userId; keep all unless caller filters later
+  }
+
+  rows = rows.filter((row) => matchesWhere(row, where));
+  return rows;
+}
+
+class StreamRepository {
   async ensureIndexes() {
-    const collection = await this.collection();
-    await collection.createIndexes([
-      { key: { userId: 1, trackId: 1, playedAt: 1 }, name: "stream_user_track_playedAt_unique", unique: true, partialFilterExpression: { userId: { $type: "string" } } },
-      { key: { trackId: 1, playedAt: 1 }, name: "stream_track_playedAt_unique", unique: true, partialFilterExpression: { userId: { $exists: false } } },
-      { key: { userId: 1, playedAt: -1 }, name: "stream_user_playedAt_desc" },
-      { key: { playedAt: -1 }, name: "stream_playedAt_desc" },
-      { key: { isDemo: 1, playedAt: -1 }, name: "stream_scope_playedAt_desc" },
-      { key: { userId: 1, isDemo: 1, playedAt: -1 }, name: "stream_user_scope_playedAt_desc" },
-      { key: { isDemo: 1, artistName: 1 }, name: "stream_scope_artist" },
-      { key: { isDemo: 1, albumName: 1 }, name: "stream_scope_album" },
-      { key: { isDemo: 1, trackId: 1 }, name: "stream_scope_track" },
-    ]);
+    // Firestore composite indexes are declared in firestore.indexes.json.
   }
 
   async createMany({ data, skipDuplicates = false }: { data: Partial<Stream>[]; skipDuplicates?: boolean }) {
     if (data.length === 0) return { count: 0 };
-    const collection = await this.collection();
-    if (skipDuplicates) {
-      const result = await collection.bulkWrite(
-        data.map((stream) => {
-          const doc = prepareDocument(stream);
-          return {
-            updateOne: {
-              filter: doc.userId
-                ? { userId: doc.userId, trackId: doc.trackId, playedAt: doc.playedAt }
-                : { trackId: doc.trackId, playedAt: doc.playedAt, userId: { $exists: false } },
-              update: { $setOnInsert: doc },
-              upsert: true,
-            },
-          };
-        }),
-        { ordered: false }
-      );
-      return { count: result.upsertedCount };
+
+    const firestore = getAdminFirestore();
+    let count = 0;
+
+    for (let i = 0; i < data.length; i += BATCH_LIMIT) {
+      const batch = firestore.batch();
+      let batchCount = 0;
+      for (const stream of data.slice(i, i + BATCH_LIMIT)) {
+        const doc = prepareDocument(stream);
+        const ref = streamsCollection().doc(doc.id);
+        if (skipDuplicates) {
+          const existing = await ref.get();
+          if (existing.exists) continue;
+        }
+        batch.set(ref, toFirestoreData(doc), { merge: skipDuplicates });
+        batchCount += 1;
+      }
+      if (batchCount > 0) {
+        await batch.commit();
+        count += batchCount;
+      }
     }
-    const result = await collection.insertMany(data.map(prepareDocument), { ordered: false });
-    return { count: result.insertedCount };
+
+    return { count };
   }
 
   async findMany({
@@ -234,27 +337,13 @@ class StreamRepository {
     take?: number;
     distinct?: Array<keyof Stream>;
   } = {}) {
-    const collection = await this.collection();
+    let rows = await queryStreams(where);
+    rows = sortStreams(rows, orderBy);
     if (distinct?.length === 1) {
-      const [field] = distinct;
-      const pipeline: Document[] = [
-        { $match: toMongoFilter(where) },
-        { $group: { _id: `$${field}`, doc: { $first: "$$ROOT" } } },
-        { $replaceRoot: { newRoot: "$doc" } },
-      ];
-      const sort = toMongoSort(orderBy);
-      if (Object.keys(sort).length > 0) pipeline.splice(1, 0, { $sort: sort });
-      if (take) pipeline.push({ $limit: take });
-      if (select) pipeline.push({ $project: toProjection(select) });
-      const docs = await collection.aggregate<StreamDocument>(pipeline).toArray();
-      return docs.map(fromDocument);
+      rows = distinctStreams(rows, distinct[0]);
     }
-
-    let cursor = collection.find(toMongoFilter(where), { projection: toProjection(select) });
-    if (orderBy) cursor = cursor.sort(toMongoSort(orderBy));
-    if (take) cursor = cursor.limit(take);
-    const docs = await cursor.toArray();
-    return docs.map(fromDocument);
+    if (take != null) rows = rows.slice(0, take);
+    return rows.map((row) => pickFields(row, select));
   }
 
   async findFirst(args: {
@@ -269,27 +358,70 @@ class StreamRepository {
   }
 
   async updateMany({ where = {}, data }: { where?: StreamWhere; data: Partial<Stream> }) {
-    const collection = await this.collection();
+    const rows = await queryStreams(where);
+    if (rows.length === 0) return { count: 0 };
+
+    const firestore = getAdminFirestore();
+    let count = 0;
     const patch = { ...data, updatedAt: new Date() };
-    if (data.durationMs != null) {
-      const rows = await collection
-        .find(toMongoFilter(where), { projection: { trackId: 1 } })
-        .toArray();
-      if (rows.length === 1) {
-        patch.durationMs = normalizeDurationMs({
-          trackId: rows[0].trackId,
-          durationMs: data.durationMs,
-        });
+
+    if (data.durationMs != null && rows.length === 1) {
+      patch.durationMs = normalizeDurationMs({
+        trackId: rows[0].trackId,
+        durationMs: data.durationMs,
+      });
+    }
+
+    for (let i = 0; i < rows.length; i += BATCH_LIMIT) {
+      const batch = firestore.batch();
+      let batchCount = 0;
+      for (const row of rows.slice(i, i + BATCH_LIMIT)) {
+        const ref = streamsCollection().doc(row.id);
+        const update: Record<string, unknown> = { updatedAt: toTimestamp(patch.updatedAt as Date) };
+        for (const [key, value] of Object.entries(patch)) {
+          if (key === "updatedAt" || key === "id") continue;
+          if (value === undefined) continue;
+          if (key === "playedAt" || key === "createdAt") {
+            update[key] = toTimestamp(value as Date);
+          } else if (key === "userId" && value == null) {
+            update.userId = FieldValue.delete();
+          } else {
+            update[key] = value;
+          }
+        }
+        batch.update(ref, update);
+        batchCount += 1;
+      }
+      if (batchCount > 0) {
+        await batch.commit();
+        count += batchCount;
       }
     }
-    const result = await collection.updateMany(toMongoFilter(where), { $set: patch });
-    return { count: result.modifiedCount };
+
+    return { count };
   }
 
   async deleteMany({ where = {} }: { where?: StreamWhere } = {}) {
-    const collection = await this.collection();
-    const result = await collection.deleteMany(toMongoFilter(where));
-    return { count: result.deletedCount };
+    const rows = await queryStreams(where);
+    if (rows.length === 0) return { count: 0 };
+
+    const firestore = getAdminFirestore();
+    let count = 0;
+
+    for (let i = 0; i < rows.length; i += BATCH_LIMIT) {
+      const batch = firestore.batch();
+      let batchCount = 0;
+      for (const row of rows.slice(i, i + BATCH_LIMIT)) {
+        batch.delete(streamsCollection().doc(row.id));
+        batchCount += 1;
+      }
+      if (batchCount > 0) {
+        await batch.commit();
+        count += batchCount;
+      }
+    }
+
+    return { count };
   }
 
   async groupBy<TBy extends Array<keyof Stream>>({
@@ -309,67 +441,86 @@ class StreamRepository {
       | { _sum?: Partial<Record<keyof Stream, "asc" | "desc">> };
     take?: number;
   }) {
-    const collection = await this.collection();
-    const id = Object.fromEntries(by.map((field) => [field, `$${field}`]));
-    const project: Document = Object.fromEntries(by.map((field) => [field, `$_id.${field}`]));
-    const group: Document = { _id: id };
-    if (_count) group.count = { $sum: 1 };
-    if (_sum?.durationMs) group.durationMsSum = { $sum: "$durationMs" };
-
-    const pipeline: Document[] = [
-      { $match: toMongoFilter(where) },
-      { $group: group },
-      {
-        $project: {
-          _id: 0,
-          ...project,
-          _count: { id: "$count", _all: "$count" },
-          _sum: { durationMs: "$durationMsSum" },
-        },
-      },
-    ];
-
-    if (orderBy && "_count" in orderBy && orderBy._count) {
-      const direction = Object.values(orderBy._count)[0] === "asc" ? 1 : -1;
-      pipeline.push({ $sort: { "_count.id": direction } });
-    } else if (orderBy && "_sum" in orderBy && orderBy._sum?.durationMs) {
-      pipeline.push({
-        $sort: { "_sum.durationMs": orderBy._sum.durationMs === "asc" ? 1 : -1 },
-      });
-    }
-    if (take) pipeline.push({ $limit: take });
-
-    return collection.aggregate<
+    const rows = await queryStreams(where);
+    const groups = new Map<
+      string,
       Pick<Stream, TBy[number]> & {
         _count: { id: number; _all: number };
         _sum: { durationMs: number | null };
       }
-    >(pipeline).toArray();
+    >();
+
+    for (const row of rows) {
+      const key = by.map((field) => String(row[field])).join("\u0000");
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          ...(Object.fromEntries(by.map((field) => [field, row[field]])) as Pick<Stream, TBy[number]>),
+          _count: { id: 0, _all: 0 },
+          _sum: { durationMs: 0 },
+        };
+        groups.set(key, group);
+      }
+      if (_count) {
+        group._count.id += 1;
+        group._count._all += 1;
+      }
+      if (_sum?.durationMs) {
+        group._sum.durationMs = (group._sum.durationMs ?? 0) + row.durationMs;
+      }
+    }
+
+    let results = [...groups.values()];
+
+    if (orderBy && "_count" in orderBy && orderBy._count) {
+      const direction = Object.values(orderBy._count)[0] === "asc" ? 1 : -1;
+      results.sort((a, b) => direction * (a._count.id - b._count.id));
+    } else if (orderBy && "_sum" in orderBy && orderBy._sum?.durationMs) {
+      const direction = orderBy._sum.durationMs === "asc" ? 1 : -1;
+      results.sort(
+        (a, b) => direction * ((a._sum.durationMs ?? 0) - (b._sum.durationMs ?? 0))
+      );
+    }
+
+    if (take != null) results = results.slice(0, take);
+    return results;
   }
 
-  async aggregate({ where = {}, _sum, _count, _min, _max }: {
+  async aggregate({
+    where = {},
+    _sum,
+    _count,
+    _min,
+    _max,
+  }: {
     where?: StreamWhere;
     _sum?: Partial<Record<keyof Stream, boolean>>;
     _count?: Record<string, boolean>;
     _min?: Partial<Record<keyof Stream, boolean>>;
     _max?: Partial<Record<keyof Stream, boolean>>;
   }) {
-    const collection = await this.collection();
-    const group: Document = { _id: null };
-    if (_sum?.durationMs) group.durationMsSum = { $sum: "$durationMs" };
-    if (_count) group.count = { $sum: 1 };
-    if (_min?.playedAt) group.minPlayedAt = { $min: "$playedAt" };
-    if (_max?.playedAt) group.maxPlayedAt = { $max: "$playedAt" };
-    const [result] = await collection.aggregate<Document>([
-      { $match: toMongoFilter(where) },
-      { $group: group },
-    ]).toArray();
+    const rows = await queryStreams(where);
+    let durationMsSum = 0;
+    let count = 0;
+    let minPlayedAt: Date | null = null;
+    let maxPlayedAt: Date | null = null;
+
+    for (const row of rows) {
+      if (_count) count += 1;
+      if (_sum?.durationMs) durationMsSum += row.durationMs;
+      if (_min?.playedAt && (minPlayedAt == null || row.playedAt < minPlayedAt)) {
+        minPlayedAt = row.playedAt;
+      }
+      if (_max?.playedAt && (maxPlayedAt == null || row.playedAt > maxPlayedAt)) {
+        maxPlayedAt = row.playedAt;
+      }
+    }
 
     return {
-      _sum: { durationMs: result?.durationMsSum ?? null },
-      _count: { id: result?.count ?? 0, _all: result?.count ?? 0 },
-      _min: { playedAt: result?.minPlayedAt ?? null },
-      _max: { playedAt: result?.maxPlayedAt ?? null },
+      _sum: { durationMs: _sum?.durationMs ? durationMsSum : null },
+      _count: { id: count, _all: count },
+      _min: { playedAt: minPlayedAt },
+      _max: { playedAt: maxPlayedAt },
     };
   }
 }
@@ -382,12 +533,20 @@ class SoundfolioDb {
   }
 
   async $disconnect() {
-    const client = await clientPromise();
-    await client.close();
-    globalForMongo.mongoClientPromise = undefined;
+    // Firestore admin client does not require explicit disconnect.
   }
 }
 
-export const db = globalForMongo.soundfolioDb ?? new SoundfolioDb();
+export const db = globalForDb.soundfolioDb ?? new SoundfolioDb();
 
-if (process.env.NODE_ENV !== "production") globalForMongo.soundfolioDb = db;
+if (process.env.NODE_ENV !== "production") globalForDb.soundfolioDb = db;
+
+/** @deprecated MongoDB removed — use `db.stream` (Firestore). */
+export async function mongoDb(): Promise<never> {
+  throw new Error("MongoDB has been removed. Soundfolio now uses Firestore for streams.");
+}
+
+/** @deprecated MongoDB removed — use Firestore via `db.stream`. */
+export async function mongoClient(): Promise<never> {
+  throw new Error("MongoDB has been removed. Soundfolio now uses Firestore for streams.");
+}

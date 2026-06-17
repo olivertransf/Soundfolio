@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { formatFirebaseAdminError } from "@/lib/firebase/errors";
 import { claimLegacyStreamsIfEligible } from "@/lib/legacy-migration";
 import { updateUserLastfmUsername } from "@/lib/users";
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     await claimLegacyStreamsIfEligible(user.uid, user.email);
     return NextResponse.json({ ok: true, profile });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not save profile";
+    const message = formatFirebaseAdminError(err);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

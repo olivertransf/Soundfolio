@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getAdminAuth } from "@/lib/firebase/admin";
+import { formatFirebaseAdminError } from "@/lib/firebase/errors";
 import { claimLegacyStreamsIfEligible } from "@/lib/legacy-migration";
 import { ensureUserProfile, getUserProfile, type UserProfile } from "@/lib/users";
 
@@ -80,14 +81,21 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Authen
 export async function establishUserSession(idToken: string) {
   const auth = getAdminAuth();
   const decoded = await auth.verifyIdToken(idToken);
-  const profile = await ensureUserProfile({
-    uid: decoded.uid,
-    email: decoded.email ?? null,
-    displayName: decoded.name ?? null,
-    photoURL: decoded.picture ?? null,
-  });
-  await claimLegacyStreamsIfEligible(decoded.uid, decoded.email ?? null);
   const sessionCookie = await createSessionCookie(idToken);
+
+  let profile: UserProfile | null = null;
+  try {
+    profile = await ensureUserProfile({
+      uid: decoded.uid,
+      email: decoded.email ?? null,
+      displayName: decoded.name ?? null,
+      photoURL: decoded.picture ?? null,
+    });
+    await claimLegacyStreamsIfEligible(decoded.uid, decoded.email ?? null);
+  } catch (error) {
+    console.error("[auth] Firestore profile setup failed:", error);
+  }
+
   return { sessionCookie, profile, uid: decoded.uid };
 }
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { recomputeLastFmDurationsAround } from "@/lib/lastfm-sync";
 import { getRecentlyPlayed } from "@/lib/spotify";
 
 export const maxDuration = 30;
@@ -58,19 +57,10 @@ async function runSync() {
 
     const result = await db.stream.createMany({ data: items, skipDuplicates: true });
 
-    let durationUpdates = 0;
-    if (result.count > 0) {
-      const playedAts = items.map((i) => i.playedAt.getTime());
-      durationUpdates = await recomputeLastFmDurationsAround(
-        new Date(Math.min(...playedAts)),
-        new Date(Math.max(...playedAts))
-      );
-    }
-
     return NextResponse.json({
       synced: result.count,
       fetched: data.items.length,
-      durationUpdates,
+      durationUpdates: 0,
       lastStream: data.items[0]?.played_at ?? null,
     });
   } catch (err) {

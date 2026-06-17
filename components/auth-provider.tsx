@@ -11,40 +11,27 @@ import {
 } from "react";
 import {
   GoogleAuthProvider,
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
-  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type User,
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
+import { upsertUserProfile } from "@/lib/firestore/user-profile";
 
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
   configured: boolean;
   signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
-  createSession: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function exchangeSession(idToken: string) {
-  const res = await fetch("/api/auth/session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken }),
-  });
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? "Could not create session");
-  }
-}
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -58,50 +45,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const auth = getFirebaseAuth();
     return onAuthStateChanged(auth, (nextUser) => {
-      setUser(nextUser);
-      setLoading(false);
+      void (async () => {
+        if (nextUser) {
+          try {
+            await upsertUserProfile(nextUser);
+          } catch (error) {
+            console.error("[auth] profile upsert failed", error);
+          }
+        }
+        setUser(nextUser);
+        setLoading(false);
+      })();
     });
-  }, []);
-
-  const createSession = useCallback(async () => {
-    if (!isFirebaseConfigured()) return;
-    const auth = getFirebaseAuth();
-    const current = auth.currentUser;
-    if (!current) return;
-    const idToken = await current.getIdToken(true);
-    await exchangeSession(idToken);
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
     const auth = getFirebaseAuth();
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-    await createSession();
-  }, [createSession]);
-
-  const signInWithEmail = useCallback(
-    async (email: string, password: string) => {
-      const auth = getFirebaseAuth();
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      await createSession();
-    },
-    [createSession]
-  );
-
-  const signUpWithEmail = useCallback(
-    async (email: string, password: string) => {
-      const auth = getFirebaseAuth();
-      await createUserWithEmailAndPassword(auth, email.trim(), password);
-      await createSession();
-    },
-    [createSession]
-  );
+    await signInWithPopup(auth, googleProvider);
+  }, []);
 
   const signOutUser = useCallback(async () => {
-    await fetch("/api/auth/session", { method: "DELETE" });
-    if (isFirebaseConfigured()) {
-      await signOut(getFirebaseAuth());
-    }
+    await signOut(getFirebaseAuth());
   }, []);
 
   const value = useMemo(
@@ -110,12 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       configured: isFirebaseConfigured(),
       signInWithGoogle,
-      signInWithEmail,
-      signUpWithEmail,
       signOutUser,
-      createSession,
     }),
-    [user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOutUser, createSession]
+    [user, loading, signInWithGoogle, signOutUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

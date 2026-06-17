@@ -1,13 +1,22 @@
-import { getRecentStreams } from "@/lib/stats";
+"use client";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { RecentPlaysList } from "@/components/recent-plays-list";
-import { requireOnboardedSession } from "@/lib/auth-server";
+import { useStreams } from "@/components/streams-provider";
+import { computeRecentStreams } from "@/lib/stats-compute";
+import { useMemo } from "react";
 
-export const dynamic = "force-dynamic";
+export default function HistoryRecentPage() {
+  const { streams, loading } = useStreams();
+  const recent = useMemo(() => computeRecentStreams(streams, 100), [streams]);
 
-export default async function HistoryRecentPage() {
-  const session = await requireOnboardedSession("/history/recent");
-  const streams = await getRecentStreams(100, "me", session.uid);
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
@@ -18,7 +27,7 @@ export default async function HistoryRecentPage() {
       <Card className="border-border/50 bg-card/70">
         <CardContent className="p-3 sm:p-4">
           <RecentPlaysList
-            initialStreams={streams.map((stream) => ({
+            initialStreams={recent.map((stream) => ({
               ...stream,
               playedAt: stream.playedAt.toISOString(),
             }))}

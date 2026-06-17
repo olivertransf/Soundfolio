@@ -1,4 +1,4 @@
-import { db, mongoDb } from "@/lib/db";
+import { db } from "@/lib/db";
 import { resolveAlbumArt } from "@/lib/resolve-art";
 
 export type MissingAlbumArtGroup = {
@@ -8,64 +8,51 @@ export type MissingAlbumArtGroup = {
   albumName: string;
 };
 
-/** Tracks missing art, newest plays first (so fresh scrobbles get filled). */
-export async function listMissingAlbumArtGroups(
-  limit: number
-): Promise<MissingAlbumArtGroup[]> {
-  const col = (await mongoDb()).collection("streams");
-  const rows = await col
-    .aggregate<{
-      _id: {
-        trackId: string;
-        trackName: string;
-        artistName: string;
-        albumName: string;
-      };
-    }>([
-      { $match: { isDemo: false, albumArt: null } },
-      {
-        $group: {
-          _id: {
-            trackId: "$trackId",
-            trackName: "$trackName",
-            artistName: "$artistName",
-            albumName: "$albumName",
-          },
-          lastPlayed: { $max: "$playedAt" },
-        },
-      },
-      { $sort: { lastPlayed: -1 } },
-      { $limit: limit },
-    ])
-    .toArray();
+function groupMissingAlbumArt(limit: number) {
+  const groups = new Map<string, MissingAlbumArtGroup & { lastPlayed: number }>();
 
-  return rows.map((r) => ({
-    trackId: r._id.trackId,
-    trackName: r._id.trackName,
-    artistName: r._id.artistName,
-    albumName: r._id.albumName,
-  }));
+  return db.stream
+    .findMany({ where: { isDemo: false, albumArt: null } })
+    .then((rows) => {
+      for (const row of rows) {
+        const key = `${row.trackId}\u0000${row.trackName}\u0000${row.artistName}\u0000${row.albumName}`;
+        const playedAt = row.playedAt.getTime();
+        const existing = groups.get(key);
+        if (!existing || playedAt > existing.lastPlayed) {
+          groups.set(key, {
+            trackId: row.trackId,
+            trackName: row.trackName,
+            artistName: row.artistName,
+            albumName: row.albumName,
+            lastPlayed: playedAt,
+          });
+        }
+      }
+
+      return [...groups.values()]
+        .sort((a, b) => b.lastPlayed - a.lastPlayed)
+        .slice(0, limit)
+        .map(({ trackId, trackName, artistName, albumName }) => ({
+          trackId,
+          trackName,
+          artistName,
+          albumName,
+        }));
+    });
+}
+
+/** Tracks missing art, newest plays first (so fresh scrobbles get filled). */
+export async function listMissingAlbumArtGroups(limit: number): Promise<MissingAlbumArtGroup[]> {
+  return groupMissingAlbumArt(limit);
 }
 
 export async function countMissingAlbumArtGroups(): Promise<number> {
-  const col = (await mongoDb()).collection("streams");
-  const rows = await col
-    .aggregate<{ n: number }>([
-      { $match: { isDemo: false, albumArt: null } },
-      {
-        $group: {
-          _id: {
-            trackId: "$trackId",
-            trackName: "$trackName",
-            artistName: "$artistName",
-            albumName: "$albumName",
-          },
-        },
-      },
-      { $count: "n" },
-    ])
-    .toArray();
-  return rows[0]?.n ?? 0;
+  const rows = await db.stream.findMany({ where: { isDemo: false, albumArt: null } });
+  const groups = new Set<string>();
+  for (const row of rows) {
+    groups.add(`${row.trackId}\u0000${row.trackName}\u0000${row.artistName}\u0000${row.albumName}`);
+  }
+  return groups.size;
 }
 
 export async function backfillAlbumArtBatch(limit: number, delayMs: number) {
@@ -81,13 +68,15 @@ export async function backfillAlbumArtBatch(limit: number, delayMs: number) {
       });
       updated += result.count;
     }
-    if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
 
-  const totalMissing = await countMissingAlbumArtGroups();
+  const remaining = await countMissingAlbumArtGroups();
   return {
     updated,
     processed: groups.length,
-    remaining: Math.max(0, totalMissing),
+    remaining,
   };
 }

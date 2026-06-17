@@ -1,38 +1,47 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
+import { setLastfmUsername } from "@/lib/firestore/user-profile";
 
 function OnboardingForm() {
-  const [lastfmUsername, setLastfmUsername] = useState("");
+  const [lastfmUsername, setLastfmUsernameInput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/me";
+  const { user, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace(`/auth?next=${encodeURIComponent("/onboarding")}`);
+    }
+  }, [authLoading, user, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!user) return;
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/onboarding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lastfmUsername }),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Could not save profile");
-        return;
-      }
+      await setLastfmUsername(user.uid, lastfmUsername);
       router.push(next);
-      router.refresh();
-    } catch {
-      setError("Request failed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save profile");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
   }
 
   return (
@@ -50,7 +59,7 @@ function OnboardingForm() {
         <input
           type="text"
           value={lastfmUsername}
-          onChange={(e) => setLastfmUsername(e.target.value)}
+          onChange={(e) => setLastfmUsernameInput(e.target.value)}
           placeholder="Last.fm username"
           autoComplete="username"
           required

@@ -7,6 +7,13 @@ import {
   detectViewerTimeZone,
   readViewerTimeZoneCookie,
 } from "@/lib/viewer-timezone-client";
+import {
+  computeListeningHeatmap,
+  computeStreamsByDayOfWeek,
+  computeStreamsByHour,
+  parseTimeRange,
+} from "@/lib/stats-compute";
+import { useStreams } from "@/components/streams-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListeningChart } from "@/components/listening-chart";
 import { ListeningHeatmap } from "@/components/listening-heatmap";
@@ -30,6 +37,7 @@ type PatternsPayload = {
 };
 
 export function HomePatternsSection({ periodLabel }: { periodLabel: string }) {
+  const { streams, loading: streamsLoading } = useStreams();
   const searchParams = useSearchParams();
   const [timeZone, setTimeZone] = useState("");
   const [data, setData] = useState<PatternsPayload | null>(null);
@@ -50,26 +58,23 @@ export function HomePatternsSection({ periodLabel }: { periodLabel: string }) {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!timeZone) return;
+    if (!timeZone || streamsLoading) return;
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams();
-    if (range) params.set("range", range);
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-    params.set(VIEWER_TIMEZONE_PARAM, timeZone);
-
-    fetch(`/api/stats/patterns?${params}`)
-      .then((r) => r.json())
-      .then((payload: PatternsPayload) => {
-        setData(payload);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError("Could not load listening patterns.");
-        setLoading(false);
+    try {
+      const filter = parseTimeRange(range || undefined, from || undefined, to || undefined, timeZone);
+      setData({
+        timeZone,
+        byHour: computeStreamsByHour(streams, filter, timeZone),
+        byDay: computeStreamsByDayOfWeek(streams, filter, timeZone),
+        heatmap: computeListeningHeatmap(streams, filter, timeZone),
       });
-  }, [timeZone, range, from, to]);
+    } catch {
+      setError("Could not load listening patterns.");
+    } finally {
+      setLoading(false);
+    }
+  }, [timeZone, range, from, to, streams, streamsLoading]);
 
   const { peakHour, peakDay, hourChartData, dayChartData } = useMemo(() => {
     if (!data) {
@@ -115,7 +120,7 @@ export function HomePatternsSection({ periodLabel }: { periodLabel: string }) {
         </p>
       </div>
 
-      {loading ? (
+      {loading || streamsLoading ? (
         <div className="rounded-2xl border border-border/40 bg-card/40 px-4 py-10 text-center text-sm text-muted-foreground">
           Loading patterns…
         </div>

@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyFirebaseIdToken } from "@/lib/auth/verify-id-token";
 import { getRecentTracks, isLastFmConfigured } from "@/lib/lastfm";
 import {
   filterNovelScrobbles,
-  insertLastFmScrobbles,
-  loadExistingInPlayWindow,
+  prepareLastFmScrobbleStreams,
+  type IncomingScrobble,
 } from "@/lib/lastfm-sync";
-import { getStatsApiUser } from "@/lib/stats-api-auth";
-import { db } from "@/lib/db";
-import { getUserProfile } from "@/lib/users";
 import {
   VIEWER_TIMEZONE_COOKIE,
   VIEWER_TIMEZONE_PARAM,
@@ -16,13 +14,32 @@ import {
 
 export const maxDuration = 30;
 
-/** Keep each invocation under Vercel's 30s limit when catching up large gaps. */
 const SYNC_BATCH_SIZE = 40;
 
+type SyncRequestBody = {
+  lastfmUsername?: string;
+  latestPlayedAt?: string | null;
+  existing?: Array<{ artistName: string; trackName: string; playedAt: string }>;
+};
+
+function bearerToken(request: NextRequest) {
+  const bearer = request.headers.get("authorization");
+  if (!bearer?.startsWith("Bearer ")) return null;
+  return bearer.slice("Bearer ".length).trim();
+}
+
 export async function POST(req: NextRequest) {
-  const apiUser = await getStatsApiUser(req);
-  if (!apiUser) {
+  const token = bearerToken(req);
+  if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let uid: string;
+  try {
+    ({ uid } = await verifyFirebaseIdToken(token));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid token";
+    return NextResponse.json({ error: message }, { status: 401 });
   }
 
   const apiKey = process.env.LASTFM_API_KEY?.trim();
@@ -35,83 +52,61 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const profile = apiUser.isLegacy ? null : await getUserProfile(apiUser.uid);
-  const username =
-    profile?.lastfmUsername?.trim() ||
-    (apiUser.isLegacy ? process.env.LASTFM_USER?.trim() : undefined);
-
+  const body = (await req.json().catch(() => ({}))) as SyncRequestBody;
+  const username = body.lastfmUsername?.trim();
   if (!username) {
     return NextResponse.json({
       synced: 0,
       skipped: true,
       message: "Last.fm username not configured",
-      detail: "Add your Last.fm username in onboarding or account settings.",
+      detail: "Add your Last.fm username in onboarding.",
     });
   }
 
   try {
-    const now = new Date();
-    const latest = await db.stream.findFirst({
-      where: {
-        isDemo: false,
-        ...(apiUser.isLegacy ? {} : { userId: apiUser.uid }),
-        playedAt: { lte: now },
-      },
-      orderBy: { playedAt: "desc" },
-      select: { playedAt: true },
-    });
-
-    const fromTimestamp = latest?.playedAt
-      ? Math.max(0, Math.floor(latest.playedAt.getTime() / 1000) - 120)
+    const latestPlayedAt = body.latestPlayedAt ? new Date(body.latestPlayedAt) : null;
+    const fromTimestamp = latestPlayedAt && !isNaN(latestPlayedAt.getTime())
+      ? Math.max(0, Math.floor(latestPlayedAt.getTime() / 1000) - 120)
       : undefined;
 
     const tracks = await getRecentTracks(username, 200, fromTimestamp);
-
     if (tracks.length === 0) {
-      return NextResponse.json({ synced: 0, message: "No new scrobbles" });
+      return NextResponse.json({ synced: 0, streams: [], message: "No new scrobbles" });
     }
 
     const readyThroughMs = Date.now() + 5 * 60 * 1000;
     const readyTracks = tracks.filter((track) => track.playedAt.getTime() <= readyThroughMs);
-
     if (readyTracks.length === 0) {
-      return NextResponse.json({ synced: 0, fetched: tracks.length, message: "No current scrobbles ready" });
+      return NextResponse.json({ synced: 0, streams: [], fetched: tracks.length, message: "No current scrobbles ready" });
     }
 
-    const userId = apiUser.isLegacy ? undefined : apiUser.uid;
-    const existing = await loadExistingInPlayWindow(readyTracks, userId);
+    const existing = (body.existing ?? []).map((row) => ({
+      artistName: row.artistName,
+      trackName: row.trackName,
+      playedAt: new Date(row.playedAt),
+    }));
     const novel = filterNovelScrobbles(readyTracks, existing);
-
     if (novel.length === 0) {
-      return NextResponse.json({
-        synced: 0,
-        fetched: tracks.length,
-        message: "No new scrobbles",
-      });
+      return NextResponse.json({ synced: 0, streams: [], fetched: tracks.length, message: "No new scrobbles" });
     }
 
     const timeZone = resolveStatsTimeZone(
       req.nextUrl.searchParams.get(VIEWER_TIMEZONE_PARAM) ??
         req.cookies.get(VIEWER_TIMEZONE_COOKIE)?.value
     );
-    const batch = [...novel].sort(
-      (a, b) => a.playedAt.getTime() - b.playedAt.getTime()
-    ).slice(0, SYNC_BATCH_SIZE);
-
-    const { inserted, durationUpdates, artUpdated } = await insertLastFmScrobbles(
-      batch,
-      timeZone,
-      { fast: true, userId }
-    );
-    const hasMore = novel.length > batch.length && inserted > 0;
+    const batch = [...novel]
+      .sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime())
+      .slice(0, SYNC_BATCH_SIZE);
+    const streams = prepareLastFmScrobbleStreams(batch, timeZone, { fast: true });
+    const hasMore = novel.length > batch.length;
 
     return NextResponse.json({
-      synced: inserted,
+      uid,
+      synced: streams.length,
       fetched: tracks.length,
       pending: novel.length - batch.length,
       hasMore,
-      durationUpdates,
-      artUpdated,
+      streams,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Sync failed";
