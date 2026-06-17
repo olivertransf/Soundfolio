@@ -39,6 +39,7 @@ yarn-error.log*
 # env files (secrets); commit `.env.example` as the template only
 .env*
 !.env.example
+.env*.local
 
 # vercel
 .vercel
@@ -47,8 +48,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# iOS app (ios/)
-ios/DerivedData/
-ios/**/xcuserdata/
-ios/Config/Secrets.xcconfig
-.env*.local
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Local secrets
+Config/Secrets.xcconfig
