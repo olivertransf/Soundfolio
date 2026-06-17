@@ -3,7 +3,7 @@ import SwiftUI
 
 @Observable
 final class StatsPreferences {
-    static let defaultBaseURL = "https://mongodb-vercel-redesign.vercel.app"
+    static let defaultBaseURL = "https://soundfolio-stats.vercel.app"
 
     private enum Keys {
         static let baseURL = "soundfolioBaseURL"
@@ -58,10 +58,16 @@ final class StatsPreferences {
         !customFrom.isEmpty && !customTo.isEmpty
     }
 
+    private static let legacyBaseURL = "https://mongodb-vercel-redesign.vercel.app"
+
     init() {
         let defaults = UserDefaults.standard
         let storedURL = defaults.string(forKey: Keys.baseURL) ?? ""
-        baseURL = storedURL.isEmpty ? Self.defaultBaseURL : storedURL
+        if storedURL.isEmpty || storedURL == Self.legacyBaseURL {
+            baseURL = Self.defaultBaseURL
+        } else {
+            baseURL = storedURL
+        }
         period = StatsPeriod(rawValue: defaults.string(forKey: Keys.period) ?? "") ?? .ytd
         customFrom = defaults.string(forKey: Keys.customFrom) ?? ""
         customTo = defaults.string(forKey: Keys.customTo) ?? ""

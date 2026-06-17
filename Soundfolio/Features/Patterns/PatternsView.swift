@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PatternsView: View {
-    @Environment(AppState.self) private var appState
+    @Environment(StreamStore.self) private var streamStore
     @Bindable var preferences: StatsPreferences
     @State private var data: PatternsResponse?
     @State private var loading = true
@@ -56,7 +56,7 @@ struct PatternsView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.baseURL)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(streamStore.streams.count)"
     }
 
     private func patternCard<Content: View>(title: String, @ViewBuilder chart: () -> Content) -> some View {
@@ -69,19 +69,9 @@ struct PatternsView: View {
     }
 
     private func load() async {
-        guard !preferences.baseURL.isEmpty else {
-            loading = false
-            error = APIClientError.missingBaseURL.localizedDescription
-            return
-        }
         loading = true
         error = nil
-        appState.reloadClient()
-        do {
-            data = try await appState.client.fetchPatterns(query: preferences.makeQuery())
-        } catch {
-            self.error = appState.handleError(error)
-        }
+        data = StatsEngine.patterns(from: streamStore.streams, preferences: preferences)
         loading = false
     }
 }

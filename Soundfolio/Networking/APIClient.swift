@@ -14,7 +14,7 @@ enum APIClientError: LocalizedError {
         case .invalidURL:
             "Server URL is invalid."
         case .unauthorized:
-            "Access key was rejected. Check Settings."
+            "Sign in expired or was rejected. Sign in again."
         case .server(let message):
             message
         case .decoding(let error):
@@ -23,29 +23,11 @@ enum APIClientError: LocalizedError {
     }
 }
 
-struct StatsQuery {
-    var range: StatsPeriod = .ytd
-    var customFrom: String?
-    var customTo: String?
-    var sort: TopSortMode = .minutes
-    var timeZone: String = TimeZone.current.identifier
-
-    func apply(to items: inout [URLQueryItem]) {
-        if let customFrom, let customTo {
-            items.append(URLQueryItem(name: "from", value: customFrom))
-            items.append(URLQueryItem(name: "to", value: customTo))
-        } else {
-            items.append(URLQueryItem(name: "range", value: range.rawValue))
-        }
-        items.append(URLQueryItem(name: "sort", value: sort.rawValue))
-        items.append(URLQueryItem(name: "tz", value: timeZone))
-    }
-}
-
 @MainActor
 final class APIClient {
     private let session: URLSession
     private var baseURLString: String
+    var authTokenProvider: (@MainActor () async throws -> String?)?
 
     init(baseURLString: String = "") {
         self.baseURLString = baseURLString
@@ -58,78 +40,47 @@ final class APIClient {
         self.baseURLString = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func fetchOverview(query: StatsQuery) async throws -> OverviewResponse {
-        try await get("/api/stats/overview", query: query)
-    }
-
-    func fetchTopTracks(query: StatsQuery, limit: Int = 50) async throws -> TopListResponse<TopTrackItem> {
-        try await get("/api/stats/top-tracks", query: query, extra: [URLQueryItem(name: "limit", value: "\(limit)")])
-    }
-
-    func fetchTopArtists(query: StatsQuery, limit: Int = 50) async throws -> TopListResponse<TopArtistItem> {
-        try await get("/api/stats/top-artists", query: query, extra: [URLQueryItem(name: "limit", value: "\(limit)")])
-    }
-
-    func fetchTopAlbums(query: StatsQuery, limit: Int = 50) async throws -> TopListResponse<TopAlbumItem> {
-        try await get("/api/stats/top-albums", query: query, extra: [URLQueryItem(name: "limit", value: "\(limit)")])
-    }
-
-    func fetchHistory(query: StatsQuery, mode: ChartGroupBy) async throws -> HistoryResponse {
-        try await get(
-            "/api/stats/history",
-            query: query,
-            extra: [URLQueryItem(name: "mode", value: mode.apiMode)]
+    func syncLastFm(
+        lastfmUsername: String,
+        streams: [StreamRecord],
+        timeZone: String = TimeZone.current.identifier
+    ) async throws -> LastFmSyncResponse {
+        let latestPlayedAt = streams.first.map { ISO8601DateFormatter().string(from: $0.playedAt) }
+        let existing = streams.map {
+            ExistingScrobblePayload(
+                artistName: $0.artistName,
+                trackName: $0.trackName,
+                playedAt: ISO8601DateFormatter().string(from: $0.playedAt)
+            )
+        }
+        let body = LastFmSyncRequest(
+            lastfmUsername: lastfmUsername,
+            latestPlayedAt: latestPlayedAt,
+            existing: existing
         )
-    }
-
-    func fetchPatterns(query: StatsQuery) async throws -> PatternsResponse {
-        try await get("/api/stats/patterns", query: query)
-    }
-
-    func fetchRecent(limit: Int = 100, timeZone: String) async throws -> RecentResponse {
-        try await get(
-            "/api/stats/recent",
-            extra: [
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "tz", value: timeZone),
-            ]
-        )
-    }
-
-    func fetchFreshness() async throws -> FreshnessResponse {
-        try await get("/api/stats/freshness")
-    }
-
-    func syncLastFm(timeZone: String = TimeZone.current.identifier) async throws -> LastFmSyncResponse {
-        try await post(
+        return try await post(
             "/api/sync-lastfm",
+            body: body,
             extra: [URLQueryItem(name: "tz", value: timeZone)]
         )
     }
 
-    private func get<T: Decodable>(
+    private func post<T: Decodable, Body: Encodable>(
         _ path: String,
-        query: StatsQuery? = nil,
+        body: Body,
         extra: [URLQueryItem] = []
     ) async throws -> T {
-        let request = try buildRequest(path: path, method: "GET", query: query, extra: extra)
-        return try await perform(request)
-    }
-
-    private func post<T: Decodable>(
-        _ path: String,
-        extra: [URLQueryItem] = []
-    ) async throws -> T {
-        let request = try buildRequest(path: path, method: "POST", extra: extra)
+        var request = try await buildRequest(path: path, method: "POST", extra: extra)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
         return try await perform(request)
     }
 
     private func buildRequest(
         path: String,
         method: String,
-        query: StatsQuery? = nil,
         extra: [URLQueryItem] = []
-    ) throws -> URLRequest {
+    ) async throws -> URLRequest {
         guard !baseURLString.isEmpty else { throw APIClientError.missingBaseURL }
         var normalized = baseURLString
         if !normalized.hasPrefix("http") {
@@ -140,18 +91,17 @@ final class APIClient {
         guard var components = URLComponents(string: normalized + path) else {
             throw APIClientError.invalidURL
         }
-        var queryItems = extra
-        if let query {
-            query.apply(to: &queryItems)
-        }
-        if !queryItems.isEmpty {
-            components.queryItems = queryItems
+        if !extra.isEmpty {
+            components.queryItems = extra
         }
         guard let url = components.url else { throw APIClientError.invalidURL }
 
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = try await authTokenProvider?() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         return request
     }
 
@@ -176,4 +126,3 @@ final class APIClient {
         }
     }
 }
-

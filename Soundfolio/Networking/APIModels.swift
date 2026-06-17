@@ -145,6 +145,19 @@ struct LastFmSyncResponse: Codable {
     let message: String?
     let detail: String?
     let error: String?
+    let streams: [SyncStreamPayload]?
+}
+
+struct LastFmSyncRequest: Encodable {
+    let lastfmUsername: String
+    let latestPlayedAt: String?
+    let existing: [ExistingScrobblePayload]
+}
+
+struct ExistingScrobblePayload: Encodable {
+    let artistName: String
+    let trackName: String
+    let playedAt: String
 }
 
 struct APIErrorResponse: Codable {

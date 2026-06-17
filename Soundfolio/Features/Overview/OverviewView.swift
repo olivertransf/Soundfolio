@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OverviewView: View {
     @Environment(AppState.self) private var appState
+    @Environment(StreamStore.self) private var streamStore
     @Bindable var preferences: StatsPreferences
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var overview: OverviewResponse?
@@ -41,7 +42,7 @@ struct OverviewView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(preferences.baseURL)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.streams.count)"
     }
 
     @ViewBuilder
@@ -199,21 +200,14 @@ struct OverviewView: View {
     }
 
     private func load() async {
-        guard !preferences.baseURL.isEmpty else {
-            loading = false
-            error = APIClientError.missingBaseURL.localizedDescription
+        if streamStore.isLoading {
+            loading = true
             return
         }
-        loading = true
-        error = nil
-        appState.reloadClient()
-        do {
-            overview = try await appState.client.fetchOverview(query: preferences.makeQuery())
-            await appState.refreshFreshness()
-        } catch {
-            self.error = appState.handleError(error)
-        }
         loading = false
+        error = nil
+        overview = StatsEngine.buildOverview(streams: streamStore.streams, preferences: preferences)
+        appState.refreshFreshness(from: streamStore)
     }
 
     private func refresh() async {

@@ -30,6 +30,8 @@ enum AppTab: String, CaseIterable, Hashable {
 
 struct RootView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var auth
+    @Environment(StreamStore.self) private var streamStore
     @Bindable var preferences: StatsPreferences
     @State private var tab: AppTab = .overview
 
@@ -39,7 +41,17 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if needsSetup {
+            if auth.isLoading {
+                ProgressView("Loading account...")
+            } else if !auth.isSignedIn {
+                NavigationStack {
+                    AuthView()
+                }
+            } else if auth.needsOnboarding {
+                NavigationStack {
+                    OnboardingView()
+                }
+            } else if needsSetup {
                 NavigationStack {
                     SetupRequiredView(preferences: preferences)
                 }
@@ -79,8 +91,21 @@ struct RootView: View {
         }
         .tint(SoundfolioTheme.accent(from: preferences))
         .preferredColorScheme(preferences.preferredColorScheme)
-        .task {
-            await appState.refreshFreshness()
+        .onChange(of: preferences.baseURL) { _, newValue in
+            auth.updateBaseURL(newValue)
+            appState.reloadClient()
+        }
+        .task(id: auth.isSignedIn && !auth.needsOnboarding) {
+            guard auth.isSignedIn, !auth.needsOnboarding, !needsSetup, let uid = auth.user?.uid else {
+                streamStore.stop()
+                return
+            }
+            streamStore.start(uid: uid)
+            appState.refreshFreshness(from: streamStore)
+        }
+        .onChange(of: streamStore.latestPlayAt) { _, newValue in
+            appState.latestPlayAt = newValue
+            appState.freshnessCheckedAt = Date()
         }
     }
 }

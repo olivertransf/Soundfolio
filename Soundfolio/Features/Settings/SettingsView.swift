@@ -1,12 +1,24 @@
 import SwiftUI
+import FirebaseAuth
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var auth
     @Bindable var preferences: StatsPreferences
     @State private var savedMessage: String?
 
     var body: some View {
         Form {
+            if let email = auth.user?.email {
+                Section("Account") {
+                    Text(email)
+                        .foregroundStyle(.secondary)
+                    Button("Sign out", role: .destructive) {
+                        try? auth.signOut()
+                    }
+                }
+            }
+
             Section("Server") {
                 TextField("Base URL", text: $preferences.baseURL)
                     .textInputAutocapitalization(.never)

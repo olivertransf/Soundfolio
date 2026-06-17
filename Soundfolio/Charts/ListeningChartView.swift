@@ -24,7 +24,7 @@ struct ListeningChartView: View {
 }
 
 struct ListeningChartSection: View {
-    @Environment(AppState.self) private var appState
+    @Environment(StreamStore.self) private var streamStore
     @Bindable var preferences: StatsPreferences
     @State private var points: [HistoryPoint] = []
     @State private var loading = true
@@ -88,22 +88,13 @@ struct ListeningChartSection: View {
     }
 
     private var taskID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(preferences.chartGroupBy.rawValue)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(preferences.chartGroupBy.rawValue)-\(streamStore.streams.count)"
     }
 
     private func load() async {
         loading = true
         error = nil
-        appState.reloadClient()
-        do {
-            let response = try await appState.client.fetchHistory(
-                query: preferences.makeQuery(),
-                mode: preferences.chartGroupBy
-            )
-            points = response.data
-        } catch {
-            self.error = appState.handleError(error)
-        }
+        points = StatsEngine.historyPoints(from: streamStore.streams, preferences: preferences)
         loading = false
     }
 }

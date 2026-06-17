@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TopTracksView: View {
     var embedInNavigation = true
-    @Environment(AppState.self) private var appState
+    @Environment(StreamStore.self) private var streamStore
     @Bindable var preferences: StatsPreferences
     @State private var items: [TopTrackItem] = []
     @State private var loading = true
@@ -31,25 +31,21 @@ struct TopTracksView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.streams.count)"
     }
 
     private func load() async {
         loading = true
         error = nil
-        appState.reloadClient()
-        do {
-            items = try await appState.client.fetchTopTracks(query: preferences.makeQuery()).items
-        } catch {
-            self.error = appState.handleError(error)
-        }
+        let range = StatsEngine.parseTimeRange(preferences: preferences)
+        items = StatsEngine.topTracks(from: streamStore.streams, sort: preferences.sort, limit: 50, range: range)
         loading = false
     }
 }
 
 struct TopArtistsView: View {
     var embedInNavigation = true
-    @Environment(AppState.self) private var appState
+    @Environment(StreamStore.self) private var streamStore
     @Bindable var preferences: StatsPreferences
     @State private var items: [TopArtistItem] = []
     @State private var loading = true
@@ -79,25 +75,21 @@ struct TopArtistsView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.streams.count)"
     }
 
     private func load() async {
         loading = true
         error = nil
-        appState.reloadClient()
-        do {
-            items = try await appState.client.fetchTopArtists(query: preferences.makeQuery()).items
-        } catch {
-            self.error = appState.handleError(error)
-        }
+        let range = StatsEngine.parseTimeRange(preferences: preferences)
+        items = StatsEngine.topArtists(from: streamStore.streams, sort: preferences.sort, limit: 50, range: range)
         loading = false
     }
 }
 
 struct TopAlbumsView: View {
     var embedInNavigation = true
-    @Environment(AppState.self) private var appState
+    @Environment(StreamStore.self) private var streamStore
     @Bindable var preferences: StatsPreferences
     @State private var items: [TopAlbumItem] = []
     @State private var loading = true
@@ -126,18 +118,14 @@ struct TopAlbumsView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.streams.count)"
     }
 
     private func load() async {
         loading = true
         error = nil
-        appState.reloadClient()
-        do {
-            items = try await appState.client.fetchTopAlbums(query: preferences.makeQuery()).items
-        } catch {
-            self.error = appState.handleError(error)
-        }
+        let range = StatsEngine.parseTimeRange(preferences: preferences)
+        items = StatsEngine.topAlbums(from: streamStore.streams, sort: preferences.sort, limit: 50, range: range)
         loading = false
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RecentPlaysView: View {
     @Environment(AppState.self) private var appState
+    @Environment(StreamStore.self) private var streamStore
     @Bindable var preferences: StatsPreferences
     @State private var streams: [RecentStream] = []
     @State private var loading = true
@@ -36,7 +37,7 @@ struct RecentPlaysView: View {
             }
         }
         .refreshable { await refresh() }
-        .task { await load() }
+        .task(id: streamStore.streams.count) { await load() }
     }
 
     @ViewBuilder
@@ -76,24 +77,10 @@ struct RecentPlaysView: View {
     }
 
     private func load() async {
-        guard !preferences.baseURL.isEmpty else {
-            loading = false
-            error = APIClientError.missingBaseURL.localizedDescription
-            return
-        }
         loading = true
         error = nil
-        appState.reloadClient()
-        do {
-            let response = try await appState.client.fetchRecent(
-                limit: 100,
-                timeZone: TimeZone.current.identifier
-            )
-            streams = response.streams
-            await appState.refreshFreshness()
-        } catch {
-            self.error = appState.handleError(error)
-        }
+        streams = StatsEngine.recentStreams(from: streamStore.streams, limit: 100)
+        appState.refreshFreshness(from: streamStore)
         loading = false
     }
 
