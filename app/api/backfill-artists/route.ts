@@ -9,7 +9,7 @@ const MAX_PER_RUN = 25;
 const DELAY_MS = 2100;
 
 export async function POST(req: NextRequest) {
-  if (!isRequestAuthorized(req)) {
+  if (!(await isRequestAuthorized(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

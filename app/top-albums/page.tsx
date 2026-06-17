@@ -6,6 +6,7 @@ import Image from "next/image";
 import { RankedStreamRow } from "@/components/ranked-stream-row";
 import { cookies } from "next/headers";
 import { VIEWER_TIMEZONE_COOKIE } from "@/lib/stats-timezone";
+import { requireOnboardedSession } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +15,14 @@ export default async function TopAlbumsPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string; sort?: string }>;
 }) {
+  const session = await requireOnboardedSession("/top-albums");
+  const userId = session.uid;
   const params = await searchParams;
   const cookieStore = await cookies();
   const viewerTimeZone = params.tz ?? cookieStore.get(VIEWER_TIMEZONE_COOKIE)?.value;
   const filter = parseTimeRange(params.range, params.from, params.to, viewerTimeZone);
   const sortBy = parseTopSortBy(params.sort);
-  const albums = await getTopAlbums(50, filter, "me", sortBy);
+  const albums = await getTopAlbums(50, filter, "me", sortBy, userId);
 
   return (
     <div className="space-y-10">

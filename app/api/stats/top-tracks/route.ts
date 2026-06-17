@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTopTracks } from "@/lib/stats";
-import { requireStatsApiAuth } from "@/lib/stats-api-auth";
+import { requireAuthenticatedStatsRequest } from "@/lib/stats-api-context";
 import {
   parseStatsRequestParams,
   parseStatsLimit,
@@ -8,12 +8,12 @@ import {
 } from "@/lib/stats-api-params";
 
 export async function GET(req: NextRequest) {
-  const denied = requireStatsApiAuth(req);
+  const { denied, userId } = await requireAuthenticatedStatsRequest(req);
   if (denied) return denied;
 
   const { filter, sortBy } = parseStatsRequestParams(req);
   const limit = parseStatsLimit(req);
-  const items = await getTopTracks(limit, filter, "me", sortBy);
+  const items = await getTopTracks(limit, filter, "me", sortBy, userId);
 
   return NextResponse.json(
     { filter: { label: filter.label }, sortBy, items },

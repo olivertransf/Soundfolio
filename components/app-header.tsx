@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DisplayPreferences } from "@/components/display-preferences";
 import { LiveSyncStatus } from "@/components/live-sync-status";
+import { AccountMenu } from "@/components/account-menu";
 import { createNavLinks, type NavAppKind } from "@/lib/nav-links";
 import {
   defaultStatsNavQuery,
@@ -82,6 +83,7 @@ export function AppHeader({
           <div className="flex items-center justify-self-end gap-1">
             <LiveSyncStatus />
             <DisplayPreferences />
+            <AccountMenu />
             <Button
               type="button"
               variant="ghost"

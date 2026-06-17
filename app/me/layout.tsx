@@ -1,6 +1,4 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { AUTH_COOKIE } from "@/lib/auth";
+import { requireOnboardedSession } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -9,14 +7,6 @@ export default async function MeLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const key = process.env.AUTH_KEY;
-  if (!key) return <>{children}</>;
-
-  const cookieStore = await cookies();
-  const cookie = cookieStore.get(AUTH_COOKIE)?.value;
-  if (cookie !== key) {
-    redirect("/auth");
-  }
-
+  await requireOnboardedSession("/me");
   return <>{children}</>;
 }

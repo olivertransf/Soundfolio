@@ -6,7 +6,7 @@ import { AppHeader } from "@/components/app-header";
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAuth = pathname === "/auth";
+  const isAuth = pathname === "/auth" || pathname === "/onboarding";
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {

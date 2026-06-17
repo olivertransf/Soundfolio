@@ -5,8 +5,9 @@ import {
   insertLastFmScrobbles,
   loadExistingInPlayWindow,
 } from "@/lib/lastfm-sync";
-import { isRequestAuthorized } from "@/lib/auth";
+import { getStatsApiUser } from "@/lib/stats-api-auth";
 import { db } from "@/lib/db";
+import { getUserProfile } from "@/lib/users";
 import {
   VIEWER_TIMEZONE_COOKIE,
   VIEWER_TIMEZONE_PARAM,
@@ -19,31 +20,43 @@ export const maxDuration = 30;
 const SYNC_BATCH_SIZE = 40;
 
 export async function POST(req: NextRequest) {
-  if (!isRequestAuthorized(req)) {
+  const apiUser = await getStatsApiUser(req);
+  if (!apiUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const username = process.env.LASTFM_USER?.trim();
   const apiKey = process.env.LASTFM_API_KEY?.trim();
-  if (!isLastFmConfigured() || !username || !apiKey) {
-    const detail =
-      !apiKey && !username
-        ? "Set LASTFM_USER and LASTFM_API_KEY in .env"
-        : !apiKey
-          ? "Set LASTFM_API_KEY in .env"
-          : "Set LASTFM_USER in .env (your Last.fm profile name, e.g. the name in last.fm/user/yourname)";
+  if (!isLastFmConfigured() || !apiKey) {
     return NextResponse.json({
       synced: 0,
       skipped: true,
       message: "Last.fm not configured",
-      detail,
+      detail: "Set LASTFM_API_KEY in server environment variables.",
+    });
+  }
+
+  const profile = apiUser.isLegacy ? null : await getUserProfile(apiUser.uid);
+  const username =
+    profile?.lastfmUsername?.trim() ||
+    (apiUser.isLegacy ? process.env.LASTFM_USER?.trim() : undefined);
+
+  if (!username) {
+    return NextResponse.json({
+      synced: 0,
+      skipped: true,
+      message: "Last.fm username not configured",
+      detail: "Add your Last.fm username in onboarding or account settings.",
     });
   }
 
   try {
     const now = new Date();
     const latest = await db.stream.findFirst({
-      where: { isDemo: false, playedAt: { lte: now } },
+      where: {
+        isDemo: false,
+        ...(apiUser.isLegacy ? {} : { userId: apiUser.uid }),
+        playedAt: { lte: now },
+      },
       orderBy: { playedAt: "desc" },
       select: { playedAt: true },
     });
@@ -65,7 +78,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ synced: 0, fetched: tracks.length, message: "No current scrobbles ready" });
     }
 
-    const existing = await loadExistingInPlayWindow(readyTracks);
+    const userId = apiUser.isLegacy ? undefined : apiUser.uid;
+    const existing = await loadExistingInPlayWindow(readyTracks, userId);
     const novel = filterNovelScrobbles(readyTracks, existing);
 
     if (novel.length === 0) {
@@ -87,7 +101,7 @@ export async function POST(req: NextRequest) {
     const { inserted, durationUpdates, artUpdated } = await insertLastFmScrobbles(
       batch,
       timeZone,
-      { fast: true }
+      { fast: true, userId }
     );
     const hasMore = novel.length > batch.length && inserted > 0;
 

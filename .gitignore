@@ -51,3 +51,4 @@ next-env.d.ts
 ios/DerivedData/
 ios/**/xcuserdata/
 ios/Config/Secrets.xcconfig
+.env*.local

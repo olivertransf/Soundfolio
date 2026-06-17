@@ -5,7 +5,7 @@ import {
   getStreamsByDay,
   parseTimeRange,
 } from "@/lib/stats";
-import { requireStatsApiAuth } from "@/lib/stats-api-auth";
+import { requireAuthenticatedStatsRequest } from "@/lib/stats-api-context";
 import {
   VIEWER_TIMEZONE_COOKIE,
   VIEWER_TIMEZONE_PARAM,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/stats-timezone";
 
 export async function GET(req: NextRequest) {
-  const denied = requireStatsApiAuth(req);
+  const { denied, userId } = await requireAuthenticatedStatsRequest(req);
   if (denied) return denied;
 
   const mode = req.nextUrl.searchParams.get("mode") ?? "months";
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const filter = parseTimeRange(range, from, to, timeZone);
 
   if (mode === "weeks") {
-    const raw = await getStreamsByWeek(26, filter, "me", timeZone);
+    const raw = await getStreamsByWeek(26, filter, "me", timeZone, userId);
     const data = raw.map((d) => ({
       label: d.week,
       minutes: d.minutes,
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (mode === "days") {
-    const raw = await getStreamsByDay(filter, "me", timeZone);
+    const raw = await getStreamsByDay(filter, "me", timeZone, userId);
     const data = raw.map((d) => ({
       label: d.label,
       minutes: d.minutes,
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data });
   }
 
-  const raw = await getStreamsByMonth(12, filter, "me", timeZone);
+  const raw = await getStreamsByMonth(12, filter, "me", timeZone, userId);
   const data = raw.map((d) => ({
     label: d.month,
     minutes: d.minutes,
