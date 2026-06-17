@@ -81,18 +81,6 @@ final class StatsPreferences {
         }
     }
 
-    func makeQuery() -> StatsQuery {
-        var query = StatsQuery(sort: sort)
-        if usesCustomRange {
-            query.range = .ytd
-            query.customFrom = customFrom
-            query.customTo = customTo
-        } else {
-            query.range = period
-        }
-        return query
-    }
-
     var importURL: URL? {
         var base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !base.isEmpty else { return nil }
