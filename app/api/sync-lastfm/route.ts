@@ -15,6 +15,8 @@ import {
 export const maxDuration = 30;
 
 const SYNC_BATCH_SIZE = 40;
+/** Re-fetch this window so middle gaps still import after a partial sync. */
+const SYNC_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
 
 type SyncRequestBody = {
   lastfmUsername?: string;
@@ -66,10 +68,10 @@ export async function POST(req: NextRequest) {
   try {
     const latestPlayedAt = body.latestPlayedAt ? new Date(body.latestPlayedAt) : null;
     const fromTimestamp = latestPlayedAt && !isNaN(latestPlayedAt.getTime())
-      ? Math.max(0, Math.floor(latestPlayedAt.getTime() / 1000) - 120)
+      ? Math.max(0, Math.floor((latestPlayedAt.getTime() - SYNC_LOOKBACK_MS) / 1000))
       : undefined;
 
-    const tracks = await getRecentTracks(username, 200, fromTimestamp);
+    const tracks = await getRecentTracks(username, 6000, fromTimestamp);
     if (tracks.length === 0) {
       return NextResponse.json({ synced: 0, streams: [], message: "No new scrobbles" });
     }

@@ -100,8 +100,11 @@ final class APIClient {
         try await get("/api/stats/freshness")
     }
 
-    func syncLastFm() async throws -> LastFmSyncResponse {
-        try await post("/api/sync-lastfm")
+    func syncLastFm(timeZone: String = TimeZone.current.identifier) async throws -> LastFmSyncResponse {
+        try await post(
+            "/api/sync-lastfm",
+            extra: [URLQueryItem(name: "tz", value: timeZone)]
+        )
     }
 
     private func get<T: Decodable>(
@@ -113,8 +116,11 @@ final class APIClient {
         return try await perform(request)
     }
 
-    private func post<T: Decodable>(_ path: String) async throws -> T {
-        let request = try buildRequest(path: path, method: "POST")
+    private func post<T: Decodable>(
+        _ path: String,
+        extra: [URLQueryItem] = []
+    ) async throws -> T {
+        let request = try buildRequest(path: path, method: "POST", extra: extra)
         return try await perform(request)
     }
 

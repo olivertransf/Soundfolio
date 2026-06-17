@@ -32,36 +32,85 @@ interface LastFmResponse {
   message?: string;
 }
 
-export async function getRecentTracks(
+const LASTFM_PAGE_SIZE = 200;
+const LASTFM_MAX_PAGES = 30;
+
+function parseRecentTracksPage(data: LastFmResponse | null) {
+  if (!data || data.error) {
+    throw new Error(data?.message ?? "Last.fm API error");
+  }
+  const raw = data.recenttracks?.track;
+  if (!raw) return { tracks: [], totalPages: 1 };
+  const tracks = Array.isArray(raw) ? raw : [raw];
+  const totalPages = Math.max(
+    1,
+    parseInt(data.recenttracks?.["@attr"]?.totalPages ?? "1", 10) || 1
+  );
+  return {
+    totalPages,
+    tracks: tracks
+      .filter((t) => t.date?.uts)
+      .map((t) => mapTrack(t, new Date(parseInt(t.date!.uts, 10) * 1000))),
+  };
+}
+
+async function fetchRecentTracksPage(
   username: string,
-  limit = 50,
-  fromTimestamp?: number
-): Promise<{ artist: string; name: string; album: string; playedAt: Date; image: string | null }[]> {
+  page: number,
+  fromTimestamp?: number,
+  toTimestamp?: number
+) {
   const apiKey = lastFmApiKey();
-  if (!apiKey) return [];
+  if (!apiKey) return { tracks: [], totalPages: 1 };
 
   const params = new URLSearchParams({
     method: "user.getRecentTracks",
     user: username,
     api_key: apiKey,
     format: "json",
-    limit: String(limit),
+    limit: String(LASTFM_PAGE_SIZE),
+    page: String(page),
   });
-  if (fromTimestamp) params.set("from", String(fromTimestamp));
+  if (fromTimestamp != null) params.set("from", String(fromTimestamp));
+  if (toTimestamp != null) params.set("to", String(toTimestamp));
 
   const res = await fetch(`${BASE}?${params}`, { cache: "no-store" });
   const data = (await safeJson(res)) as LastFmResponse | null;
-  if (!data || data.error) {
-    throw new Error(data?.message ?? `Last.fm API error ${data?.error ?? res.status}`);
+  if (!res.ok && !data?.error) {
+    throw new Error(`Last.fm API HTTP ${res.status}`);
+  }
+  return parseRecentTracksPage(data);
+}
+
+/** All scrobbles after `fromTimestamp` (paginated). Required when catching up >200 plays. */
+export async function getRecentTracks(
+  username: string,
+  limit = 50,
+  fromTimestamp?: number
+): Promise<{ artist: string; name: string; album: string; playedAt: Date; image: string | null }[]> {
+  if (fromTimestamp == null) {
+    const { tracks } = await fetchRecentTracksPage(username, 1);
+    return tracks.slice(0, limit);
   }
 
-  const raw = data.recenttracks?.track;
-  if (!raw) return [];
-  const tracks = Array.isArray(raw) ? raw : [raw];
+  const cap = Math.min(LASTFM_MAX_PAGES, Math.ceil(limit / LASTFM_PAGE_SIZE) || LASTFM_MAX_PAGES);
+  const merged: ReturnType<typeof mapTrack>[] = [];
+  let totalPages = 1;
 
-  return tracks
-    .filter((t) => t.date?.uts)
-    .map((t) => mapTrack(t, new Date(parseInt(t.date!.uts, 10) * 1000)));
+  for (let page = 1; page <= cap; page++) {
+    const batch = await fetchRecentTracksPage(username, page, fromTimestamp);
+    totalPages = batch.totalPages;
+    merged.push(...batch.tracks);
+    if (page >= totalPages || batch.tracks.length === 0) break;
+  }
+
+  const seen = new Set<number>();
+  return merged.filter((t) => {
+    const key = t.playedAt.getTime();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export type LastFmImage = { size?: string; "#text"?: string };
