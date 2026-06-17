@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useUserStreams } from "@/hooks/use-user-streams";
+import { useDemoStreams } from "@/hooks/use-demo-streams";
 import type { Stream } from "@/lib/types/stream";
 
 type StreamsContextValue = {
@@ -33,6 +34,17 @@ export function StreamsProvider({ children }: { children: ReactNode }) {
       setStreams,
     }),
     [user, streams, loading, error, reload, setStreams]
+  );
+
+  return <StreamsContext.Provider value={value}>{children}</StreamsContext.Provider>;
+}
+
+export function DemoStreamsProvider({ children }: { children: ReactNode }) {
+  const { streams, loading, error, reload, setStreams } = useDemoStreams();
+
+  const value = useMemo(
+    () => ({ streams, loading, error, reload, setStreams }),
+    [streams, loading, error, reload, setStreams]
   );
 
   return <StreamsContext.Provider value={value}>{children}</StreamsContext.Provider>;
