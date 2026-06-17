@@ -3,7 +3,6 @@
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -87,11 +86,7 @@ export async function writeUserStreams(uid: string, streams: StreamInput[], skip
     for (const stream of streams.slice(i, i + BATCH_LIMIT)) {
       const id = streamDocumentId({ ...stream, userId: uid });
       const ref = doc(userStreamsRef(uid), id);
-      if (skipExisting) {
-        const existing = await getDoc(ref);
-        if (existing.exists()) continue;
-      }
-      batch.set(ref, toFirestoreData(stream));
+      batch.set(ref, toFirestoreData(stream), { merge: skipExisting });
       batchCount += 1;
     }
 

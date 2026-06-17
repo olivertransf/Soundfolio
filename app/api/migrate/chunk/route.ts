@@ -4,7 +4,7 @@ import { verifyFirebaseIdToken } from "@/lib/auth/verify-id-token";
 
 export const maxDuration = 60;
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 450;
 const LEGACY_UID = process.env.LEGACY_USER_ID?.trim() ?? "lLqJcmE1iYbrHx9OUmLaXriCGAi1";
 
 function bearerToken(request: NextRequest) {
