@@ -24,7 +24,12 @@ export type IncomingScrobble = {
 export type InsertLastFmOptions = {
   /** Skip per-track Last.fm/iTunes art lookups (safe for serverless sync). */
   fast?: boolean;
+  userId?: string;
 };
+
+function userScope(userId?: string) {
+  return userId ? { isDemo: false as const, userId } : { isDemo: false as const };
+}
 
 export async function insertLastFmScrobbles(
   novel: IncomingScrobble[],
@@ -44,10 +49,12 @@ export async function insertLastFmScrobbles(
   const maxPlayed = sorted[sorted.length - 1].playedAt;
 
   const fast = options?.fast === true;
+  const userId = options?.userId;
   const defaultDurationMs = lastFmDefaultDurationMs();
   const catalogCache = new Map<string, number>();
   const artistArtCache = new Map<string, string | null>();
   const insertData = sorted.map((t) => ({
+    userId,
     trackId: lastFmScrobbleStreamId(t.artist, t.name, t.playedAt),
     trackName: t.name,
     artistName: t.artist,
@@ -92,7 +99,7 @@ export async function insertLastFmScrobbles(
   const rowsToInsert = insertData.map(({ _scrobbleImage: _, ...row }) => row);
 
   const insertResult = await db.stream.createMany({ data: rowsToInsert, skipDuplicates: true });
-  const durationUpdates = await recomputeLastFmDurationsAround(minPlayed, maxPlayed);
+  const durationUpdates = await recomputeLastFmDurationsAround(minPlayed, maxPlayed, userId);
 
   let artUpdated = 0;
   const needsArt = !fast && rowsToInsert.some((r) => !r.albumArt);
@@ -109,18 +116,23 @@ export async function insertLastFmScrobbles(
 }
 
 /** Recompute Last.fm listen times in a window (full catalog unless next play is sooner). */
-export async function recomputeLastFmDurationsAround(minPlayed: Date, maxPlayed: Date) {
+export async function recomputeLastFmDurationsAround(
+  minPlayed: Date,
+  maxPlayed: Date,
+  userId?: string
+) {
+  const scope = userScope(userId);
   const [neighborBefore, inRange, neighborAfter] = await Promise.all([
     db.stream.findFirst({
-      where: { isDemo: false, playedAt: { lt: minPlayed } },
+      where: { ...scope, playedAt: { lt: minPlayed } },
       orderBy: { playedAt: "desc" },
     }),
     db.stream.findMany({
-      where: { isDemo: false, playedAt: { gte: minPlayed, lte: maxPlayed } },
+      where: { ...scope, playedAt: { gte: minPlayed, lte: maxPlayed } },
       orderBy: { playedAt: "asc" },
     }),
     db.stream.findFirst({
-      where: { isDemo: false, playedAt: { gt: maxPlayed } },
+      where: { ...scope, playedAt: { gt: maxPlayed } },
       orderBy: { playedAt: "asc" },
     }),
   ]);
@@ -159,13 +171,13 @@ export function filterNovelScrobbles(
   return tracks.filter((t) => !seen.has(scrobbleIdentityKey(t.artist, t.name, t.playedAt)));
 }
 
-export async function loadExistingInPlayWindow(tracks: IncomingScrobble[]) {
+export async function loadExistingInPlayWindow(tracks: IncomingScrobble[], userId?: string) {
   if (tracks.length === 0) return [];
   const playedAts = tracks.map((t) => t.playedAt);
   const minPlayed = new Date(Math.min(...playedAts.map((d) => d.getTime())));
   const maxPlayed = new Date(Math.max(...playedAts.map((d) => d.getTime())));
   return db.stream.findMany({
-    where: { isDemo: false, playedAt: { gte: minPlayed, lte: maxPlayed } },
+    where: { ...userScope(userId), playedAt: { gte: minPlayed, lte: maxPlayed } },
     select: { artistName: true, trackName: true, playedAt: true },
   });
 }

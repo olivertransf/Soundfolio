@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import AdmZip from "adm-zip";
 import { db } from "@/lib/db";
-import { isRequestAuthorized } from "@/lib/auth";
+import { getStatsApiUser } from "@/lib/stats-api-auth";
 import {
   resolveStatsTimeZone,
   spotifyExportTsToUtc,
@@ -21,9 +21,11 @@ interface SpotifyStreamEntry {
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  if (!isRequestAuthorized(req)) {
+  const apiUser = await getStatsApiUser(req);
+  if (!apiUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = apiUser.isLegacy ? undefined : apiUser.uid;
 
   try {
     const formData = await req.formData();
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
 
       const result = await db.stream.createMany({
         data: batch.map((e) => ({
+          userId,
           trackId: e.spotify_track_uri!.replace("spotify:track:", ""),
           trackName: e.master_metadata_track_name!,
           artistName: e.master_metadata_album_artist_name!,

@@ -26,6 +26,7 @@ import { AlbumArt } from "@/components/album-art";
 import { ArtistArt } from "@/components/artist-art";
 import { cookies } from "next/headers";
 import { VIEWER_TIMEZONE_COOKIE } from "@/lib/stats-timezone";
+import { getServerSession } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,8 @@ export default async function OverviewPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string; tz?: string; sort?: string }>;
 }) {
+  const session = await getServerSession();
+  const userId = session!.uid;
   const params = await searchParams;
   const cookieStore = await cookies();
   const viewerTimeZone = params.tz ?? cookieStore.get(VIEWER_TIMEZONE_COOKIE)?.value;
@@ -50,14 +53,14 @@ export default async function OverviewPage({
     span,
     recentStreams,
   ] = await Promise.all([
-    getTotalStats(filter),
-    getTopTracks(5, filter, "me", sortBy),
-    getTopArtists(5, filter, "me", sortBy),
-    getTopAlbums(5, filter, "me", sortBy),
-    getLatestPlayAt(),
-    getListeningDiversity(filter),
-    getListeningSpan(filter),
-    getRecentStreams(7),
+    getTotalStats(filter, "me", userId),
+    getTopTracks(5, filter, "me", sortBy, userId),
+    getTopArtists(5, filter, "me", sortBy, userId),
+    getTopAlbums(5, filter, "me", sortBy, userId),
+    getLatestPlayAt("me", userId),
+    getListeningDiversity(filter, "me", userId),
+    getListeningSpan(filter, "me", userId),
+    getRecentStreams(7, "me", userId),
   ]);
 
   const days = calendarDaysInFilter(filter, span, viewerTimeZone);

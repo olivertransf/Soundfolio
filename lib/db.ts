@@ -15,6 +15,7 @@ import {
 
 export interface Stream {
   id: string;
+  userId?: string;
   trackId: string;
   trackName: string;
   artistName: string;
@@ -183,9 +184,12 @@ class StreamRepository {
   async ensureIndexes() {
     const collection = await this.collection();
     await collection.createIndexes([
-      { key: { trackId: 1, playedAt: 1 }, name: "stream_track_playedAt_unique", unique: true },
+      { key: { userId: 1, trackId: 1, playedAt: 1 }, name: "stream_user_track_playedAt_unique", unique: true, partialFilterExpression: { userId: { $type: "string" } } },
+      { key: { trackId: 1, playedAt: 1 }, name: "stream_track_playedAt_unique", unique: true, partialFilterExpression: { userId: { $exists: false } } },
+      { key: { userId: 1, playedAt: -1 }, name: "stream_user_playedAt_desc" },
       { key: { playedAt: -1 }, name: "stream_playedAt_desc" },
       { key: { isDemo: 1, playedAt: -1 }, name: "stream_scope_playedAt_desc" },
+      { key: { userId: 1, isDemo: 1, playedAt: -1 }, name: "stream_user_scope_playedAt_desc" },
       { key: { isDemo: 1, artistName: 1 }, name: "stream_scope_artist" },
       { key: { isDemo: 1, albumName: 1 }, name: "stream_scope_album" },
       { key: { isDemo: 1, trackId: 1 }, name: "stream_scope_track" },
@@ -201,7 +205,9 @@ class StreamRepository {
           const doc = prepareDocument(stream);
           return {
             updateOne: {
-              filter: { trackId: doc.trackId, playedAt: doc.playedAt },
+              filter: doc.userId
+                ? { userId: doc.userId, trackId: doc.trackId, playedAt: doc.playedAt }
+                : { trackId: doc.trackId, playedAt: doc.playedAt, userId: { $exists: false } },
               update: { $setOnInsert: doc },
               upsert: true,
             },

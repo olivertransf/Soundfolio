@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireStatsApiAuth } from "@/lib/stats-api-auth";
+import { requireAuthenticatedStatsRequest } from "@/lib/stats-api-context";
 import { getRecentStreams } from "@/lib/stats";
 import { getNowPlayingTrack } from "@/lib/lastfm";
 import { resolveAlbumArt, resolveArtistArt } from "@/lib/resolve-art";
 import { lastFmTrackId } from "@/lib/stream-ids";
+import { getUserProfile } from "@/lib/users";
+import { getStatsApiUser } from "@/lib/stats-api-auth";
 import {
   VIEWER_TIMEZONE_COOKIE,
   VIEWER_TIMEZONE_PARAM,
@@ -12,7 +14,7 @@ import {
 } from "@/lib/stats-timezone";
 
 export async function GET(req: NextRequest) {
-  const denied = requireStatsApiAuth(req);
+  const { denied, userId } = await requireAuthenticatedStatsRequest(req);
   if (denied) return denied;
 
   const limit = Math.min(
@@ -23,8 +25,13 @@ export async function GET(req: NextRequest) {
     req.nextUrl.searchParams.get(VIEWER_TIMEZONE_PARAM) ??
       req.cookies.get(VIEWER_TIMEZONE_COOKIE)?.value
   );
-  const streams = await getRecentStreams(limit);
-  const username = process.env.LASTFM_USER?.trim();
+  const streams = await getRecentStreams(limit, "me", userId);
+
+  const apiUser = await getStatsApiUser(req);
+  const profile = apiUser && !apiUser.isLegacy ? await getUserProfile(apiUser.uid) : null;
+  const username =
+    profile?.lastfmUsername?.trim() ||
+    (apiUser?.isLegacy ? process.env.LASTFM_USER?.trim() : undefined);
   const nowPlaying = username ? await getNowPlayingTrack(username) : null;
   const nowPlayingStream = nowPlaying
     ? {

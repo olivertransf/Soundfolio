@@ -1,11 +1,13 @@
 import { getRecentStreams } from "@/lib/stats";
 import { Card, CardContent } from "@/components/ui/card";
 import { RecentPlaysList } from "@/components/recent-plays-list";
+import { requireOnboardedSession } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function HistoryRecentPage() {
-  const streams = await getRecentStreams(100);
+  const session = await requireOnboardedSession("/history/recent");
+  const streams = await getRecentStreams(100, "me", session.uid);
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">

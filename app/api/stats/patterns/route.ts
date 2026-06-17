@@ -5,11 +5,11 @@ import {
   getStreamsByHour,
   parseTimeRange,
 } from "@/lib/stats";
-import { requireStatsApiAuth } from "@/lib/stats-api-auth";
+import { requireAuthenticatedStatsRequest } from "@/lib/stats-api-context";
 import { VIEWER_TIMEZONE_PARAM, resolveStatsTimeZone } from "@/lib/stats-timezone";
 
 export async function GET(req: NextRequest) {
-  const denied = requireStatsApiAuth(req);
+  const { denied, userId } = await requireAuthenticatedStatsRequest(req);
   if (denied) return denied;
 
   const sp = req.nextUrl.searchParams;
@@ -20,9 +20,9 @@ export async function GET(req: NextRequest) {
 
   const filter = parseTimeRange(range, from, to, timeZone);
   const [byHour, byDay, heatmap] = await Promise.all([
-    getStreamsByHour(filter, "me", timeZone),
-    getStreamsByDayOfWeek(filter, "me", timeZone),
-    getListeningHeatmap(filter, "me", timeZone),
+    getStreamsByHour(filter, "me", timeZone, userId),
+    getStreamsByDayOfWeek(filter, "me", timeZone, userId),
+    getListeningHeatmap(filter, "me", timeZone, userId),
   ]);
 
   return NextResponse.json(

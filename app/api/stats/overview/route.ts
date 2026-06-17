@@ -9,11 +9,11 @@ import {
   getListeningSpan,
   calendarDaysInFilter,
 } from "@/lib/stats";
-import { requireStatsApiAuth } from "@/lib/stats-api-auth";
+import { requireAuthenticatedStatsRequest } from "@/lib/stats-api-context";
 import { parseStatsRequestParams, STATS_API_CACHE_HEADERS } from "@/lib/stats-api-params";
 
 export async function GET(req: NextRequest) {
-  const denied = requireStatsApiAuth(req);
+  const { denied, userId } = await requireAuthenticatedStatsRequest(req);
   if (denied) return denied;
 
   const { filter, sortBy, timeZone } = parseStatsRequestParams(req);
@@ -27,13 +27,13 @@ export async function GET(req: NextRequest) {
     diversity,
     span,
   ] = await Promise.all([
-    getTotalStats(filter),
-    getTopTracks(5, filter, "me", sortBy),
-    getTopArtists(5, filter, "me", sortBy),
-    getTopAlbums(5, filter, "me", sortBy),
-    getLatestPlayAt(),
-    getListeningDiversity(filter),
-    getListeningSpan(filter),
+    getTotalStats(filter, "me", userId),
+    getTopTracks(5, filter, "me", sortBy, userId),
+    getTopArtists(5, filter, "me", sortBy, userId),
+    getTopAlbums(5, filter, "me", sortBy, userId),
+    getLatestPlayAt("me", userId),
+    getListeningDiversity(filter, "me", userId),
+    getListeningSpan(filter, "me", userId),
   ]);
 
   const days = calendarDaysInFilter(filter, span, timeZone);
