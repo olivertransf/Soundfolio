@@ -11,11 +11,15 @@ import {
   writeBatch,
   orderBy,
   limit,
+  startAfter,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { getFirebaseFirestore } from "@/lib/firebase/client";
 import { type Stream, type StreamInput, streamDocumentId } from "@/lib/types/stream";
 
 const BATCH_LIMIT = 450;
+/** Recent plays per Firestore page — keep low to protect daily read quota. */
+export const STREAMS_PAGE_SIZE = 400;
 
 function userStreamsRef(uid: string) {
   return collection(getFirebaseFirestore(), "users", uid, "streams");
@@ -59,9 +63,39 @@ function toFirestoreData(stream: StreamInput) {
   };
 }
 
+export async function fetchUserStreamsPage(
+  uid: string,
+  pageSize = STREAMS_PAGE_SIZE,
+  cursor?: QueryDocumentSnapshot
+): Promise<{
+  streams: Stream[];
+  lastDoc?: QueryDocumentSnapshot;
+  hasMore: boolean;
+}> {
+  const q = cursor
+    ? query(userStreamsRef(uid), orderBy("playedAt", "desc"), startAfter(cursor), limit(pageSize))
+    : query(userStreamsRef(uid), orderBy("playedAt", "desc"), limit(pageSize));
+  const snap = await getDocs(q);
+  const streams = snap.docs.map((entry) => fromDoc(entry.id, entry.data() as Record<string, unknown>));
+  const lastDoc = snap.docs[snap.docs.length - 1];
+  return {
+    streams,
+    lastDoc,
+    hasMore: snap.docs.length === pageSize,
+  };
+}
+
 export async function fetchUserStreams(uid: string): Promise<Stream[]> {
-  const snap = await getDocs(query(userStreamsRef(uid), orderBy("playedAt", "desc")));
-  return snap.docs.map((entry) => fromDoc(entry.id, entry.data() as Record<string, unknown>));
+  const all: Stream[] = [];
+  let cursor: QueryDocumentSnapshot | undefined;
+  let hasMore = true;
+  while (hasMore) {
+    const page = await fetchUserStreamsPage(uid, STREAMS_PAGE_SIZE, cursor);
+    all.push(...page.streams);
+    hasMore = page.hasMore;
+    cursor = page.lastDoc;
+  }
+  return all;
 }
 
 export async function fetchLatestPlayAt(uid: string): Promise<Date | null> {
@@ -100,7 +134,7 @@ export async function writeUserStreams(uid: string, streams: StreamInput[], skip
 }
 
 export async function countUserStreams(uid: string) {
-  const snap = await getDocs(userStreamsRef(uid));
+  const snap = await getDocs(query(userStreamsRef(uid), limit(1)));
   return snap.size;
 }
 

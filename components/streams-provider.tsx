@@ -14,8 +14,12 @@ import type { Stream } from "@/lib/types/stream";
 type StreamsContextValue = {
   streams: Stream[];
   loading: boolean;
+  loadingMore: boolean;
+  fullyLoaded: boolean;
+  hasMore: boolean;
   error: string | null;
   reload: () => Promise<void>;
+  loadMore: () => Promise<void>;
   setStreams: (streams: Stream[]) => void;
 };
 
@@ -23,17 +27,22 @@ const StreamsContext = createContext<StreamsContextValue | null>(null);
 
 export function StreamsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { streams, loading, error, reload, setStreams } = useUserStreams();
+  const { streams, loading, loadingMore, fullyLoaded, hasMore, error, reload, loadMore, setStreams } =
+    useUserStreams();
 
   const value = useMemo(
     () => ({
       streams: user ? streams : [],
       loading: user ? loading : false,
+      loadingMore: user ? loadingMore : false,
+      fullyLoaded: user ? fullyLoaded : true,
+      hasMore: user ? hasMore : false,
       error: user ? error : null,
       reload,
+      loadMore,
       setStreams,
     }),
-    [user, streams, loading, error, reload, setStreams]
+    [user, streams, loading, loadingMore, fullyLoaded, hasMore, error, reload, loadMore, setStreams]
   );
 
   return <StreamsContext.Provider value={value}>{children}</StreamsContext.Provider>;
@@ -43,7 +52,17 @@ export function DemoStreamsProvider({ children }: { children: ReactNode }) {
   const { streams, loading, error, reload, setStreams } = useDemoStreams();
 
   const value = useMemo(
-    () => ({ streams, loading, error, reload, setStreams }),
+    () => ({
+      streams,
+      loading,
+      loadingMore: false,
+      fullyLoaded: true,
+      hasMore: false,
+      error,
+      reload,
+      loadMore: async () => {},
+      setStreams,
+    }),
     [streams, loading, error, reload, setStreams]
   );
 

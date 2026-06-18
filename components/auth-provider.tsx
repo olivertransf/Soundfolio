@@ -45,17 +45,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const auth = getFirebaseAuth();
     return onAuthStateChanged(auth, (nextUser) => {
-      void (async () => {
-        if (nextUser) {
-          try {
-            await upsertUserProfile(nextUser);
-          } catch (error) {
-            console.error("[auth] profile upsert failed", error);
-          }
-        }
-        setUser(nextUser);
-        setLoading(false);
-      })();
+      setUser(nextUser);
+      setLoading(false);
+      if (!nextUser) return;
+      void upsertUserProfile(nextUser).catch((error) => {
+        console.error("[auth] profile upsert failed", error);
+      });
     });
   }, []);
 

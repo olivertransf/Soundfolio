@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
@@ -48,7 +48,8 @@ const previewKinds = [
 
 export function OverviewContent() {
   const searchParams = useSearchParams();
-  const { streams, loading } = useStreams();
+  const { streams, loading, loadingMore, fullyLoaded, hasMore } = useStreams();
+  const deferredStreams = useDeferredValue(streams);
   const [previewKind, setPreviewKind] = useState<(typeof previewKinds)[number]["id"]>("tracks");
 
   const range = searchParams.get("range") ?? undefined;
@@ -65,20 +66,20 @@ export function OverviewContent() {
     [range, from, to, viewerTimeZone]
   );
 
-  const stats = useMemo(() => computeTotalStats(streams, filter), [streams, filter]);
-  const topTracks = useMemo(() => computeTopTracks(streams, 5, filter, sortBy), [streams, filter, sortBy]);
-  const topArtists = useMemo(() => computeTopArtists(streams, 5, filter, sortBy), [streams, filter, sortBy]);
-  const topAlbums = useMemo(() => computeTopAlbums(streams, 5, filter, sortBy), [streams, filter, sortBy]);
-  const diversity = useMemo(() => computeListeningDiversity(streams, filter), [streams, filter]);
-  const span = useMemo(() => computeListeningSpan(streams, filter), [streams, filter]);
-  const recentStreams = useMemo(() => computeRecentStreams(streams, 7), [streams]);
+  const stats = useMemo(() => computeTotalStats(deferredStreams, filter), [deferredStreams, filter]);
+  const topTracks = useMemo(() => computeTopTracks(deferredStreams, 5, filter, sortBy), [deferredStreams, filter, sortBy]);
+  const topArtists = useMemo(() => computeTopArtists(deferredStreams, 5, filter, sortBy), [deferredStreams, filter, sortBy]);
+  const topAlbums = useMemo(() => computeTopAlbums(deferredStreams, 5, filter, sortBy), [deferredStreams, filter, sortBy]);
+  const diversity = useMemo(() => computeListeningDiversity(deferredStreams, filter), [deferredStreams, filter]);
+  const span = useMemo(() => computeListeningSpan(deferredStreams, filter), [deferredStreams, filter]);
+  const recentStreams = useMemo(() => computeRecentStreams(deferredStreams, 7), [deferredStreams]);
   const peakHour = useMemo(
-    () => computePeakHour(streams, filter, viewerTimeZone ?? undefined),
-    [streams, filter, viewerTimeZone]
+    () => computePeakHour(deferredStreams, filter, viewerTimeZone ?? undefined),
+    [deferredStreams, filter, viewerTimeZone]
   );
   const peakDay = useMemo(
-    () => computePeakDay(streams, filter, viewerTimeZone ?? undefined),
-    [streams, filter, viewerTimeZone]
+    () => computePeakDay(deferredStreams, filter, viewerTimeZone ?? undefined),
+    [deferredStreams, filter, viewerTimeZone]
   );
 
   const days = calendarDaysInFilter(filter, span, viewerTimeZone ?? undefined);
@@ -118,6 +119,13 @@ export function OverviewContent() {
     <div className="mx-auto max-w-[1600px] space-y-4 sm:space-y-5">
       <div className="space-y-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
+        {!fullyLoaded && hasMore ? (
+          <p className="text-xs text-muted-foreground">
+            {loadingMore
+              ? `Loading older plays (${streams.length.toLocaleString()} loaded so far).`
+              : "Recent plays loaded. Use Load more in the banner for older history."}
+          </p>
+        ) : null}
         <p className="text-sm text-muted-foreground">How you&apos;re listening in {filter.label.toLowerCase()}.</p>
       </div>
 

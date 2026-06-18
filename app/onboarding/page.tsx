@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { firestoreErrorMessage } from "@/lib/firestore/errors";
 import { setLastfmUsername } from "@/lib/firestore/user-profile";
 
 function OnboardingForm() {
@@ -30,7 +31,7 @@ function OnboardingForm() {
       await setLastfmUsername(user.uid, lastfmUsername);
       router.push(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save profile");
+      setError(firestoreErrorMessage(err, "Could not save profile"));
     } finally {
       setLoading(false);
     }
