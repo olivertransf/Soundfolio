@@ -15,6 +15,7 @@ import { ArtistArt } from "@/components/artist-art";
 import { AlbumArt } from "@/components/album-art";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader, PageShell, SectionBlock } from "@/components/page-shell";
 import { useStreams } from "@/components/streams-provider";
 import { librarySectionHref } from "@/components/library/library-content";
 import {
@@ -116,145 +117,160 @@ export function OverviewContent() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4 sm:space-y-5">
-      <div className="space-y-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
-        {!fullyLoaded && hasMore ? (
-          <p className="text-xs text-muted-foreground">
-            {loadingMore
-              ? `Loading older plays (${streams.length.toLocaleString()} loaded so far).`
-              : "Recent plays loaded. Use Load more in the banner for older history."}
-          </p>
-        ) : null}
-        <p className="text-sm text-muted-foreground">How you&apos;re listening in {filter.label.toLowerCase()}.</p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Dashboard"
+        description={`How you're listening in ${filter.label.toLowerCase()}.`}
+        meta={
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 text-primary">
+              {filter.label}
+            </Badge>
+            {span ? (
+              <span className="text-xs text-muted-foreground">
+                {span.first.toLocaleDateString()} – {span.last.toLocaleDateString()}
+              </span>
+            ) : null}
+            {!fullyLoaded && hasMore ? (
+              <span className="text-xs text-muted-foreground">
+                {loadingMore
+                  ? `Loading older plays (${streams.length.toLocaleString()} loaded).`
+                  : "Partial history loaded — use Load more for older stats."}
+              </span>
+            ) : null}
+          </div>
+        }
+      />
 
       <FilterToolbar context="dashboard" />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 text-primary">
-          {filter.label}
-        </Badge>
-        {span ? (
-          <span className="text-xs text-muted-foreground">
-            {span.first.toLocaleDateString()} – {span.last.toLocaleDateString()}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <StatCard label="Minutes" value={stats.totalMinutes.toLocaleString()} sub={`${stats.totalHours.toLocaleString()} hours`} icon={Clock} />
-        <StatCard label="Plays" value={stats.totalStreams.toLocaleString()} sub={filter.label} icon={Play} />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Tracks" value={diversity.uniqueTracks.toLocaleString()} sub="unique" icon={Music} variant="compact" />
-        <StatCard label="Artists" value={diversity.uniqueArtists.toLocaleString()} sub="unique" icon={Users} variant="compact" />
-        <StatCard label="Min / day" value={avgMinPerDay.toLocaleString()} sub={`~${days} days`} icon={Clock} variant="compact" />
-        <StatCard label="Plays / day" value={avgStreamsPerDay.toLocaleString()} icon={Headphones} variant="compact" />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <InsightCard
-          label="Busiest hour"
-          primaryValue={peakHour ? formatHourLabel(peakHour.label) : "—"}
-          detail={
-            peakHour
-              ? `${peakHour.minutes.toLocaleString()} min · ${peakHour.streams.toLocaleString()} plays`
-              : "No plays in this range."
-          }
-        />
-        <InsightCard
-          label="Busiest day"
-          primaryValue={peakDay?.label ?? "—"}
-          detail={
-            peakDay
-              ? `${peakDay.minutes.toLocaleString()} min · ${peakDay.streams.toLocaleString()} plays`
-              : "No plays in this range."
-          }
-        />
-      </div>
-
-      <Suspense
-        fallback={
-          <Card className="rounded-2xl border border-border/40 bg-card/40 shadow-none ring-0">
-            <CardContent className="flex h-[240px] items-center justify-center px-4 text-sm text-muted-foreground">
-              Loading chart…
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_min(100%,22rem)] xl:items-start xl:gap-6">
+        <div className="space-y-5">
+          <Card className="overflow-hidden border-border/50 bg-card/70 shadow-none">
+            <CardContent className="space-y-5 p-4 sm:p-5">
+              <div>
+                <h2 className="font-display text-lg font-semibold tracking-tight sm:text-xl">
+                  Listening at a glance
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {stats.totalStreams.toLocaleString()} plays · {diversity.uniqueArtists.toLocaleString()} artists ·{" "}
+                  {diversity.uniqueTracks.toLocaleString()} tracks
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <StatCard label="Minutes" value={stats.totalMinutes.toLocaleString()} sub={`${stats.totalHours.toLocaleString()} hours`} icon={Clock} variant="compact" />
+                <StatCard label="Plays" value={stats.totalStreams.toLocaleString()} sub={filter.label} icon={Play} variant="compact" />
+                <StatCard label="Min / day" value={avgMinPerDay.toLocaleString()} sub={`~${days} days`} icon={Clock} variant="compact" />
+                <StatCard label="Plays / day" value={avgStreamsPerDay.toLocaleString()} icon={Headphones} variant="compact" />
+                <StatCard label="Tracks" value={diversity.uniqueTracks.toLocaleString()} sub="unique" icon={Music} variant="compact" />
+                <StatCard label="Artists" value={diversity.uniqueArtists.toLocaleString()} sub="unique" icon={Users} variant="compact" />
+              </div>
             </CardContent>
           </Card>
-        }
-      >
-        <ListeningActivity periodLabel={filter.label} compact />
-      </Suspense>
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Recent plays</h2>
-            <p className="text-xs text-muted-foreground">Last {recentStreams.length} listens</p>
-          </div>
-          <Link href={libraryRecentHref} className="text-sm font-medium text-primary hover:underline">
-            See all
-          </Link>
-        </div>
-        <Card className="border-border/50 bg-card/70">
-          <CardContent className="p-3 sm:p-4">
-            <RecentPlaysList
-              compact
-              linkable
-              initialStreams={recentStreams.map((stream) => ({
-                id: stream.id,
-                trackName: stream.trackName,
-                artistName: stream.artistName,
-                albumName: stream.albumName,
-                albumArt: stream.albumArt,
-                playedAt: stream.playedAt.toISOString(),
-              }))}
-            />
-          </CardContent>
-        </Card>
-      </section>
+          <Suspense
+            fallback={
+              <Card className="rounded-2xl border border-border/40 bg-card/40 shadow-none ring-0">
+                <CardContent className="flex h-[280px] items-center justify-center px-4 text-sm text-muted-foreground">
+                  Loading chart…
+                </CardContent>
+              </Card>
+            }
+          >
+            <ListeningActivity periodLabel={filter.label} compact={false} />
+          </Suspense>
 
-      <section className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-sm font-semibold">Top rankings</h2>
-            <p className="text-xs text-muted-foreground">By {sortBy}</p>
-          </div>
-          <Link href={libraryRankingsHref} className="text-sm font-medium text-primary hover:underline">
-            See all
-          </Link>
+          <SectionBlock
+            title="Top rankings"
+            description={`By ${sortBy}`}
+            action={
+              <Link href={libraryRankingsHref} className="text-sm font-medium text-primary hover:underline">
+                See all
+              </Link>
+            }
+          >
+            <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-card/30 p-1">
+              {previewKinds.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setPreviewKind(item.id)}
+                  className={cn(
+                    "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                    previewKind === item.id
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <Card className="border-border/50 bg-card/70">
+              <CardContent className="p-3 sm:p-4">
+                <TopPreviewList
+                  kind={previewKind}
+                  sortBy={sortBy}
+                  tracks={topTracks}
+                  artists={topArtists}
+                  albums={topAlbums}
+                />
+              </CardContent>
+            </Card>
+          </SectionBlock>
         </div>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-card/30 p-1">
-          {previewKinds.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setPreviewKind(item.id)}
-              className={cn(
-                "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-                previewKind === item.id
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <Card className="border-border/50 bg-card/70">
-          <CardContent className="p-3 sm:p-4">
-            <TopPreviewList
-              kind={previewKind}
-              sortBy={sortBy}
-              tracks={topTracks}
-              artists={topArtists}
-              albums={topAlbums}
+
+        <aside className="space-y-5 xl:sticky xl:top-[calc(4.25rem+env(safe-area-inset-top,0px))]">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <InsightCard
+              label="Busiest hour"
+              primaryValue={peakHour ? formatHourLabel(peakHour.label) : "—"}
+              detail={
+                peakHour
+                  ? `${peakHour.minutes.toLocaleString()} min · ${peakHour.streams.toLocaleString()} plays`
+                  : "No plays in this range."
+              }
             />
-          </CardContent>
-        </Card>
-      </section>
-    </div>
+            <InsightCard
+              label="Busiest day"
+              primaryValue={peakDay?.label ?? "—"}
+              detail={
+                peakDay
+                  ? `${peakDay.minutes.toLocaleString()} min · ${peakDay.streams.toLocaleString()} plays`
+                  : "No plays in this range."
+              }
+            />
+          </div>
+
+          <SectionBlock
+            title="Recent plays"
+            description={`Last ${recentStreams.length} listens`}
+            action={
+              <Link href={libraryRecentHref} className="text-sm font-medium text-primary hover:underline">
+                See all
+              </Link>
+            }
+          >
+            <Card className="border-border/50 bg-card/70">
+              <CardContent className="p-3 sm:p-4">
+                <RecentPlaysList
+                  compact
+                  linkable
+                  initialStreams={recentStreams.map((stream) => ({
+                    id: stream.id,
+                    trackName: stream.trackName,
+                    artistName: stream.artistName,
+                    albumName: stream.albumName,
+                    albumArt: stream.albumArt,
+                    playedAt: stream.playedAt.toISOString(),
+                  }))}
+                />
+              </CardContent>
+            </Card>
+          </SectionBlock>
+        </aside>
+      </div>
+    </PageShell>
   );
 }
 

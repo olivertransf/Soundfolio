@@ -71,8 +71,8 @@ export function AppHeader({
                   return (
                     <Link key={href} href={href} className={navLinkClass(active)}>
                       <Icon className="h-3.5 w-3.5 opacity-80" aria-hidden />
-                      <span className="hidden 2xl:inline">{label}</span>
-                      <span className="2xl:hidden">{shortLabel}</span>
+                      <span className="hidden lg:inline">{label}</span>
+                      <span className="lg:hidden">{shortLabel}</span>
                     </Link>
                   );
                 })}

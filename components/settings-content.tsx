@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { useOptionalStreams } from "@/components/streams-provider";
 import { DisplayPreferencesPanel } from "@/components/display-preferences-panel";
+import { PageHeader, PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getUserProfile, setLastfmUsername } from "@/lib/firestore/user-profile";
@@ -75,14 +76,15 @@ export function SettingsContent() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
-      <div className="space-y-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
-        <p className="text-sm text-muted-foreground">Account, sync, and appearance.</p>
-      </div>
+    <PageShell className="max-w-5xl">
+      <PageHeader
+        title="Settings"
+        description="Account, sync, and appearance."
+      />
 
-      <section className="space-y-4 rounded-2xl border border-border/40 bg-card/40 p-5">
-        <h2 className="text-sm font-semibold">Account</h2>
+      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
+        <section className="space-y-4 rounded-2xl border border-border/40 bg-card/40 p-5">
+          <h2 className="text-sm font-semibold">Account</h2>
         {user?.email ? (
           <p className="text-sm text-muted-foreground">{user.email}</p>
         ) : null}
@@ -162,10 +164,11 @@ export function SettingsContent() {
         </p>
       </section>
 
-      <section className="space-y-4 rounded-2xl border border-border/40 bg-card/40 p-5">
+      <section className="space-y-4 rounded-2xl border border-border/40 bg-card/40 p-5 lg:col-span-2">
         <h2 className="text-sm font-semibold">Appearance</h2>
         <DisplayPreferencesPanel />
-      </section>
-    </div>
+        </section>
+      </div>
+    </PageShell>
   );
 }

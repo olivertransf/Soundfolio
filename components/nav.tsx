@@ -25,7 +25,10 @@ export function Nav() {
   return (
     <nav className="fixed left-0 top-0 flex h-full w-56 flex-col gap-1 border-r border-border bg-card px-4 py-6">
       <div className="mb-6 px-2">
-        <span className="text-xl font-bold spotify-green">Spotify Stats</span>
+        <span className="text-xl font-bold">
+          <span className="text-primary">Sound</span>
+          <span className="text-foreground">folio</span>
+        </span>
       </div>
       {links.map(({ href, label, icon: Icon }) => (
         <Link
