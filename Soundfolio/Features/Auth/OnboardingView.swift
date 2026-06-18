@@ -19,7 +19,7 @@ struct OnboardingView: View {
                         .kerning(1.5)
                     Text("Connect Last.fm")
                         .font(.title.bold())
-                    Text("Use the username from your profile URL, like last.fm/user/yourname.")
+                    Text("Use the username from your profile URL, like last.fm/user/yourname. After setup, your Dashboard shows listening stats. Import Spotify history on the web if needed.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

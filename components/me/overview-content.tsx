@@ -1,42 +1,55 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
 import { useSearchParams } from "next/navigation";
-import { Music } from "lucide-react";
-import { TopSortTabs } from "@/components/top-sort-tabs";
-import { OverviewMetricsGrid } from "@/components/overview-metrics-grid";
+import { Clock, Headphones, Music, Play, Users } from "lucide-react";
+import { FilterToolbar } from "@/components/filter-toolbar";
+import { InsightCard } from "@/components/insight-card";
+import { StatCard } from "@/components/stat-card";
+import { ListeningActivity } from "@/components/listening-activity";
+import { RecentPlaysList } from "@/components/recent-plays-list";
+import { ArtistArt } from "@/components/artist-art";
+import { AlbumArt } from "@/components/album-art";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ListeningActivity } from "@/components/listening-activity";
-import { HomePatternsSection } from "@/components/home-patterns-section";
-import { RecentPlaysList } from "@/components/recent-plays-list";
-import { AlbumArt } from "@/components/album-art";
-import { ArtistArt } from "@/components/artist-art";
 import { useStreams } from "@/components/streams-provider";
+import { librarySectionHref } from "@/components/library/library-content";
 import {
   calendarDaysInFilter,
-  computeLatestPlayAt,
   computeListeningDiversity,
   computeListeningSpan,
+  computePeakDay,
+  computePeakHour,
   computeRecentStreams,
   computeTopAlbums,
   computeTopArtists,
   computeTopTracks,
   computeTotalStats,
+  formatHourLabel,
   parseTimeRange,
   parseTopSortBy,
 } from "@/lib/stats-compute";
+import { albumPath, artistPath, trackPath } from "@/lib/entity-paths";
 import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
 import {
   detectViewerTimeZone,
   readViewerTimeZoneCookie,
 } from "@/lib/viewer-timezone-client";
+import { cn } from "@/lib/utils";
+
+const previewKinds = [
+  { id: "tracks", label: "Tracks" },
+  { id: "artists", label: "Artists" },
+  { id: "albums", label: "Albums" },
+] as const;
 
 export function OverviewContent() {
   const searchParams = useSearchParams();
   const { streams, loading } = useStreams();
+  const [previewKind, setPreviewKind] = useState<(typeof previewKinds)[number]["id"]>("tracks");
 
   const range = searchParams.get("range") ?? undefined;
   const from = searchParams.get("from") ?? undefined;
@@ -56,24 +69,25 @@ export function OverviewContent() {
   const topTracks = useMemo(() => computeTopTracks(streams, 5, filter, sortBy), [streams, filter, sortBy]);
   const topArtists = useMemo(() => computeTopArtists(streams, 5, filter, sortBy), [streams, filter, sortBy]);
   const topAlbums = useMemo(() => computeTopAlbums(streams, 5, filter, sortBy), [streams, filter, sortBy]);
-  const latestPlayAt = useMemo(() => computeLatestPlayAt(streams), [streams]);
   const diversity = useMemo(() => computeListeningDiversity(streams, filter), [streams, filter]);
   const span = useMemo(() => computeListeningSpan(streams, filter), [streams, filter]);
   const recentStreams = useMemo(() => computeRecentStreams(streams, 7), [streams]);
+  const peakHour = useMemo(
+    () => computePeakHour(streams, filter, viewerTimeZone ?? undefined),
+    [streams, filter, viewerTimeZone]
+  );
+  const peakDay = useMemo(
+    () => computePeakDay(streams, filter, viewerTimeZone ?? undefined),
+    [streams, filter, viewerTimeZone]
+  );
 
   const days = calendarDaysInFilter(filter, span, viewerTimeZone ?? undefined);
   const avgMinPerDay = Math.round(stats.totalMinutes / days);
   const avgStreamsPerDay = Math.round(stats.totalStreams / days);
   const hasData = stats.totalStreams > 0;
 
-  const metrics = [
-    { label: "Minutes", value: stats.totalMinutes.toLocaleString(), hint: `${stats.totalHours.toLocaleString()} h` },
-    { label: "Streams", value: stats.totalStreams.toLocaleString() },
-    { label: "Tracks", value: diversity.uniqueTracks.toLocaleString(), hint: "unique" },
-    { label: "Artists", value: diversity.uniqueArtists.toLocaleString(), hint: "unique" },
-    { label: "Min / day", value: avgMinPerDay.toLocaleString(), hint: `~${days} d` },
-    { label: "Plays / day", value: avgStreamsPerDay.toLocaleString() },
-  ];
+  const libraryRecentHref = librarySectionHref("recent", new URLSearchParams(searchParams.toString()));
+  const libraryRankingsHref = librarySectionHref("rankings", new URLSearchParams(searchParams.toString()));
 
   if (loading) {
     return (
@@ -93,196 +107,246 @@ export function OverviewContent() {
         <p className="max-w-sm text-muted-foreground">
           Sync Last.fm or import your listening history to see stats here.
         </p>
+        <Link href="/history/import" className="text-sm font-medium text-primary hover:underline">
+          Import on web
+        </Link>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 sm:space-y-5">
-      <section className="overflow-hidden rounded-3xl border border-border/50 bg-card/55 p-5 shadow-2xl ring-1 ring-border/30 sm:p-6">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 text-primary">
-                {filter.label}
-              </Badge>
-              <Badge variant="outline" className="rounded-full border-border/60 text-muted-foreground">
-                Live stats
-              </Badge>
-            </div>
-            <div>
-              <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-5xl">
-                Your listening, tuned live.
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Explore the shape of your listening history with live refresh,
-                richer charts, and controls that stay out of your way.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-sm">
-              <Link href="#listening" className="rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90">
-                View chart
-              </Link>
-              <Link href="#patterns" className="rounded-full border border-border/60 bg-secondary/30 px-4 py-2 font-medium text-foreground hover:bg-secondary/50">
-                View patterns
-              </Link>
-            </div>
-          </div>
-          <div className="grid gap-2 rounded-2xl border border-border/50 bg-background/45 p-4 text-sm sm:min-w-64">
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-muted-foreground">Last play</span>
-              <span className="font-medium tabular-nums text-foreground">
-                {latestPlayAt ? formatDistanceToNow(latestPlayAt, { addSuffix: true }) : "No plays"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-muted-foreground">Average</span>
-              <span className="font-medium tabular-nums text-foreground">
-                {avgMinPerDay.toLocaleString()} min / day
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-muted-foreground">Library</span>
-              <span className="font-medium tabular-nums text-foreground">
-                {diversity.uniqueTracks.toLocaleString()} tracks
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+      <div className="space-y-1">
+        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">How you&apos;re listening in {filter.label.toLowerCase()}.</p>
+      </div>
 
-      <OverviewMetricsGrid metrics={metrics} />
+      <FilterToolbar context="dashboard" />
 
-      <div id="listening" className="grid scroll-mt-24 gap-4 lg:grid-cols-[minmax(0,1fr)_min(100%,15.5rem)] lg:items-stretch xl:grid-cols-[minmax(0,1fr)_min(100%,17.5rem)] xl:gap-5">
-        <Suspense
-          fallback={
-            <Card className="rounded-2xl border border-border/40 bg-card/40 shadow-none ring-0">
-              <CardContent className="flex h-[240px] items-center justify-center px-4 text-sm leading-relaxed text-muted-foreground">
-                Loading chart…
-              </CardContent>
-            </Card>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 text-primary">
+          {filter.label}
+        </Badge>
+        {span ? (
+          <span className="text-xs text-muted-foreground">
+            {span.first.toLocaleDateString()} – {span.last.toLocaleDateString()}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <StatCard label="Minutes" value={stats.totalMinutes.toLocaleString()} sub={`${stats.totalHours.toLocaleString()} hours`} icon={Clock} />
+        <StatCard label="Plays" value={stats.totalStreams.toLocaleString()} sub={filter.label} icon={Play} />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Tracks" value={diversity.uniqueTracks.toLocaleString()} sub="unique" icon={Music} variant="compact" />
+        <StatCard label="Artists" value={diversity.uniqueArtists.toLocaleString()} sub="unique" icon={Users} variant="compact" />
+        <StatCard label="Min / day" value={avgMinPerDay.toLocaleString()} sub={`~${days} days`} icon={Clock} variant="compact" />
+        <StatCard label="Plays / day" value={avgStreamsPerDay.toLocaleString()} icon={Headphones} variant="compact" />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <InsightCard
+          label="Busiest hour"
+          primaryValue={peakHour ? formatHourLabel(peakHour.label) : "—"}
+          detail={
+            peakHour
+              ? `${peakHour.minutes.toLocaleString()} min · ${peakHour.streams.toLocaleString()} plays`
+              : "No plays in this range."
           }
-        >
-          <ListeningActivity periodLabel={filter.label} compact />
-        </Suspense>
-
-        <aside className="min-w-0 lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:self-stretch">
-          <div className="flex h-full min-h-0 flex-col rounded-2xl border border-border/40 bg-border/15 p-px">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[15px] bg-card/80">
-              <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
-                <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Recent
-                </h2>
-                <Link href="/history/recent" className="text-xs font-medium text-primary hover:underline">
-                  View all
-                </Link>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
-                <RecentPlaysList
-                  compact
-                  initialStreams={recentStreams.map((stream) => ({
-                    id: stream.id,
-                    trackName: stream.trackName,
-                    artistName: stream.artistName,
-                    albumName: stream.albumName,
-                    albumArt: stream.albumArt,
-                    playedAt: stream.playedAt.toISOString(),
-                  }))}
-                />
-              </div>
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <p className="text-sm text-muted-foreground">Top rankings for {filter.label.toLowerCase()}</p>
-        <div className="w-full min-w-0 space-y-1.5 sm:max-w-[11rem]">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Rank by</p>
-          <Suspense>
-            <TopSortTabs />
-          </Suspense>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-border/40 bg-border/15 p-px">
-        <div className="overflow-hidden rounded-[15px] bg-card/80">
-          <div className="grid divide-y divide-border/30 md:grid-cols-3 md:divide-x md:divide-y-0">
-            <TopSection title="Top tracks" items={topTracks} sortBy={sortBy} kind="tracks" />
-            <TopSection title="Top artists" items={topArtists} sortBy={sortBy} kind="artists" />
-            <TopSection title="Top albums" items={topAlbums} sortBy={sortBy} kind="albums" />
-          </div>
-        </div>
+        />
+        <InsightCard
+          label="Busiest day"
+          primaryValue={peakDay?.label ?? "—"}
+          detail={
+            peakDay
+              ? `${peakDay.minutes.toLocaleString()} min · ${peakDay.streams.toLocaleString()} plays`
+              : "No plays in this range."
+          }
+        />
       </div>
 
       <Suspense
         fallback={
-          <div className="rounded-2xl border border-border/40 bg-card/40 px-4 py-8 text-center text-sm leading-relaxed text-muted-foreground">
-            Loading patterns…
-          </div>
+          <Card className="rounded-2xl border border-border/40 bg-card/40 shadow-none ring-0">
+            <CardContent className="flex h-[240px] items-center justify-center px-4 text-sm text-muted-foreground">
+              Loading chart…
+            </CardContent>
+          </Card>
         }
       >
-        <HomePatternsSection periodLabel={filter.label} />
+        <ListeningActivity periodLabel={filter.label} compact />
       </Suspense>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Recent plays</h2>
+            <p className="text-xs text-muted-foreground">Last {recentStreams.length} listens</p>
+          </div>
+          <Link href={libraryRecentHref} className="text-sm font-medium text-primary hover:underline">
+            See all
+          </Link>
+        </div>
+        <Card className="border-border/50 bg-card/70">
+          <CardContent className="p-3 sm:p-4">
+            <RecentPlaysList
+              compact
+              linkable
+              initialStreams={recentStreams.map((stream) => ({
+                id: stream.id,
+                trackName: stream.trackName,
+                artistName: stream.artistName,
+                albumName: stream.albumName,
+                albumArt: stream.albumArt,
+                playedAt: stream.playedAt.toISOString(),
+              }))}
+            />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Top rankings</h2>
+            <p className="text-xs text-muted-foreground">By {sortBy}</p>
+          </div>
+          <Link href={libraryRankingsHref} className="text-sm font-medium text-primary hover:underline">
+            See all
+          </Link>
+        </div>
+        <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-card/30 p-1">
+          {previewKinds.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setPreviewKind(item.id)}
+              className={cn(
+                "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                previewKind === item.id
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <Card className="border-border/50 bg-card/70">
+          <CardContent className="p-3 sm:p-4">
+            <TopPreviewList
+              kind={previewKind}
+              sortBy={sortBy}
+              tracks={topTracks}
+              artists={topArtists}
+              albums={topAlbums}
+            />
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }
 
-function TopSection({
-  title,
-  items,
-  sortBy,
+function TopPreviewList({
   kind,
+  sortBy,
+  tracks,
+  artists,
+  albums,
 }: {
-  title: string;
-  items: Array<Record<string, unknown>>;
-  sortBy: "streams" | "minutes";
-  kind: "tracks" | "artists" | "albums";
+  kind: (typeof previewKinds)[number]["id"];
+  sortBy: "minutes" | "streams";
+  tracks: ReturnType<typeof computeTopTracks>;
+  artists: ReturnType<typeof computeTopArtists>;
+  albums: ReturnType<typeof computeTopAlbums>;
 }) {
-  return (
-    <section className="min-w-0 p-4">
-      <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
-      <ul className="space-y-0">
-        {items.map((item, i) => (
-          <li key={`${kind}-${i}`}>
-            <div className="flex items-center gap-3 rounded-lg py-2 transition-colors hover:bg-muted/20">
-              <span className="w-5 shrink-0 text-center text-xs font-medium tabular-nums text-muted-foreground">
-                {i + 1}
-              </span>
-              {kind === "artists" ? (
-                <ArtistArt
-                  src={item.artistArt as string | null}
-                  alt={item.artistName as string}
-                  width={32}
-                  height={32}
-                  className="ring-1 ring-border/25"
-                />
+  if (kind === "tracks") {
+    return (
+      <ul className="space-y-1">
+        {tracks.map((track, i) => (
+          <li key={track.trackId}>
+            <Link
+              href={trackPath(track.artistName, track.trackName)}
+              className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/25"
+            >
+              <span className="w-5 text-center text-xs text-muted-foreground">{i + 1}</span>
+              {track.albumArt ? (
+                <Image src={track.albumArt} alt={track.albumName} width={36} height={36} className="rounded" />
               ) : (
-                <AlbumArt
-                  src={item.albumArt as string | null}
-                  alt={(item.albumName as string) ?? (item.trackName as string)}
-                  width={32}
-                  height={32}
-                  className="size-8 shrink-0 rounded-md ring-1 ring-border/25"
-                />
+                <div className="size-9 rounded bg-secondary" />
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium leading-snug">
-                  {kind === "albums" ? (item.albumName as string) : kind === "artists" ? (item.artistName as string) : (item.trackName as string)}
-                </p>
-                <p className="truncate text-xs leading-snug text-muted-foreground">
-                  {kind === "tracks" ? (item.artistName as string) : kind === "albums" ? (item.artistName as string) : sortBy === "streams" ? `${(item.minutesListened as number).toLocaleString()} min` : `${(item.streams as number).toLocaleString()} plays`}
-                </p>
+                <p className="truncate text-sm font-medium">{track.trackName}</p>
+                <p className="truncate text-xs text-muted-foreground">{track.artistName}</p>
               </div>
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {sortBy === "streams"
-                  ? `${(item.streams as number).toLocaleString()}×`
-                  : `${(item.minutesListened as number).toLocaleString()} min`}
+                  ? `${track.streams.toLocaleString()} plays`
+                  : `${track.minutesListened.toLocaleString()} min`}
               </span>
-            </div>
+            </Link>
           </li>
         ))}
       </ul>
-    </section>
+    );
+  }
+
+  if (kind === "artists") {
+    return (
+      <ul className="space-y-1">
+        {artists.map((artist, i) => (
+          <li key={artist.artistName}>
+            <Link
+              href={artistPath(artist.artistName)}
+              className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/25"
+            >
+              <span className="w-5 text-center text-xs text-muted-foreground">{i + 1}</span>
+              <ArtistArt src={artist.artistArt} alt={artist.artistName} width={36} height={36} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{artist.artistName}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {sortBy === "streams"
+                    ? `${artist.minutesListened.toLocaleString()} min`
+                    : `${artist.streams.toLocaleString()} plays`}
+                </p>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {sortBy === "streams"
+                  ? `${artist.streams.toLocaleString()} plays`
+                  : `${artist.minutesListened.toLocaleString()} min`}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <ul className="space-y-1">
+      {albums.map((album, i) => (
+        <li key={`${album.albumName}-${album.artistName}`}>
+          <Link
+            href={albumPath(album.artistName, album.albumName)}
+            className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/25"
+          >
+            <span className="w-5 text-center text-xs text-muted-foreground">{i + 1}</span>
+            <AlbumArt src={album.albumArt} alt={album.albumName} width={36} height={36} className="size-9 rounded-md" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{album.albumName}</p>
+              <p className="truncate text-xs text-muted-foreground">{album.artistName}</p>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {sortBy === "streams"
+                ? `${album.streams.toLocaleString()} plays`
+                : `${album.minutesListened.toLocaleString()} min`}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }

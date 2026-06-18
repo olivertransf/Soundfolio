@@ -3,6 +3,7 @@ import SwiftUI
 struct TopTracksView: View {
     var embedInNavigation = true
     @Environment(StreamStore.self) private var streamStore
+    @Environment(StatsCache.self) private var statsCache
     @Bindable var preferences: StatsPreferences
     @State private var items: [TopTrackItem] = []
     @State private var loading = true
@@ -22,8 +23,9 @@ struct TopTracksView: View {
                     rank: index + 1,
                     title: track.trackName,
                     subtitle: track.artistName,
-                    value: preferences.sort == .streams ? "\(track.streams.formatted())×" : "\(track.minutesListened.formatted()) min",
-                    artworkURL: track.albumArt
+                    value: RankValueFormatter.primary(minutes: track.minutesListened, streams: track.streams, sort: preferences.sort),
+                    artworkURL: track.albumArt,
+                    destination: TrackDetailView(trackName: track.trackName, artistName: track.artistName, preferences: preferences)
                 )
             }
         }
@@ -31,14 +33,18 @@ struct TopTracksView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.streams.count)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.revision)"
     }
 
     private func load() async {
         loading = true
         error = nil
-        let range = StatsEngine.parseTimeRange(preferences: preferences)
-        items = StatsEngine.topTracks(from: streamStore.streams, sort: preferences.sort, limit: 50, range: range)
+        items = statsCache.topTracks(
+            streams: streamStore.streams,
+            preferences: preferences,
+            revision: streamStore.revision,
+            limit: 50
+        )
         loading = false
     }
 }
@@ -46,6 +52,7 @@ struct TopTracksView: View {
 struct TopArtistsView: View {
     var embedInNavigation = true
     @Environment(StreamStore.self) private var streamStore
+    @Environment(StatsCache.self) private var statsCache
     @Bindable var preferences: StatsPreferences
     @State private var items: [TopArtistItem] = []
     @State private var loading = true
@@ -64,10 +71,11 @@ struct TopArtistsView: View {
                 RankedRow(
                     rank: index + 1,
                     title: artist.artistName,
-                    subtitle: preferences.sort == .streams ? "\(artist.minutesListened) min" : "\(artist.streams) plays",
-                    value: preferences.sort == .streams ? "\(artist.streams.formatted())×" : "\(artist.minutesListened.formatted()) min",
+                    subtitle: RankValueFormatter.secondary(minutes: artist.minutesListened, streams: artist.streams, sort: preferences.sort),
+                    value: RankValueFormatter.primary(minutes: artist.minutesListened, streams: artist.streams, sort: preferences.sort),
                     artworkURL: artist.artistArt,
-                    isCircleArt: true
+                    isCircleArt: true,
+                    destination: ArtistDetailView(artistName: artist.artistName, preferences: preferences)
                 )
             }
         }
@@ -75,14 +83,18 @@ struct TopArtistsView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.streams.count)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.revision)"
     }
 
     private func load() async {
         loading = true
         error = nil
-        let range = StatsEngine.parseTimeRange(preferences: preferences)
-        items = StatsEngine.topArtists(from: streamStore.streams, sort: preferences.sort, limit: 50, range: range)
+        items = statsCache.topArtists(
+            streams: streamStore.streams,
+            preferences: preferences,
+            revision: streamStore.revision,
+            limit: 50
+        )
         loading = false
     }
 }
@@ -90,6 +102,7 @@ struct TopArtistsView: View {
 struct TopAlbumsView: View {
     var embedInNavigation = true
     @Environment(StreamStore.self) private var streamStore
+    @Environment(StatsCache.self) private var statsCache
     @Bindable var preferences: StatsPreferences
     @State private var items: [TopAlbumItem] = []
     @State private var loading = true
@@ -109,8 +122,9 @@ struct TopAlbumsView: View {
                     rank: index + 1,
                     title: album.albumName,
                     subtitle: album.artistName,
-                    value: preferences.sort == .streams ? "\(album.streams.formatted())×" : "\(album.minutesListened.formatted()) min",
-                    artworkURL: album.albumArt
+                    value: RankValueFormatter.primary(minutes: album.minutesListened, streams: album.streams, sort: preferences.sort),
+                    artworkURL: album.albumArt,
+                    destination: AlbumDetailView(albumName: album.albumName, artistName: album.artistName, preferences: preferences)
                 )
             }
         }
@@ -118,14 +132,18 @@ struct TopAlbumsView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.streams.count)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.revision)"
     }
 
     private func load() async {
         loading = true
         error = nil
-        let range = StatsEngine.parseTimeRange(preferences: preferences)
-        items = StatsEngine.topAlbums(from: streamStore.streams, sort: preferences.sort, limit: 50, range: range)
+        items = statsCache.topAlbums(
+            streams: streamStore.streams,
+            preferences: preferences,
+            revision: streamStore.revision,
+            limit: 50
+        )
         loading = false
     }
 }
@@ -145,7 +163,7 @@ private struct TopListContainer<Rows: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SoundfolioTheme.sectionSpacing) {
                 if !embedInNavigation {
-                    StatsFiltersBar(preferences: preferences)
+                    FilterToolbar(preferences: preferences, context: .rankings)
                 }
 
                 if loading {

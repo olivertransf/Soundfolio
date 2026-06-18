@@ -6,25 +6,39 @@ struct ArtworkView: View {
     var cornerRadius: CGFloat = 8
     var isCircle = false
 
+    @State private var image: UIImage?
+
     var body: some View {
-        artworkContent
-            .frame(width: size, height: size)
-            .modifier(ArtworkClipModifier(isCircle: isCircle, cornerRadius: cornerRadius))
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: size, height: size)
+        .modifier(ArtworkClipModifier(isCircle: isCircle, cornerRadius: cornerRadius))
+        .task(id: urlString) {
+            await loadImage()
+        }
     }
 
-    @ViewBuilder
-    private var artworkContent: some View {
-        if let urlString, let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    placeholder
-                }
-            }
-        } else {
-            placeholder
+    private func loadImage() async {
+        image = nil
+        guard let urlString, let url = URL(string: urlString) else { return }
+        if let cached = ArtworkCache.image(for: url) {
+            image = cached
+            return
+        }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let loaded = UIImage(data: data) else { return }
+            ArtworkCache.store(loaded, for: url)
+            image = loaded
+        } catch {
+            image = nil
         }
     }
 

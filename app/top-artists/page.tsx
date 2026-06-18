@@ -62,6 +62,7 @@ function TopArtistsContent() {
                   key={artist.artistName}
                   rank={i + 1}
                   sortBy={sortBy}
+                  href={`/artist/${encodeURIComponent(artist.artistName)}`}
                   leading={
                     <ArtistArt
                       src={artist.artistArt}

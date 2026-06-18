@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Clock, Headphones } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TopSortBy } from "@/lib/top-sort";
@@ -12,6 +13,7 @@ type RankedStreamRowProps = {
   minutes: number;
   sortBy?: TopSortBy;
   padding?: "default" | "compact";
+  href?: string;
 };
 
 export function RankedStreamRow({
@@ -23,15 +25,11 @@ export function RankedStreamRow({
   minutes,
   sortBy = "minutes",
   padding = "default",
+  href,
 }: RankedStreamRowProps) {
   const primary = sortBy === "streams" ? "streams" : "minutes";
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-1.5 rounded-lg px-2 transition-colors hover:bg-secondary/50 sm:flex-row sm:items-center sm:gap-4",
-        padding === "compact" ? "py-2.5" : "py-3"
-      )}
-    >
+  const content = (
+    <>
       <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
         <span className="w-7 shrink-0 text-right text-sm text-muted-foreground">{rank}</span>
         {leading}
@@ -59,9 +57,25 @@ export function RankedStreamRow({
           )}
         >
           <Headphones className="h-3.5 w-3.5 shrink-0" />
-          {streams.toLocaleString()}
+          {streams.toLocaleString()} plays
         </span>
       </div>
-    </div>
+    </>
   );
+
+  const className = cn(
+    "flex flex-col gap-1.5 rounded-lg px-2 transition-colors hover:bg-secondary/50 sm:flex-row sm:items-center sm:gap-4",
+    padding === "compact" ? "py-2.5" : "py-3",
+    href && "cursor-pointer"
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }

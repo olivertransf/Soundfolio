@@ -78,19 +78,31 @@ struct SoundfolioBarChart: View {
                     labelStyle: labelStyle,
                     availableWidth: geometry.size.width
                 )
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .bottom, spacing: 0) {
-                        ForEach(Array(points.enumerated()), id: \.offset) { index, point in
-                            barColumn(
-                                index: index,
-                                point: point,
-                                slotWidth: layout.slotWidth,
-                                barWidth: layout.barWidth
-                            )
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .bottom, spacing: 0) {
+                            ForEach(Array(points.enumerated()), id: \.offset) { index, point in
+                                barColumn(
+                                    index: index,
+                                    point: point,
+                                    slotWidth: layout.slotWidth,
+                                    barWidth: layout.barWidth
+                                )
+                                .id(index)
+                            }
                         }
+                        .frame(width: layout.contentWidth, height: chartHeight, alignment: .bottomLeading)
+                        .padding(.trailing, 8)
                     }
-                    .frame(width: layout.contentWidth, height: chartHeight, alignment: .bottomLeading)
-                    .padding(.trailing, 8)
+                    .onAppear {
+                        scrollToPresent(proxy)
+                    }
+                    .onChange(of: points.count) { _, _ in
+                        scrollToPresent(proxy)
+                    }
+                    .onChange(of: labelStyle) { _, _ in
+                        scrollToPresent(proxy)
+                    }
                 }
             }
             .frame(height: chartHeight)
@@ -194,6 +206,17 @@ struct SoundfolioBarChart: View {
         if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
         if n >= 1_000 { return String(format: "%.1fk", Double(n) / 1_000) }
         return "\(n)"
+    }
+
+    private func scrollToPresent(_ proxy: ScrollViewProxy) {
+        guard labelStyle.anchorsToPresent, !points.isEmpty else { return }
+        let lastIndex = points.count - 1
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(50))
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(lastIndex, anchor: .trailing)
+            }
+        }
     }
 }
 

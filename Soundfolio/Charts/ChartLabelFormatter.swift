@@ -1,10 +1,15 @@
 import Foundation
 
-enum ChartAxisLabelStyle {
+enum ChartAxisLabelStyle: Equatable {
     case listeningHistory(ChartGroupBy)
     case hourOfDay
     case weekday
     case automatic
+
+    var anchorsToPresent: Bool {
+        if case .listeningHistory = self { return true }
+        return false
+    }
 }
 
 /// Axis labels aligned with the website (`formatChartAxisLabel` in stats-timezone).

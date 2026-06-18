@@ -46,11 +46,16 @@ enum StatsEngine {
 
     private static func filtered(_ streams: [StreamRecord], range: StatsTimeRange) -> [StreamRecord] {
         streams.filter { stream in
+            guard !stream.isDemo else { return false }
             guard stream.durationMs > 0 else { return false }
             if let since = range.since, stream.playedAt < since { return false }
             if let until = range.until, stream.playedAt > until { return false }
             return true
         }
+    }
+
+    private static func trackKey(for row: StreamRecord) -> String {
+        EntityNormalize.trackGroupKey(trackId: row.trackId, trackName: row.trackName, artistName: row.artistName)
     }
 
     static func buildOverview(streams: [StreamRecord], preferences: StatsPreferences) -> OverviewResponse {
@@ -63,8 +68,8 @@ enum StatsEngine {
             totalHours: Int(totalMs / 3_600_000)
         )
         let diversity = OverviewDiversity(
-            uniqueTracks: Set(rows.map(\.trackId)).count,
-            uniqueArtists: Set(rows.map(\.artistName)).count
+            uniqueTracks: Set(rows.map(trackKey)).count,
+            uniqueArtists: Set(rows.map { EntityNormalize.artistGroupKey(artistName: $0.artistName) }).count
         )
         let spanDates = rows.map(\.playedAt)
         let span: OverviewSpan? = spanDates.isEmpty ? nil : OverviewSpan(
@@ -74,7 +79,8 @@ enum StatsEngine {
         let calendarDays = max(1, daysInRange(filter, spanDates: spanDates))
         let avgMin = totals.totalMinutes / calendarDays
         let avgStreams = totals.totalStreams / calendarDays
-        let latest = streams.first?.playedAt
+        let latestInPeriod = rows.map(\.playedAt).max()
+        let latestGlobal = streams.first(where: { !$0.isDemo })?.playedAt
 
         return OverviewResponse(
             filter: FilterLabel(label: filter.label),
@@ -84,7 +90,8 @@ enum StatsEngine {
             totals: totals,
             diversity: diversity,
             span: span,
-            latestPlayAt: latest.map { ISO8601DateFormatter().string(from: $0) },
+            latestPlayAt: latestInPeriod.map { ISO8601DateFormatter().string(from: $0) },
+            latestPlayAtGlobal: latestGlobal.map { ISO8601DateFormatter().string(from: $0) },
             calendarDays: calendarDays,
             avgMinPerDay: avgMin,
             avgStreamsPerDay: avgStreams,
@@ -96,23 +103,26 @@ enum StatsEngine {
                 OverviewMetric(label: "Min / day", value: "\(avgMin)", hint: "~\(calendarDays) d"),
                 OverviewMetric(label: "Plays / day", value: "\(avgStreams)", hint: nil),
             ],
-            topTracks: topTracks(from: rows, sort: preferences.sort, limit: 5),
-            topArtists: topArtists(from: rows, sort: preferences.sort, limit: 5),
-            topAlbums: topAlbums(from: rows, sort: preferences.sort, limit: 5)
+            topTracks: topTracks(from: streams, sort: preferences.sort, limit: 5, range: filter),
+            topArtists: topArtists(from: streams, sort: preferences.sort, limit: 5, range: filter),
+            topAlbums: topAlbums(from: streams, sort: preferences.sort, limit: 5, range: filter)
         )
     }
 
     static func topTracks(from streams: [StreamRecord], sort: TopSortMode, limit: Int, range: StatsTimeRange? = nil) -> [TopTrackItem] {
-        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { $0.durationMs > 0 }
-        var groups: [String: (trackName: String, artistName: String, albumName: String, albumArt: String?, streams: Int, durationMs: Int)] = [:]
+        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { !$0.isDemo && $0.durationMs > 0 }
+        var groups: [String: (trackId: String, trackName: String, artistName: String, albumName: String, albumArt: String?, streams: Int, durationMs: Int)] = [:]
         for row in rows {
-            let key = "\(row.trackName)\0\(row.artistName)"
-            var group = groups[key] ?? (row.trackName, row.artistName, row.albumName, row.albumArt, 0, 0)
+            let key = trackKey(for: row)
+            var group = groups[key] ?? (row.trackId, row.trackName, row.artistName, row.albumName, row.albumArt, 0, 0)
             group.streams += 1
             group.durationMs += row.durationMs
+            group.trackName = EntityNormalize.betterDisplay(group.trackName, row.trackName)
+            group.artistName = EntityNormalize.betterDisplay(group.artistName, row.artistName)
+            group.albumName = EntityNormalize.betterDisplay(group.albumName, row.albumName)
             if group.albumArt == nil, let art = row.albumArt {
                 group.albumArt = art
-                group.albumName = row.albumName
+                group.albumName = EntityNormalize.betterDisplay(group.albumName, row.albumName)
             }
             groups[key] = group
         }
@@ -121,7 +131,7 @@ enum StatsEngine {
             .prefix(limit)
             .map {
                 TopTrackItem(
-                    trackId: "\($0.trackName)\0\($0.artistName)",
+                    trackId: EntityNormalize.catalogTrackId(trackId: $0.trackId, trackName: $0.trackName, artistName: $0.artistName),
                     trackName: $0.trackName,
                     artistName: $0.artistName,
                     albumName: $0.albumName,
@@ -133,14 +143,16 @@ enum StatsEngine {
     }
 
     static func topArtists(from streams: [StreamRecord], sort: TopSortMode, limit: Int, range: StatsTimeRange? = nil) -> [TopArtistItem] {
-        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { $0.durationMs > 0 }
+        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { !$0.isDemo && $0.durationMs > 0 }
         var groups: [String: (artistName: String, artistArt: String?, streams: Int, durationMs: Int)] = [:]
         for row in rows {
-            var group = groups[row.artistName] ?? (row.artistName, nil, 0, 0)
+            let key = EntityNormalize.artistGroupKey(artistName: row.artistName)
+            var group = groups[key] ?? (row.artistName, nil, 0, 0)
             group.streams += 1
             group.durationMs += row.durationMs
+            group.artistName = EntityNormalize.betterDisplay(group.artistName, row.artistName)
             if group.artistArt == nil, let art = row.artistArt { group.artistArt = art }
-            groups[row.artistName] = group
+            groups[key] = group
         }
         return groups.values
             .sorted { sort == .streams ? $0.streams > $1.streams : ($0.durationMs / 60_000) > ($1.durationMs / 60_000) }
@@ -156,13 +168,15 @@ enum StatsEngine {
     }
 
     static func topAlbums(from streams: [StreamRecord], sort: TopSortMode, limit: Int, range: StatsTimeRange? = nil) -> [TopAlbumItem] {
-        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { $0.durationMs > 0 }
+        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { !$0.isDemo && $0.durationMs > 0 }
         var groups: [String: (albumName: String, artistName: String, albumArt: String?, streams: Int, durationMs: Int)] = [:]
         for row in rows {
-            let key = "\(row.albumName)\0\(row.artistName)"
+            let key = EntityNormalize.albumGroupKey(albumName: row.albumName, artistName: row.artistName)
             var group = groups[key] ?? (row.albumName, row.artistName, row.albumArt, 0, 0)
             group.streams += 1
             group.durationMs += row.durationMs
+            group.albumName = EntityNormalize.betterDisplay(group.albumName, row.albumName)
+            group.artistName = EntityNormalize.betterDisplay(group.artistName, row.artistName)
             if group.albumArt == nil, let art = row.albumArt { group.albumArt = art }
             groups[key] = group
         }
@@ -180,8 +194,15 @@ enum StatsEngine {
             }
     }
 
-    static func recentStreams(from streams: [StreamRecord], limit: Int) -> [RecentStream] {
-        streams
+    static func recentStreams(from streams: [StreamRecord], limit: Int, preferences: StatsPreferences? = nil) -> [RecentStream] {
+        let rows: [StreamRecord]
+        if let preferences {
+            let range = parseTimeRange(preferences: preferences)
+            rows = filtered(streams, range: range)
+        } else {
+            rows = streams.filter { !$0.isDemo }
+        }
+        return rows
             .filter { $0.playedAt <= Date() }
             .prefix(limit)
             .map {
@@ -221,7 +242,14 @@ enum StatsEngine {
             buckets[key] = bucket
         }
 
-        return buckets.keys.sorted().map { label in
+        let cap: Int
+        switch preferences.chartGroupBy {
+        case .days: cap = 90
+        case .weeks: cap = 26
+        case .months: cap = 12
+        }
+
+        return buckets.keys.sorted().suffix(cap).map { label in
             let bucket = buckets[label] ?? (0, 0)
             return HistoryPoint(label: label, minutes: bucket.minutes, streams: bucket.streams)
         }
@@ -269,6 +297,87 @@ enum StatsEngine {
             byHour: hourRows,
             byDay: dayRows,
             heatmap: HeatmapPayload(grid: grid, dayNames: dayNames)
+        )
+    }
+
+    static func peakHour(from patterns: PatternsResponse) -> PatternsHourDay? {
+        patterns.byHour.max { lhs, rhs in
+            lhs.minutes == rhs.minutes ? lhs.streams < rhs.streams : lhs.minutes < rhs.minutes
+        }
+    }
+
+    static func peakDay(from patterns: PatternsResponse) -> PatternsHourDay? {
+        patterns.byDay.max { lhs, rhs in
+            lhs.minutes == rhs.minutes ? lhs.streams < rhs.streams : lhs.minutes < rhs.minutes
+        }
+    }
+
+    static func trackDetail(name: String, artist: String, streams: [StreamRecord], range: StatsTimeRange) -> TrackDetail {
+        let rows = filtered(streams, range: range).filter {
+            EntityNormalize.matches($0.trackName, name) && EntityNormalize.matches($0.artistName, artist)
+        }
+        let totalMs = rows.reduce(0) { $0 + $1.durationMs }
+        let dates = rows.map(\.playedAt)
+        let albumArt = rows.compactMap(\.albumArt).first
+        let albumName = rows.first?.albumName ?? ""
+        let trackName = rows.reduce(name) { EntityNormalize.betterDisplay($0, $1.trackName) }
+        let artistName = rows.reduce(artist) { EntityNormalize.betterDisplay($0, $1.artistName) }
+        return TrackDetail(
+            trackName: trackName,
+            artistName: artistName,
+            albumName: albumName,
+            albumArt: albumArt,
+            streams: rows.count,
+            minutesListened: totalMs / 60_000,
+            firstPlayedAt: dates.min(),
+            lastPlayedAt: dates.max(),
+            recentPlays: recentStreams(from: rows, limit: 20)
+        )
+    }
+
+    static func artistDetail(name: String, streams: [StreamRecord], range: StatsTimeRange, sort: TopSortMode) -> ArtistDetail {
+        let rows = filtered(streams, range: range).filter { EntityNormalize.matches($0.artistName, name) }
+        let totalMs = rows.reduce(0) { $0 + $1.durationMs }
+        let artistArt = rows.compactMap(\.artistArt).first
+        let artistName = rows.reduce(name) { EntityNormalize.betterDisplay($0, $1.artistName) }
+        return ArtistDetail(
+            artistName: artistName,
+            artistArt: artistArt,
+            streams: rows.count,
+            minutesListened: totalMs / 60_000,
+            topTracks: topTracks(from: rows, sort: sort, limit: 10),
+            topAlbums: topAlbums(from: rows, sort: sort, limit: 10)
+        )
+    }
+
+    static func albumDetail(name: String, artist: String, streams: [StreamRecord], range: StatsTimeRange) -> AlbumDetail {
+        let rows = filtered(streams, range: range).filter {
+            EntityNormalize.matches($0.albumName, name) && EntityNormalize.matches($0.artistName, artist)
+        }
+        let totalMs = rows.reduce(0) { $0 + $1.durationMs }
+        var trackGroups: [String: (name: String, streams: Int, durationMs: Int)] = [:]
+        for row in rows {
+            let key = EntityNormalize.key(row.trackName)
+            var group = trackGroups[key] ?? (row.trackName, 0, 0)
+            group.streams += 1
+            group.durationMs += row.durationMs
+            group.name = EntityNormalize.betterDisplay(group.name, row.trackName)
+            trackGroups[key] = group
+        }
+        let tracks = trackGroups.map { _, group in
+            AlbumTrackRow(trackName: group.name, streams: group.streams, minutes: group.durationMs / 60_000)
+        }
+        .sorted { $0.streams > $1.streams }
+
+        let albumName = rows.reduce(name) { EntityNormalize.betterDisplay($0, $1.albumName) }
+        let artistName = rows.reduce(artist) { EntityNormalize.betterDisplay($0, $1.artistName) }
+        return AlbumDetail(
+            albumName: albumName,
+            artistName: artistName,
+            albumArt: rows.compactMap(\.albumArt).first,
+            streams: rows.count,
+            minutesListened: totalMs / 60_000,
+            tracks: tracks
         )
     }
 

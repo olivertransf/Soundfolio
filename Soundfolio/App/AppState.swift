@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+import FirebaseAuth
 #endif
 
 @MainActor
@@ -11,8 +12,28 @@ final class AppState {
     private(set) var client: APIClient
 
     var lastSyncMessage: String?
+    var lastSyncedAt: Date?
     var isSyncing = false
+    var syncProgressMessage: String?
+    var syncSavedCount = 0
+    var syncPendingCount = 0
+    var lastSyncResult: SyncResult?
+    var isSyncingInBackground = false
     var globalError: String?
+
+    struct SyncResult: Equatable {
+        enum Kind: Equatable {
+            case added
+            case upToDate
+            case skipped
+            case failed
+        }
+
+        let kind: Kind
+        let message: String
+        let addedCount: Int
+        let date: Date
+    }
 
     var latestPlayAt: Date?
     var freshnessCheckedAt: Date?
@@ -22,7 +43,7 @@ final class AppState {
 
     init(preferences: StatsPreferences) {
         self.preferences = preferences
-        client = APIClient(baseURLString: preferences.baseURL)
+        client = APIClient(baseURLString: StatsPreferences.defaultBaseURL)
     }
 
     func bindAuth(_ authManager: AuthManager) {
@@ -30,7 +51,6 @@ final class AppState {
         client.authTokenProvider = { [weak authManager] in
             try await authManager?.idToken()
         }
-        authManager.updateBaseURL(preferences.baseURL)
     }
 
     func bindStreamStore(_ streamStore: StreamStore) {
@@ -38,7 +58,7 @@ final class AppState {
     }
 
     func reloadClient() {
-        client.updateConfiguration(baseURLString: preferences.baseURL)
+        client.updateConfiguration(baseURLString: StatsPreferences.defaultBaseURL)
     }
 
     func syncLastFm() async throws -> LastFmSyncResponse {
@@ -50,25 +70,50 @@ final class AppState {
         }
 
         isSyncing = true
-        defer { isSyncing = false }
+        syncSavedCount = 0
+        syncPendingCount = 0
+        applySyncProgress("Connecting to Last.fm…")
+        lastSyncResult = nil
+        SyncBackgroundSession.begin()
+        defer {
+            isSyncing = false
+            syncProgressMessage = nil
+            syncSavedCount = 0
+            syncPendingCount = 0
+            isSyncingInBackground = false
+            SyncBackgroundSession.end()
+        }
         reloadClient()
 
         var totalWritten = 0
         var lastResult: LastFmSyncResponse?
+        var batch = 0
 
+        do {
         for _ in 0 ..< 40 {
+            SyncBackgroundSession.renew()
+            applySyncProgress(
+                batch == 0
+                    ? "Fetching scrobbles from Last.fm…"
+                    : "Importing scrobbles (\(totalWritten) saved)…"
+            )
             let result = try await client.syncLastFm(
                 lastfmUsername: lastfmUsername,
                 streams: streamStore.streams,
                 timeZone: TimeZone.current.identifier
             )
             lastResult = result
-            if let error = result.error ?? result.detail {
-                lastSyncMessage = error
+            batch += 1
+            if let error = result.error ?? result.detail, result.skipped != true {
+                let message = error
+                lastSyncMessage = message
+                lastSyncResult = SyncResult(kind: .failed, message: message, addedCount: totalWritten, date: Date())
                 throw APIClientError.server(error)
             }
             if result.skipped == true {
-                lastSyncMessage = result.detail ?? result.message ?? "Last.fm sync is not configured on the server."
+                let message = result.detail ?? result.message ?? "Last.fm sync is not configured on the server."
+                lastSyncMessage = message
+                lastSyncResult = SyncResult(kind: .skipped, message: message, addedCount: 0, date: Date())
                 refreshFreshness(from: streamStore)
                 return result
             }
@@ -76,8 +121,20 @@ final class AppState {
             let payloads = result.streams ?? []
             if payloads.isEmpty { break }
 
-            let written = try await streamStore.writeStreams(uid: uid, payloads: payloads, skipExisting: true)
+            applySyncProgress("Saving \(payloads.count) scrobbles…")
+            let written = try await streamStore.writeStreams(uid: uid, payloads: payloads, skipExisting: false)
             totalWritten += written
+            syncSavedCount = totalWritten
+
+            if let pending = result.pending, pending > 0, result.hasMore == true {
+                syncPendingCount = pending
+                applySyncProgress("Saved \(totalWritten) · \(pending) remaining")
+            } else {
+                syncPendingCount = 0
+                if written > 0 {
+                    applySyncProgress("Saved \(totalWritten) scrobbles")
+                }
+            }
 
             if result.hasMore != true || written == 0 {
                 break
@@ -85,20 +142,37 @@ final class AppState {
         }
 
         guard let lastResult else {
-            throw APIClientError.server("Sync did not return a response.")
+            let message = "Sync did not return a response."
+            lastSyncResult = SyncResult(kind: .failed, message: message, addedCount: totalWritten, date: Date())
+            throw APIClientError.server(message)
         }
 
+        let message: String
+        let kind: SyncResult.Kind
         if totalWritten > 0 {
-            lastSyncMessage = "Added \(totalWritten) scrobbles"
+            message = "Added \(totalWritten) scrobbles"
+            kind = .added
         } else {
-            lastSyncMessage = lastResult.message ?? "No new scrobbles"
+            message = lastResult.message ?? "Already up to date"
+            kind = .upToDate
         }
+        lastSyncMessage = message
+        lastSyncedAt = Date()
+        lastSyncResult = SyncResult(kind: kind, message: message, addedCount: totalWritten, date: Date())
 
         refreshFreshness(from: streamStore)
         #if canImport(UIKit)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         #endif
         return lastResult
+        } catch {
+            if lastSyncResult == nil {
+                let message = handleError(error)
+                lastSyncMessage = message
+                lastSyncResult = SyncResult(kind: .failed, message: message, addedCount: totalWritten, date: Date())
+            }
+            throw error
+        }
     }
 
     func refreshFreshness(from streamStore: StreamStore? = nil) {
@@ -113,6 +187,22 @@ final class AppState {
             return api.localizedDescription
         }
         return error.localizedDescription
+    }
+
+    func setSyncBackgrounded(_ backgrounded: Bool) {
+        isSyncingInBackground = backgrounded && isSyncing
+        guard isSyncing, let current = syncProgressMessage else { return }
+        if backgrounded {
+            if !current.hasPrefix("Background sync · ") {
+                syncProgressMessage = "Background sync · \(current)"
+            }
+        } else if current.hasPrefix("Background sync · ") {
+            syncProgressMessage = String(current.dropFirst("Background sync · ".count))
+        }
+    }
+
+    private func applySyncProgress(_ message: String) {
+        syncProgressMessage = isSyncingInBackground ? "Background sync · \(message)" : message
     }
 }
 

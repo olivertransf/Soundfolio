@@ -7,9 +7,11 @@ final class StreamStore {
     private(set) var streams: [StreamRecord] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    private(set) var revision = 0
 
     private var listener: ListenerRegistration?
     private var activeUID: String?
+    private var persistTask: Task<Void, Never>?
 
     func start(uid: String) {
         guard activeUID != uid else { return }
@@ -17,6 +19,12 @@ final class StreamStore {
         activeUID = uid
         isLoading = true
         errorMessage = nil
+
+        if let cached = StreamPersistence.load(uid: uid), !cached.isEmpty {
+            streams = cached
+            revision &+= 1
+            isLoading = false
+        }
 
         listener = Firestore.firestore()
             .collection("users")
@@ -33,9 +41,18 @@ final class StreamStore {
                     }
                     guard let documents = snapshot?.documents else {
                         self.streams = []
+                        self.revision &+= 1
                         return
                     }
-                    self.streams = documents.compactMap { Self.record(from: $0) }
+                    let remote = documents.compactMap { Self.record(from: $0) }
+                    let next = Self.mergeStreams(local: self.streams, remote: remote)
+                    let changed = next.count != self.streams.count
+                        || next.first?.id != self.streams.first?.id
+                    self.streams = next
+                    if changed {
+                        self.revision &+= 1
+                        self.schedulePersist(uid: uid)
+                    }
                 }
             }
     }
@@ -43,9 +60,25 @@ final class StreamStore {
     func stop() {
         listener?.remove()
         listener = nil
+        persistTask?.cancel()
+        persistTask = nil
+        if let activeUID {
+            StreamPersistence.clear(uid: activeUID)
+        }
         activeUID = nil
         streams = []
         isLoading = false
+        revision = 0
+    }
+
+    private func schedulePersist(uid: String) {
+        persistTask?.cancel()
+        let snapshot = streams
+        persistTask = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            StreamPersistence.save(streams: snapshot, uid: uid)
+        }
     }
 
     var latestPlayAt: Date? {
@@ -55,6 +88,7 @@ final class StreamStore {
     func writeStreams(uid: String, payloads: [SyncStreamPayload], skipExisting: Bool = true) async throws -> Int {
         let db = Firestore.firestore()
         var written = 0
+        var merged: [StreamRecord] = []
         var batch = db.batch()
         var batchCount = 0
 
@@ -80,6 +114,7 @@ final class StreamStore {
             ], forDocument: ref, merge: true)
             batchCount += 1
             written += 1
+            merged.append(record)
 
             if batchCount >= 450 {
                 try await batch.commit()
@@ -92,7 +127,34 @@ final class StreamStore {
             try await batch.commit()
         }
 
+        if !merged.isEmpty {
+            insertRecordsLocally(merged, uid: uid)
+        }
+
         return written
+    }
+
+    /// Keep locally inserted rows until Firestore snapshot includes them.
+    private static func mergeStreams(local: [StreamRecord], remote: [StreamRecord]) -> [StreamRecord] {
+        var byID = Dictionary(uniqueKeysWithValues: remote.map { ($0.id, $0) })
+        for record in local where byID[record.id] == nil {
+            byID[record.id] = record
+        }
+        return byID.values.sorted { $0.playedAt > $1.playedAt }
+    }
+
+    private func insertRecordsLocally(_ records: [StreamRecord], uid: String) {
+        var byID = Dictionary(uniqueKeysWithValues: streams.map { ($0.id, $0) })
+        for record in records {
+            byID[record.id] = record
+        }
+        let next = byID.values.sorted { $0.playedAt > $1.playedAt }
+        let changed = next.count != streams.count || next.first?.id != streams.first?.id
+        streams = next
+        if changed {
+            revision &+= 1
+            schedulePersist(uid: uid)
+        }
     }
 
     private static func record(from document: QueryDocumentSnapshot) -> StreamRecord? {

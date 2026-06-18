@@ -25,17 +25,30 @@ struct ListeningChartView: View {
 
 struct ListeningChartSection: View {
     @Environment(StreamStore.self) private var streamStore
+    @Environment(StatsCache.self) private var statsCache
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Bindable var preferences: StatsPreferences
     @State private var points: [HistoryPoint] = []
     @State private var loading = true
     @State private var error: String?
-    @State private var metric: ChartMetric = .minutes
+
+    private var accent: Color { SoundfolioTheme.accent(from: preferences) }
+
+    private var subtitle: String {
+        let filter = StatsEngine.parseTimeRange(preferences: preferences)
+        return "\(preferences.chartGroupBy.label) totals for \(filter.label.lowercased())"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text("Listening")
-                    .font(.subheadline.weight(.semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Listening history")
+                        .font(.subheadline.weight(.semibold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer(minLength: 0)
                 Picker("Granularity", selection: $preferences.chartGroupBy) {
                     ForEach(ChartGroupBy.allCases) { group in
@@ -46,7 +59,7 @@ struct ListeningChartSection: View {
                 .labelsHidden()
             }
 
-            Picker("Metric", selection: $metric) {
+            Picker("Metric", selection: $preferences.chartMetric) {
                 ForEach(ChartMetric.allCases) { m in
                     Text(m.rawValue.capitalized).tag(m)
                 }
@@ -54,6 +67,12 @@ struct ListeningChartSection: View {
             .pickerStyle(.segmented)
 
             chartBody
+
+            if let first = points.first?.label, let last = points.last?.label, points.count > 1 {
+                Text("\(first) – \(last)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .soundfolioCard()
         .task(id: taskID) { await load() }
@@ -64,37 +83,51 @@ struct ListeningChartSection: View {
         Group {
             if loading {
                 ProgressView()
-                    .frame(height: SoundfolioTheme.chartHeight)
+                    .frame(height: chartHeight)
             } else if let error {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(height: SoundfolioTheme.chartHeight)
+                    .frame(height: chartHeight)
             } else if points.isEmpty {
-                Text("No chart data")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(height: SoundfolioTheme.chartHeight)
+                VStack(spacing: 4) {
+                    Text("No listening in this period")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Try widening the date range.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(height: chartHeight)
             } else {
                 ListeningChartView(
                     points: points,
-                    metric: metric,
+                    metric: preferences.chartMetric,
                     groupBy: preferences.chartGroupBy,
-                    accent: SoundfolioTheme.accent(from: preferences)
+                    accent: accent
                 )
+                .frame(height: chartHeight)
             }
         }
         .frame(maxWidth: .infinity)
     }
 
+    private var chartHeight: CGFloat {
+        horizontalSizeClass == .regular ? SoundfolioTheme.chartHeightRegular : SoundfolioTheme.chartHeight
+    }
+
     private var taskID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(preferences.chartGroupBy.rawValue)-\(streamStore.streams.count)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(preferences.chartGroupBy.rawValue)-\(preferences.chartMetric.rawValue)-\(streamStore.revision)"
     }
 
     private func load() async {
         loading = true
         error = nil
-        points = StatsEngine.historyPoints(from: streamStore.streams, preferences: preferences)
+        points = statsCache.historyPoints(
+            streams: streamStore.streams,
+            preferences: preferences,
+            revision: streamStore.revision
+        )
         loading = false
     }
 }

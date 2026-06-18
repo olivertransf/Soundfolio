@@ -60,6 +60,7 @@ struct OverviewResponse: Codable {
     let diversity: OverviewDiversity
     let span: OverviewSpan?
     let latestPlayAt: String?
+    let latestPlayAtGlobal: String?
     let calendarDays: Int
     let avgMinPerDay: Int
     let avgStreamsPerDay: Int
@@ -113,6 +114,43 @@ struct PatternsResponse: Codable {
     let byHour: [PatternsHourDay]
     let byDay: [PatternsHourDay]
     let heatmap: HeatmapPayload
+}
+
+struct TrackDetail: Codable {
+    let trackName: String
+    let artistName: String
+    let albumName: String
+    let albumArt: String?
+    let streams: Int
+    let minutesListened: Int
+    let firstPlayedAt: Date?
+    let lastPlayedAt: Date?
+    let recentPlays: [RecentStream]
+}
+
+struct ArtistDetail: Codable {
+    let artistName: String
+    let artistArt: String?
+    let streams: Int
+    let minutesListened: Int
+    let topTracks: [TopTrackItem]
+    let topAlbums: [TopAlbumItem]
+}
+
+struct AlbumTrackRow: Identifiable, Codable {
+    var id: String { trackName }
+    let trackName: String
+    let streams: Int
+    let minutes: Int
+}
+
+struct AlbumDetail: Codable {
+    let albumName: String
+    let artistName: String
+    let albumArt: String?
+    let streams: Int
+    let minutesListened: Int
+    let tracks: [AlbumTrackRow]
 }
 
 struct RecentStream: Codable, Identifiable {

@@ -20,10 +20,12 @@ export function lastFmScrobbleStreamId(
   return `lfm-${hashKey([artistName, trackName, playedAt.toISOString()]).slice(0, 24)}`;
 }
 
+import { normalizeEntityKey } from "@/lib/entity-normalize";
+
 export function scrobbleIdentityKey(
   artistName: string,
   trackName: string,
   playedAt: Date
 ) {
-  return `${artistName.trim().toLocaleLowerCase()}\0${trackName.trim().toLocaleLowerCase()}\0${playedAt.getTime()}`;
+  return `${normalizeEntityKey(artistName)}\0${normalizeEntityKey(trackName)}\0${playedAt.getTime()}`;
 }

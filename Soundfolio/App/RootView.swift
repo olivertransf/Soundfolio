@@ -1,43 +1,15 @@
 import SwiftUI
-
-enum AppTab: String, CaseIterable, Hashable {
-    case overview
-    case recent
-    case tops
-    case patterns
-    case settings
-
-    var title: String {
-        switch self {
-        case .overview: "Home"
-        case .recent: "Recent"
-        case .tops: "Tops"
-        case .patterns: "Patterns"
-        case .settings: "Settings"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .overview: "chart.bar.fill"
-        case .recent: "clock.fill"
-        case .tops: "music.note.list"
-        case .patterns: "waveform"
-        case .settings: "gearshape.fill"
-        }
-    }
-}
+import FirebaseAuth
 
 struct RootView: View {
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var auth
     @Environment(StreamStore.self) private var streamStore
+    @Environment(StatsCache.self) private var statsCache
     @Bindable var preferences: StatsPreferences
-    @State private var tab: AppTab = .overview
-
-    private var needsSetup: Bool {
-        preferences.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
+    @State private var navigation = AppNavigation()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -51,35 +23,25 @@ struct RootView: View {
                 NavigationStack {
                     OnboardingView()
                 }
-            } else if needsSetup {
-                NavigationStack {
-                    SetupRequiredView(preferences: preferences)
-                }
             } else {
-                TabView(selection: $tab) {
+                TabView(selection: Bindable(navigation).selectedTab) {
                     NavigationStack {
-                        OverviewView(preferences: preferences)
+                        DashboardView(preferences: preferences)
                     }
-                    .tabItem { Label(AppTab.overview.title, systemImage: AppTab.overview.systemImage) }
-                    .tag(AppTab.overview)
+                    .tabItem { Label(AppTab.dashboard.title, systemImage: AppTab.dashboard.systemImage) }
+                    .tag(AppTab.dashboard)
 
-                    NavigationStack {
-                        RecentPlaysView(preferences: preferences)
+                    Group {
+                        if horizontalSizeClass == .regular {
+                            LibraryView(preferences: preferences)
+                        } else {
+                            NavigationStack {
+                                LibraryView(preferences: preferences)
+                            }
+                        }
                     }
-                    .tabItem { Label(AppTab.recent.title, systemImage: AppTab.recent.systemImage) }
-                    .tag(AppTab.recent)
-
-                    NavigationStack {
-                        TopsTabView(preferences: preferences)
-                    }
-                    .tabItem { Label(AppTab.tops.title, systemImage: AppTab.tops.systemImage) }
-                    .tag(AppTab.tops)
-
-                    NavigationStack {
-                        PatternsView(preferences: preferences)
-                    }
-                    .tabItem { Label(AppTab.patterns.title, systemImage: AppTab.patterns.systemImage) }
-                    .tag(AppTab.patterns)
+                    .tabItem { Label(AppTab.library.title, systemImage: AppTab.library.systemImage) }
+                    .tag(AppTab.library)
 
                     NavigationStack {
                         SettingsView(preferences: preferences)
@@ -87,72 +49,50 @@ struct RootView: View {
                     .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.systemImage) }
                     .tag(AppTab.settings)
                 }
+                .tabViewStyle(.sidebarAdaptable)
             }
         }
+        .environment(navigation)
         .tint(SoundfolioTheme.accent(from: preferences))
         .preferredColorScheme(preferences.preferredColorScheme)
-        .onChange(of: preferences.baseURL) { _, newValue in
-            auth.updateBaseURL(newValue)
-            appState.reloadClient()
-        }
         .task(id: auth.isSignedIn && !auth.needsOnboarding) {
-            guard auth.isSignedIn, !auth.needsOnboarding, !needsSetup, let uid = auth.user?.uid else {
+            guard auth.isSignedIn, !auth.needsOnboarding, let uid = auth.user?.uid else {
                 streamStore.stop()
+                statsCache.clearForSignOut()
                 return
             }
+            statsCache.setActiveUser(uid)
             streamStore.start(uid: uid)
+            statsCache.hydrate(uid: uid, revision: streamStore.revision)
             appState.refreshFreshness(from: streamStore)
         }
         .onChange(of: streamStore.latestPlayAt) { _, newValue in
             appState.latestPlayAt = newValue
             appState.freshnessCheckedAt = Date()
         }
-    }
-}
-
-enum TopListKind: String, CaseIterable, Identifiable {
-    case tracks
-    case artists
-    case albums
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .tracks: "Tracks"
-        case .artists: "Artists"
-        case .albums: "Albums"
-        }
-    }
-}
-
-struct TopsTabView: View {
-    @Bindable var preferences: StatsPreferences
-    @State private var kind: TopListKind = .tracks
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Picker("List", selection: $kind) {
-                ForEach(TopListKind.allCases) { k in
-                    Text(k.title).tag(k)
-                }
+        .onChange(of: streamStore.revision) { oldRevision, newRevision in
+            guard newRevision != oldRevision else { return }
+            if oldRevision == 0, let uid = auth.user?.uid {
+                statsCache.hydrate(uid: uid, revision: newRevision)
+                return
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, SoundfolioTheme.pagePadding)
-            .padding(.vertical, 8)
-
-            Group {
-                switch kind {
-                case .tracks:
-                    TopTracksView(embedInNavigation: false, preferences: preferences)
-                case .artists:
-                    TopArtistsView(embedInNavigation: false, preferences: preferences)
-                case .albums:
-                    TopAlbumsView(embedInNavigation: false, preferences: preferences)
-                }
+            guard !appState.isSyncing else { return }
+            statsCache.invalidateAll()
+        }
+        .onChange(of: appState.isSyncing) { wasSyncing, isSyncing in
+            if wasSyncing, !isSyncing {
+                statsCache.invalidateAll()
             }
         }
-        .navigationTitle("Tops")
-        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background:
+                appState.setSyncBackgrounded(true)
+            case .active:
+                appState.setSyncBackgrounded(false)
+            default:
+                break
+            }
+        }
     }
 }

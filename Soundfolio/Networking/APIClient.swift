@@ -29,7 +29,7 @@ final class APIClient {
     private var baseURLString: String
     var authTokenProvider: (@MainActor () async throws -> String?)?
 
-    init(baseURLString: String = "") {
+    init(baseURLString: String = StatsPreferences.defaultBaseURL) {
         self.baseURLString = baseURLString
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
@@ -40,17 +40,24 @@ final class APIClient {
         self.baseURLString = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private static let syncExistingCap = 2_500
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
     func syncLastFm(
         lastfmUsername: String,
         streams: [StreamRecord],
         timeZone: String = TimeZone.current.identifier
     ) async throws -> LastFmSyncResponse {
-        let latestPlayedAt = streams.first.map { ISO8601DateFormatter().string(from: $0.playedAt) }
-        let existing = streams.map {
+        let latestPlayedAt = streams.first.map { Self.isoFormatter.string(from: $0.playedAt) }
+        let existing = streams.prefix(Self.syncExistingCap).map {
             ExistingScrobblePayload(
                 artistName: $0.artistName,
                 trackName: $0.trackName,
-                playedAt: ISO8601DateFormatter().string(from: $0.playedAt)
+                playedAt: Self.isoFormatter.string(from: $0.playedAt)
             )
         }
         let body = LastFmSyncRequest(
@@ -81,16 +88,8 @@ final class APIClient {
         method: String,
         extra: [URLQueryItem] = []
     ) async throws -> URLRequest {
-        guard !baseURLString.isEmpty else { throw APIClientError.missingBaseURL }
-        var normalized = baseURLString
-        if !normalized.hasPrefix("http") {
-            normalized = "https://\(normalized)"
-        }
-        while normalized.hasSuffix("/") { normalized.removeLast() }
-
-        guard var components = URLComponents(string: normalized + path) else {
-            throw APIClientError.invalidURL
-        }
+        var components = try normalizedBaseComponents()
+        components.path = path
         if !extra.isEmpty {
             components.queryItems = extra
         }
@@ -105,6 +104,23 @@ final class APIClient {
         return request
     }
 
+    private func normalizedBaseComponents() throws -> URLComponents {
+        var normalized = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty {
+            normalized = StatsPreferences.defaultBaseURL
+        }
+        if !normalized.hasPrefix("http") {
+            normalized = "https://\(normalized)"
+        }
+        guard var components = URLComponents(string: normalized), components.host?.isEmpty == false else {
+            throw APIClientError.invalidURL
+        }
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+        return components
+    }
+
     private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -116,6 +132,9 @@ final class APIClient {
         guard (200 ... 299).contains(http.statusCode) else {
             if let apiError = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
                 throw APIClientError.server(apiError.detail ?? apiError.error ?? "Request failed (\(http.statusCode)).")
+            }
+            if http.statusCode == 404 {
+                throw APIClientError.server("Sync endpoint was not found on the server.")
             }
             throw APIClientError.server("Request failed (\(http.statusCode)).")
         }

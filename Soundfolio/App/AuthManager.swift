@@ -19,8 +19,6 @@ final class AuthManager {
     private(set) var lastError: String?
 
     private nonisolated(unsafe) var listener: AuthStateDidChangeListenerHandle?
-    private var baseURLString = StatsPreferences.defaultBaseURL
-
     var isSignedIn: Bool { user != nil }
 
     init() {
@@ -37,10 +35,6 @@ final class AuthManager {
                 }
             }
         }
-    }
-
-    func updateBaseURL(_ value: String) {
-        baseURLString = value
     }
 
     func idToken(forceRefresh: Bool = false) async throws -> String? {
@@ -119,9 +113,9 @@ final class AuthManager {
         #endif
     }
 
-    func completeOnboarding(lastfmUsername: String) async throws {
+    func updateLastFmUsername(_ username: String) async throws {
         guard let uid = user?.uid else { throw AuthManagerError.notSignedIn }
-        let trimmed = lastfmUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw AuthManagerError.server("Last.fm username is required.") }
 
         try await Firestore.firestore().collection("users").document(uid).setData([
@@ -129,8 +123,12 @@ final class AuthManager {
             "updatedAt": FieldValue.serverTimestamp(),
         ], merge: true)
 
-        self.lastfmUsername = trimmed
+        lastfmUsername = trimmed
         needsOnboarding = false
+    }
+
+    func completeOnboarding(lastfmUsername: String) async throws {
+        try await updateLastFmUsername(lastfmUsername)
     }
 
     func signOut() throws {

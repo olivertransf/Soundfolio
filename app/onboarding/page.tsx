@@ -52,6 +52,7 @@ function OnboardingForm() {
         <p className="text-sm text-muted-foreground">
           Enter the username from your Last.fm profile URL, for example{" "}
           <span className="font-mono text-foreground">last.fm/user/yourname</span>.
+          Your Dashboard is home after setup. Import Spotify history from Settings if needed.
         </p>
       </div>
 

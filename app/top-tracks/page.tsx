@@ -64,6 +64,7 @@ function TopTracksContent() {
                   rank={i + 1}
                   padding="compact"
                   sortBy={sortBy}
+                  href={`/track/${encodeURIComponent(track.artistName)}/${encodeURIComponent(track.trackName)}`}
                   leading={
                     track.albumArt ? (
                       <Image

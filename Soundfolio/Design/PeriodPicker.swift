@@ -2,17 +2,61 @@ import SwiftUI
 
 struct PeriodPicker: View {
     @Bindable var preferences: StatsPreferences
+    @State private var showCustomRange = false
+    @State private var customFromDate = Date()
+    @State private var customToDate = Date()
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                if preferences.usesCustomRange {
+                    customRangeChip
+                }
                 ForEach(StatsPeriod.allCases) { period in
                     if period == .all || !preferences.usesCustomRange {
                         periodChip(period)
                     }
                 }
+                if !preferences.usesCustomRange {
+                    customButton
+                }
             }
         }
+        .sheet(isPresented: $showCustomRange) {
+            customRangeSheet
+        }
+    }
+
+    private var customRangeChip: some View {
+        Button {
+            prepareCustomDates()
+            showCustomRange = true
+        } label: {
+            Text(preferences.customFrom.isEmpty ? "Custom" : "\(preferences.customFrom) – \(preferences.customTo)")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(SoundfolioTheme.accent(from: preferences).opacity(0.18))
+                .foregroundStyle(SoundfolioTheme.accent(from: preferences))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var customButton: some View {
+        Button {
+            prepareCustomDates()
+            showCustomRange = true
+        } label: {
+            Text("Custom")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(.tertiarySystemFill))
+                .foregroundStyle(.primary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func periodChip(_ period: StatsPeriod) -> some View {
@@ -31,6 +75,53 @@ struct PeriodPicker: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    private var customRangeSheet: some View {
+        NavigationStack {
+            Form {
+                DatePicker("From", selection: $customFromDate, displayedComponents: .date)
+                DatePicker("To", selection: $customToDate, displayedComponents: .date)
+            }
+            .navigationTitle("Custom range")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showCustomRange = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Apply") { applyCustomRange() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func prepareCustomDates() {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = Calendar.current.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        if let from = formatter.date(from: preferences.customFrom) {
+            customFromDate = from
+        }
+        if let to = formatter.date(from: preferences.customTo) {
+            customToDate = to
+        }
+    }
+
+    private func applyCustomRange() {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = Calendar.current.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let from = min(customFromDate, customToDate)
+        let to = max(customFromDate, customToDate)
+        preferences.customFrom = formatter.string(from: from)
+        preferences.customTo = formatter.string(from: to)
+        showCustomRange = false
     }
 }
 

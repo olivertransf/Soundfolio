@@ -5,7 +5,10 @@ struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var auth
     @Bindable var preferences: StatsPreferences
-    @State private var savedMessage: String?
+    @State private var lastfmUsername = ""
+    @State private var isSavingUsername = false
+    @State private var usernameMessage: String?
+    @State private var syncError: String?
 
     var body: some View {
         Form {
@@ -13,20 +16,38 @@ struct SettingsView: View {
                 Section("Account") {
                     Text(email)
                         .foregroundStyle(.secondary)
+                    TextField("Last.fm username", text: $lastfmUsername)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if let usernameMessage {
+                        Text(usernameMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button(isSavingUsername ? "Saving…" : "Save username") {
+                        Task { await saveUsername() }
+                    }
+                    .disabled(isSavingUsername || lastfmUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     Button("Sign out", role: .destructive) {
                         try? auth.signOut()
                     }
                 }
             }
 
-            Section("Server") {
-                TextField("Base URL", text: $preferences.baseURL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                Text("Default: \(StatsPreferences.defaultBaseURL)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section("Data") {
+                SyncStatusPanel(
+                    isSyncing: appState.isSyncing,
+                    progressMessage: appState.syncProgressMessage,
+                    savedCount: appState.syncSavedCount,
+                    pendingCount: appState.syncPendingCount,
+                    lastResult: appState.lastSyncResult,
+                    lastSyncedAt: appState.lastSyncedAt,
+                    accent: SoundfolioTheme.accent(from: preferences),
+                    onSync: { Task { await syncNow() } }
+                )
+                if let url = preferences.importURL {
+                    Link("Import Spotify history on web", destination: url)
+                }
             }
 
             Section("Appearance") {
@@ -43,22 +64,38 @@ struct SettingsView: View {
                     Text("Light").tag(ColorScheme.light)
                 }
             }
-
-            Section {
-                Button("Save") {
-                    appState.reloadClient()
-                    savedMessage = "Saved"
-                }
-            }
-
-            if let savedMessage {
-                Section {
-                    Text(savedMessage)
-                        .foregroundStyle(.secondary)
-                }
-            }
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            lastfmUsername = auth.lastfmUsername ?? ""
+        }
+        .alert("Sync failed", isPresented: Binding(
+            get: { syncError != nil },
+            set: { if !$0 { syncError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(syncError ?? "")
+        }
+    }
+
+    private func saveUsername() async {
+        isSavingUsername = true
+        defer { isSavingUsername = false }
+        do {
+            try await auth.updateLastFmUsername(lastfmUsername)
+            usernameMessage = "Username saved"
+        } catch {
+            usernameMessage = error.localizedDescription
+        }
+    }
+
+    private func syncNow() async {
+        do {
+            _ = try await appState.syncLastFm()
+        } catch {
+            syncError = appState.handleError(error)
+        }
     }
 }

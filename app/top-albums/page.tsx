@@ -62,6 +62,7 @@ function TopAlbumsContent() {
                   key={`${album.albumName}-${album.artistName}`}
                   rank={i + 1}
                   sortBy={sortBy}
+                  href={`/album/${encodeURIComponent(album.artistName)}/${encodeURIComponent(album.albumName)}`}
                   leading={
                     album.albumArt ? (
                       <Image

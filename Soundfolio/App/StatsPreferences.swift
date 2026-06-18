@@ -6,18 +6,14 @@ final class StatsPreferences {
     static let defaultBaseURL = "https://soundfolio-stats.vercel.app"
 
     private enum Keys {
-        static let baseURL = "soundfolioBaseURL"
         static let period = "soundfolioPeriod"
         static let customFrom = "soundfolioCustomFrom"
         static let customTo = "soundfolioCustomTo"
         static let sort = "soundfolioTopSort"
         static let chartGroup = "soundfolioChartGroupBy"
+        static let chartMetric = "soundfolioChartMetric"
         static let accent = "soundfolioAccent"
         static let colorScheme = "soundfolioColorScheme"
-    }
-
-    var baseURL: String {
-        didSet { UserDefaults.standard.set(baseURL, forKey: Keys.baseURL) }
     }
 
     var period: StatsPeriod {
@@ -40,6 +36,10 @@ final class StatsPreferences {
         didSet { UserDefaults.standard.set(chartGroupBy.rawValue, forKey: Keys.chartGroup) }
     }
 
+    var chartMetric: ChartMetric {
+        didSet { UserDefaults.standard.set(chartMetric.rawValue, forKey: Keys.chartMetric) }
+    }
+
     var accent: AppAccent {
         didSet { UserDefaults.standard.set(accent.rawValue, forKey: Keys.accent) }
     }
@@ -58,21 +58,14 @@ final class StatsPreferences {
         !customFrom.isEmpty && !customTo.isEmpty
     }
 
-    private static let legacyBaseURL = "https://mongodb-vercel-redesign.vercel.app"
-
     init() {
         let defaults = UserDefaults.standard
-        let storedURL = defaults.string(forKey: Keys.baseURL) ?? ""
-        if storedURL.isEmpty || storedURL == Self.legacyBaseURL {
-            baseURL = Self.defaultBaseURL
-        } else {
-            baseURL = storedURL
-        }
         period = StatsPeriod(rawValue: defaults.string(forKey: Keys.period) ?? "") ?? .ytd
         customFrom = defaults.string(forKey: Keys.customFrom) ?? ""
         customTo = defaults.string(forKey: Keys.customTo) ?? ""
         sort = TopSortMode(rawValue: defaults.string(forKey: Keys.sort) ?? "") ?? .minutes
         chartGroupBy = ChartGroupBy(rawValue: defaults.string(forKey: Keys.chartGroup) ?? "") ?? .weeks
+        chartMetric = ChartMetric(rawValue: defaults.string(forKey: Keys.chartMetric) ?? "") ?? .minutes
         accent = AppAccent(rawValue: defaults.string(forKey: Keys.accent) ?? "") ?? .spotify
         switch defaults.string(forKey: Keys.colorScheme) {
         case "dark": preferredColorScheme = .dark
@@ -82,10 +75,18 @@ final class StatsPreferences {
     }
 
     var importURL: URL? {
-        var base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !base.isEmpty else { return nil }
-        if !base.hasPrefix("http") { base = "https://\(base)" }
-        while base.hasSuffix("/") { base.removeLast() }
-        return URL(string: "\(base)/history/import")
+        guard var components = serverOriginComponents else { return nil }
+        components.path = "/history/import"
+        return components.url
+    }
+
+    var serverOriginComponents: URLComponents? {
+        guard var components = URLComponents(string: Self.defaultBaseURL), components.host?.isEmpty == false else {
+            return nil
+        }
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+        return components
     }
 }

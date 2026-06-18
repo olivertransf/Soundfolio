@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
       { source: "/me/top-tracks", destination: "/top-tracks", permanent: true },
       { source: "/me/top-artists", destination: "/top-artists", permanent: true },
       { source: "/me/top-albums", destination: "/top-albums", permanent: true },
+      { source: "/history/recent", destination: "/library?section=recent", permanent: false },
+      { source: "/top-tracks", destination: "/library?section=rankings", permanent: false },
+      { source: "/top-artists", destination: "/library?section=rankings", permanent: false },
+      { source: "/top-albums", destination: "/library?section=rankings", permanent: false },
+      { source: "/patterns", destination: "/library?section=patterns", permanent: false },
     ];
   },
   images: {

@@ -9,6 +9,7 @@ import { scrobbleIdentityKey } from "@/lib/stream-ids";
 type SyncResponse = {
   synced?: number;
   hasMore?: boolean;
+  pending?: number;
   skipped?: boolean;
   message?: string;
   detail?: string;
@@ -33,7 +34,23 @@ function existingPayload(streams: Stream[]) {
   }));
 }
 
-export async function runLastFmSync(uid: string, streams: Stream[]) {
+export type SyncProgress = {
+  message: string;
+  importedCount: number;
+  pendingCount?: number;
+};
+
+export type SyncOutcome = {
+  written: number;
+  message: string;
+  kind: "added" | "upToDate" | "skipped" | "failed";
+};
+
+export async function runLastFmSync(
+  uid: string,
+  streams: Stream[],
+  onProgress?: (progress: SyncProgress) => void
+): Promise<SyncOutcome> {
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
   if (!user || user.uid !== uid) {
@@ -50,7 +67,16 @@ export async function runLastFmSync(uid: string, streams: Stream[]) {
   const token = await user.getIdToken(true);
   let totalWritten = 0;
 
-  for (let i = 0; i < 40; i++) {
+  onProgress?.({ message: "Connecting to Last.fm…", importedCount: 0 });
+
+  for (let batch = 0; batch < 40; batch++) {
+    onProgress?.({
+      message:
+        batch === 0
+          ? "Fetching scrobbles from Last.fm…"
+          : `Importing scrobbles (${totalWritten} saved)…`,
+      importedCount: totalWritten,
+    });
     const response = await fetch("/api/sync-lastfm", {
       method: "POST",
       headers: {
@@ -69,7 +95,8 @@ export async function runLastFmSync(uid: string, streams: Stream[]) {
       throw new Error(data.detail ?? data.message ?? "Last.fm sync failed.");
     }
     if (data.skipped) {
-      return { written: totalWritten, message: data.detail ?? data.message ?? "Sync skipped." };
+      const message = data.detail ?? data.message ?? "Sync skipped.";
+      return { written: totalWritten, message, kind: "skipped" };
     }
 
     const incoming = (data.streams ?? []).map((stream) => ({
@@ -78,8 +105,27 @@ export async function runLastFmSync(uid: string, streams: Stream[]) {
     }));
     if (incoming.length === 0) break;
 
+    onProgress?.({
+      message: `Saving ${incoming.length} scrobbles…`,
+      importedCount: totalWritten,
+    });
+
     const written = await writeUserStreams(uid, incoming, true);
     totalWritten += written;
+
+    if (data.pending && data.pending > 0 && data.hasMore) {
+      onProgress?.({
+        message: `Saved ${totalWritten} · ${data.pending} remaining`,
+        importedCount: totalWritten,
+        pendingCount: data.pending,
+      });
+    } else if (written > 0) {
+      onProgress?.({
+        message: `Saved ${totalWritten} scrobbles`,
+        importedCount: totalWritten,
+        pendingCount: 0,
+      });
+    }
 
     for (const stream of incoming) {
       streams.unshift({
@@ -101,7 +147,14 @@ export async function runLastFmSync(uid: string, streams: Stream[]) {
     if (!data.hasMore || written === 0) break;
   }
 
-  return { written: totalWritten, message: totalWritten > 0 ? `Added ${totalWritten} scrobbles` : "No new scrobbles" };
+  if (totalWritten > 0) {
+    return {
+      written: totalWritten,
+      message: `Added ${totalWritten} scrobbles`,
+      kind: "added",
+    };
+  }
+  return { written: 0, message: "Already up to date", kind: "upToDate" };
 }
 
 export function dedupeStreamKeys(streams: Stream[]) {

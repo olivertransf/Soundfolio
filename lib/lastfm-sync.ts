@@ -2,6 +2,7 @@ import {
   isLastFmPlaceholderUrl,
   lastFmDefaultDurationMs,
 } from "@/lib/lastfm";
+import { cleanEntityLabel } from "@/lib/entity-normalize";
 import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
 import { correctLastFmPlayedAt, resolveStatsTimeZone } from "@/lib/stats-timezone";
 import type { StreamInput } from "@/lib/types/stream";
@@ -35,10 +36,10 @@ export function prepareLastFmScrobbleStreams(
 
   return sorted.map((t) => ({
     trackId: lastFmScrobbleStreamId(t.artist, t.name, t.playedAt),
-    trackName: t.name,
-    artistName: t.artist,
+    trackName: cleanEntityLabel(t.name),
+    artistName: cleanEntityLabel(t.artist),
     artistArt: null,
-    albumName: t.album,
+    albumName: cleanEntityLabel(t.album),
     albumArt: t.image && !isLastFmPlaceholderUrl(t.image) ? t.image : null,
     durationMs: options?.fast === false ? defaultDurationMs : defaultDurationMs,
     playedAt: t.playedAt,
