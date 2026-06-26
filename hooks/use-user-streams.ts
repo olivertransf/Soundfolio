@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { fetchUserStreamsPage, STREAMS_PAGE_SIZE } from "@/lib/firestore/streams";
+import {
+  fetchStreamDocSnapshot,
+  fetchUserStreamsPage,
+  STREAMS_PAGE_SIZE,
+} from "@/lib/firestore/streams";
 import { firestoreErrorMessage, isFirestoreQuotaError } from "@/lib/firestore/errors";
 import {
   clearStreamCache,
@@ -10,9 +14,20 @@ import {
   mergeStreamLists,
   readStreamCache,
   writeStreamCache,
+  type StreamCachePagination,
 } from "@/lib/stream-cache";
 import type { Stream } from "@/lib/types/stream";
 import type { QueryDocumentSnapshot } from "firebase/firestore";
+
+function paginationFromPage(
+  page: { hasMore: boolean; lastDoc?: QueryDocumentSnapshot },
+  streams: Stream[]
+): StreamCachePagination {
+  return {
+    hasMore: page.hasMore,
+    lastDocId: page.lastDoc?.id ?? streams[streams.length - 1]?.id,
+  };
+}
 
 export function useUserStreams() {
   const { user, loading: authLoading } = useAuth();
@@ -24,6 +39,44 @@ export function useUserStreams() {
   const [error, setError] = useState<string | null>(null);
   const loadTokenRef = useRef(0);
   const cursorRef = useRef<QueryDocumentSnapshot | undefined>(undefined);
+
+  const persistCache = useCallback(
+    (uid: string, nextStreams: Stream[], pagination: StreamCachePagination) => {
+      writeStreamCache(uid, nextStreams, pagination);
+    },
+    []
+  );
+
+  const restoreCursor = useCallback(async (uid: string, lastDocId?: string) => {
+    if (!lastDocId) {
+      cursorRef.current = undefined;
+      return;
+    }
+    cursorRef.current = await fetchStreamDocSnapshot(uid, lastDocId);
+  }, []);
+
+  const probePagination = useCallback(
+    async (uid: string, token: number) => {
+      try {
+        const page = await fetchUserStreamsPage(uid, STREAMS_PAGE_SIZE, cursorRef.current);
+        if (token !== loadTokenRef.current) return;
+
+        cursorRef.current = page.lastDoc;
+        setHasMore(page.hasMore);
+        setFullyLoaded(!page.hasMore);
+
+        setStreams((current) => {
+          persistCache(uid, current, paginationFromPage(page, current));
+          return current;
+        });
+      } catch {
+        if (token !== loadTokenRef.current) return;
+        setHasMore(false);
+        setFullyLoaded(true);
+      }
+    },
+    [persistCache]
+  );
 
   const applyCache = useCallback((uid: string) => {
     const cached = readStreamCache(uid);
@@ -50,7 +103,7 @@ export function useUserStreams() {
 
       setStreams((current) => {
         const merged = mergeStreamLists(current, page.streams);
-        writeStreamCache(user.uid, merged);
+        persistCache(user.uid, merged, paginationFromPage(page, merged));
         return merged;
       });
     } catch (err) {
@@ -65,7 +118,7 @@ export function useUserStreams() {
         setLoadingMore(false);
       }
     }
-  }, [user, loadingMore, fullyLoaded, hasMore]);
+  }, [user, loadingMore, fullyLoaded, hasMore, persistCache]);
 
   const reload = useCallback(
     async (options?: { forceNetwork?: boolean }) => {
@@ -89,7 +142,20 @@ export function useUserStreams() {
       const cached = applyCache(user.uid);
 
       if (cached && isStreamCacheFresh(cached.savedAt) && !options?.forceNetwork) {
-        setFullyLoaded(true);
+        const cachedHasMore = cached.hasMore;
+        const lastDocId = cached.lastDocId ?? cached.streams[cached.streams.length - 1]?.id;
+
+        if (typeof cachedHasMore === "boolean") {
+          await restoreCursor(user.uid, lastDocId);
+          if (token !== loadTokenRef.current) return;
+          setHasMore(cachedHasMore);
+          setFullyLoaded(!cachedHasMore);
+          return;
+        }
+
+        await restoreCursor(user.uid, lastDocId);
+        if (token !== loadTokenRef.current) return;
+        void probePagination(user.uid, token);
         return;
       }
 
@@ -107,7 +173,7 @@ export function useUserStreams() {
 
         setStreams((current) => {
           const merged = mergeStreamLists(cached?.streams ?? current, firstPage.streams);
-          writeStreamCache(user.uid, merged);
+          persistCache(user.uid, merged, paginationFromPage(firstPage, merged));
           return merged;
         });
         setLoading(false);
@@ -118,14 +184,16 @@ export function useUserStreams() {
         if (cached?.streams.length) {
           setLoading(false);
           setFullyLoaded(true);
+          setHasMore(false);
         } else {
           setStreams([]);
           setLoading(false);
           setFullyLoaded(true);
+          setHasMore(false);
         }
       }
     },
-    [user, applyCache]
+    [user, applyCache, restoreCursor, probePagination, persistCache]
   );
 
   useEffect(() => {
@@ -150,11 +218,11 @@ export function useUserStreams() {
   const setStreamsWithCache = useCallback(
     (next: Stream[]) => {
       if (user) {
-        writeStreamCache(user.uid, next);
+        persistCache(user.uid, next, { hasMore, lastDocId: cursorRef.current?.id });
       }
       setStreams(next);
     },
-    [user]
+    [user, hasMore, persistCache]
   );
 
   const clearCache = useCallback(() => {

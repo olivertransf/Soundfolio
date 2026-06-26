@@ -16,6 +16,8 @@ import { AlbumArt } from "@/components/album-art";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader, PageShell, SectionBlock } from "@/components/page-shell";
+import { PageHistoryActions } from "@/components/page-history-actions";
+import { LiveSyncStatus } from "@/components/live-sync-status";
 import { useStreams } from "@/components/streams-provider";
 import { librarySectionHref } from "@/components/library/library-content";
 import {
@@ -49,7 +51,7 @@ const previewKinds = [
 
 export function OverviewContent() {
   const searchParams = useSearchParams();
-  const { streams, loading, loadingMore, fullyLoaded, hasMore } = useStreams();
+  const { streams, loading } = useStreams();
   const deferredStreams = useDeferredValue(streams);
   const [previewKind, setPreviewKind] = useState<(typeof previewKinds)[number]["id"]>("tracks");
 
@@ -109,9 +111,12 @@ export function OverviewContent() {
         <p className="max-w-sm text-muted-foreground">
           Sync Last.fm or import your listening history to see stats here.
         </p>
-        <Link href="/history/import" className="text-sm font-medium text-primary hover:underline">
-          Import on web
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <LiveSyncStatus />
+          <Link href="/history/import" className="text-sm font-medium text-primary hover:underline">
+            Import on web
+          </Link>
+        </div>
       </div>
     );
   }
@@ -121,6 +126,7 @@ export function OverviewContent() {
       <PageHeader
         title="Dashboard"
         description={`How you're listening in ${filter.label.toLowerCase()}.`}
+        actions={<PageHistoryActions />}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 text-primary">
@@ -129,13 +135,6 @@ export function OverviewContent() {
             {span ? (
               <span className="text-xs text-muted-foreground">
                 {span.first.toLocaleDateString()} – {span.last.toLocaleDateString()}
-              </span>
-            ) : null}
-            {!fullyLoaded && hasMore ? (
-              <span className="text-xs text-muted-foreground">
-                {loadingMore
-                  ? `Loading older plays (${streams.length.toLocaleString()} loaded).`
-                  : "Partial history loaded — use Load more for older stats."}
               </span>
             ) : null}
           </div>

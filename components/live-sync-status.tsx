@@ -1,7 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
 import {
   Activity,
   CheckCircle2,
@@ -9,88 +7,32 @@ import {
   MinusCircle,
   RefreshCw,
 } from "lucide-react";
-import { useAuth } from "@/components/auth-provider";
+import { useOptionalLastFmSync } from "@/hooks/use-lastfm-sync";
 import { useOptionalStreams } from "@/components/streams-provider";
-import { runLastFmSync, type SyncOutcome } from "@/lib/sync/run-lastfm-sync";
-import { computeLatestPlayAt } from "@/lib/stats-compute";
+import type { SyncOutcome } from "@/lib/sync/run-lastfm-sync";
 import { cn } from "@/lib/utils";
 
-type SyncUIState =
-  | { phase: "idle" }
-  | { phase: "running"; message: string; saved: number; pending: number }
-  | { phase: "done"; outcome: SyncOutcome; at: number };
+type LiveSyncStatusProps = {
+  className?: string;
+  fullWidth?: boolean;
+};
 
-export function LiveSyncStatus() {
-  const { user } = useAuth();
+export function LiveSyncStatus({ className, fullWidth = false }: LiveSyncStatusProps) {
   const streamsCtx = useOptionalStreams();
-  const [uiState, setUiState] = useState<SyncUIState>({ phase: "idle" });
+  const syncCtx = useOptionalLastFmSync();
 
-  const latestPlayAt = useMemo(
-    () => (streamsCtx ? computeLatestPlayAt(streamsCtx.streams) : null),
-    [streamsCtx]
-  );
+  if (!streamsCtx || !syncCtx) return null;
 
-  const loading = uiState.phase === "running";
-
-  useEffect(() => {
-    if (uiState.phase !== "done") return;
-    const timer = window.setTimeout(() => {
-      setUiState({ phase: "idle" });
-    }, 5000);
-    return () => window.clearTimeout(timer);
-  }, [uiState]);
-
-  const label = useMemo(() => {
-    if (uiState.phase === "running") {
-      if (uiState.saved > 0) {
-        return uiState.pending > 0
-          ? `Saved ${uiState.saved} · ${uiState.pending} left`
-          : `Saved ${uiState.saved}`;
-      }
-      return uiState.message;
-    }
-    if (uiState.phase === "done") return uiState.outcome.message;
-    if (!latestPlayAt) return "Sync Last.fm";
-    return `Synced ${formatDistanceToNow(latestPlayAt, { addSuffix: true })}`;
-  }, [latestPlayAt, uiState]);
-
-  const handleSync = useCallback(async () => {
-    if (!user || !streamsCtx) return;
-    setUiState({ phase: "running", message: "Connecting to Last.fm…", saved: 0, pending: 0 });
-    try {
-      const working = [...streamsCtx.streams];
-      const outcome = await runLastFmSync(user.uid, working, (progress) => {
-        setUiState({
-          phase: "running",
-          message: progress.message,
-          saved: progress.importedCount,
-          pending: progress.pendingCount ?? 0,
-        });
-      });
-      await streamsCtx.reload();
-      setUiState({ phase: "done", outcome, at: Date.now() });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Last.fm sync failed.";
-      setUiState({
-        phase: "done",
-        outcome: { written: 0, message, kind: "failed" },
-        at: Date.now(),
-      });
-    }
-  }, [user, streamsCtx]);
-
-  if (!streamsCtx) return null;
-
-  const outcome = uiState.phase === "done" ? uiState.outcome : null;
+  const { loading, label, outcome, runningMessage, sync, canSync } = syncCtx;
 
   return (
     <button
       type="button"
-      disabled={loading || !user}
-      onClick={() => void handleSync()}
+      disabled={!canSync}
+      onClick={() => void sync()}
       className={cn(
-        "hidden h-8 max-w-[min(100vw-2rem,20rem)] items-center gap-2 rounded-full border px-3 text-xs font-medium transition-colors sm:inline-flex",
+        "inline-flex h-8 max-w-[min(100vw-2rem,20rem)] items-center gap-2 rounded-full border px-3 text-xs font-medium transition-colors",
+        fullWidth && "w-full max-w-none justify-center",
         loading && "border-primary/40 bg-primary/10 text-primary",
         outcome?.kind === "added" &&
           "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
@@ -102,9 +44,10 @@ export function LiveSyncStatus() {
           "border-border/60 bg-secondary/30 text-muted-foreground",
         !loading &&
           !outcome &&
-          "border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+          "border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+        className
       )}
-      aria-label={loading ? uiState.message : "Sync Last.fm and refresh"}
+      aria-label={loading ? runningMessage : "Sync Last.fm and refresh"}
       title={label}
     >
       <StatusIcon loading={loading} outcome={outcome} />

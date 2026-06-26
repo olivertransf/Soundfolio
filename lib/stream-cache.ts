@@ -1,6 +1,6 @@
 import type { Stream } from "@/lib/types/stream";
 
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const CACHE_LIMIT = 4_000;
 /** Skip Firestore when cache is this fresh (saves daily read quota). */
 export const STREAM_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -11,10 +11,12 @@ type CachedStream = Omit<Stream, "playedAt" | "createdAt" | "updatedAt"> & {
   updatedAt: string;
 };
 
-type CacheEnvelopeV2 = {
+type CacheEnvelope = {
   v: number;
   savedAt: number;
   streams: CachedStream[];
+  hasMore?: boolean;
+  lastDocId?: string;
 };
 
 function cacheKey(uid: string) {
@@ -42,6 +44,8 @@ function revive(row: CachedStream): Stream {
 export type StreamCacheSnapshot = {
   streams: Stream[];
   savedAt: number | null;
+  hasMore?: boolean;
+  lastDocId?: string;
 };
 
 export function readStreamCache(uid: string): StreamCacheSnapshot | null {
@@ -49,7 +53,7 @@ export function readStreamCache(uid: string): StreamCacheSnapshot | null {
   try {
     const raw = localStorage.getItem(cacheKey(uid));
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as CacheEnvelopeV2 | CachedStream[];
+    const parsed = JSON.parse(raw) as CacheEnvelope | CachedStream[];
     if (Array.isArray(parsed)) {
       if (parsed.length === 0) return null;
       return { streams: parsed.map(revive), savedAt: null };
@@ -58,19 +62,33 @@ export function readStreamCache(uid: string): StreamCacheSnapshot | null {
     return {
       streams: parsed.streams.map(revive),
       savedAt: typeof parsed.savedAt === "number" ? parsed.savedAt : null,
+      hasMore: typeof parsed.hasMore === "boolean" ? parsed.hasMore : undefined,
+      lastDocId: typeof parsed.lastDocId === "string" ? parsed.lastDocId : undefined,
     };
   } catch {
     return null;
   }
 }
 
-export function writeStreamCache(uid: string, streams: Stream[]) {
+export type StreamCachePagination = {
+  hasMore: boolean;
+  lastDocId?: string;
+};
+
+export function writeStreamCache(
+  uid: string,
+  streams: Stream[],
+  pagination?: StreamCachePagination
+) {
   if (typeof window === "undefined") return;
   try {
-    const envelope: CacheEnvelopeV2 = {
+    const trimmed = streams.slice(0, CACHE_LIMIT);
+    const envelope: CacheEnvelope = {
       v: CACHE_VERSION,
       savedAt: Date.now(),
-      streams: streams.slice(0, CACHE_LIMIT).map(serialize),
+      streams: trimmed.map(serialize),
+      hasMore: pagination?.hasMore,
+      lastDocId: pagination?.lastDocId ?? trimmed[trimmed.length - 1]?.id,
     };
     localStorage.setItem(cacheKey(uid), JSON.stringify(envelope));
   } catch {

@@ -3,6 +3,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -61,6 +62,15 @@ function toFirestoreData(stream: StreamInput) {
     createdAt: toTimestamp(stream.createdAt ?? now),
     updatedAt: toTimestamp(stream.updatedAt ?? now),
   };
+}
+
+export async function fetchStreamDocSnapshot(
+  uid: string,
+  docId: string
+): Promise<QueryDocumentSnapshot | undefined> {
+  const snap = await getDoc(doc(userStreamsRef(uid), docId));
+  if (!snap.exists()) return undefined;
+  return snap as QueryDocumentSnapshot;
 }
 
 export async function fetchUserStreamsPage(

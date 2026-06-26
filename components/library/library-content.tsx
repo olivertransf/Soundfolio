@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart3, Clock, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { PageHistoryActions } from "@/components/page-history-actions";
 import { LibraryRecentSection } from "@/components/library/recent-section";
 import { LibraryRankingsSection } from "@/components/library/rankings-section";
 import { LibraryPatternsSection } from "@/components/library/patterns-section";
@@ -35,6 +36,7 @@ function LibraryContentInner() {
       <PageHeader
         title="Library"
         description="Explore recent plays, rankings, and listening patterns."
+        actions={<PageHistoryActions />}
       />
 
       <div className="grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-8">

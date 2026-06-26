@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { TopListToolbar } from "@/components/top-list-toolbar";
 import { PageHeader } from "@/components/page-header";
+import { PageHistoryActions } from "@/components/page-history-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { RankedStreamRow } from "@/components/ranked-stream-row";
 import { useStreams } from "@/components/streams-provider";
@@ -49,7 +50,10 @@ function TopTracksContent() {
         description={`The songs you came back to most in this period. Ranked by ${topSortLabel(sortBy)}.`}
         periodLabel={filter.label}
       >
-        <TopListToolbar />
+        <div className="flex w-full flex-col gap-3">
+          <PageHistoryActions />
+          <TopListToolbar />
+        </div>
       </PageHeader>
 
       <Card className="border-border/50 bg-card/70">

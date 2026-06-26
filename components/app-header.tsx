@@ -136,6 +136,11 @@ export function AppHeader({
             <X className="h-5 w-5" />
           </Button>
         </div>
+        {navApp === "main" ? (
+          <div className="mb-3 pl-1">
+            <LiveSyncStatus fullWidth />
+          </div>
+        ) : null}
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto pl-1" aria-label="Mobile">
           {NAV_LINKS.map(({ href, label, icon: Icon }) => {
             const active = pathMatchesNav(pathname, href);

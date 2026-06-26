@@ -3,8 +3,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { StreamsProvider } from "@/components/streams-provider";
-import { StreamsLoadBanner } from "@/components/streams-load-banner";
 import { getUserProfile, userNeedsOnboarding } from "@/lib/firestore/user-profile";
 import { firestoreErrorMessage } from "@/lib/firestore/errors";
 
@@ -82,10 +80,5 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     );
   }
 
-  return (
-    <StreamsProvider>
-      <StreamsLoadBanner />
-      {children}
-    </StreamsProvider>
-  );
+  return <>{children}</>;
 }
