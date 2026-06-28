@@ -55,29 +55,6 @@ export function useUserStreams() {
     cursorRef.current = await fetchStreamDocSnapshot(uid, lastDocId);
   }, []);
 
-  const probePagination = useCallback(
-    async (uid: string, token: number) => {
-      try {
-        const page = await fetchUserStreamsPage(uid, STREAMS_PAGE_SIZE, cursorRef.current);
-        if (token !== loadTokenRef.current) return;
-
-        cursorRef.current = page.lastDoc;
-        setHasMore(page.hasMore);
-        setFullyLoaded(!page.hasMore);
-
-        setStreams((current) => {
-          persistCache(uid, current, paginationFromPage(page, current));
-          return current;
-        });
-      } catch {
-        if (token !== loadTokenRef.current) return;
-        setHasMore(false);
-        setFullyLoaded(true);
-      }
-    },
-    [persistCache]
-  );
-
   const applyCache = useCallback((uid: string) => {
     const cached = readStreamCache(uid);
     if (!cached?.streams.length) return null;
@@ -86,39 +63,50 @@ export function useUserStreams() {
     return cached;
   }, []);
 
+  const loadAllRemaining = useCallback(
+    async (uid: string, token: number) => {
+      if (token !== loadTokenRef.current) return;
+
+      setLoadingMore(true);
+      setError(null);
+
+      try {
+        let keepGoing = true;
+        while (keepGoing && token === loadTokenRef.current) {
+          const page = await fetchUserStreamsPage(uid, STREAMS_PAGE_SIZE, cursorRef.current);
+          if (token !== loadTokenRef.current) return;
+
+          cursorRef.current = page.lastDoc;
+          keepGoing = page.hasMore;
+          setHasMore(page.hasMore);
+          setFullyLoaded(!page.hasMore);
+
+          setStreams((current) => {
+            const merged = mergeStreamLists(current, page.streams);
+            persistCache(uid, merged, paginationFromPage(page, merged));
+            return merged;
+          });
+        }
+      } catch (err) {
+        if (token !== loadTokenRef.current) return;
+        setError(firestoreErrorMessage(err, "Could not load listening history."));
+        if (isFirestoreQuotaError(err)) {
+          setFullyLoaded(true);
+          setHasMore(false);
+        }
+      } finally {
+        if (token === loadTokenRef.current) {
+          setLoadingMore(false);
+        }
+      }
+    },
+    [persistCache]
+  );
+
   const loadMore = useCallback(async () => {
     if (!user || loadingMore || fullyLoaded || !hasMore) return;
-
-    const token = loadTokenRef.current;
-    setLoadingMore(true);
-    setError(null);
-
-    try {
-      const page = await fetchUserStreamsPage(user.uid, STREAMS_PAGE_SIZE, cursorRef.current);
-      if (token !== loadTokenRef.current) return;
-
-      cursorRef.current = page.lastDoc;
-      setHasMore(page.hasMore);
-      setFullyLoaded(!page.hasMore);
-
-      setStreams((current) => {
-        const merged = mergeStreamLists(current, page.streams);
-        persistCache(user.uid, merged, paginationFromPage(page, merged));
-        return merged;
-      });
-    } catch (err) {
-      if (token !== loadTokenRef.current) return;
-      setError(firestoreErrorMessage(err, "Could not load more listening history."));
-      if (isFirestoreQuotaError(err)) {
-        setFullyLoaded(true);
-        setHasMore(false);
-      }
-    } finally {
-      if (token === loadTokenRef.current) {
-        setLoadingMore(false);
-      }
-    }
-  }, [user, loadingMore, fullyLoaded, hasMore, persistCache]);
+    await loadAllRemaining(user.uid, loadTokenRef.current);
+  }, [user, loadingMore, fullyLoaded, hasMore, loadAllRemaining]);
 
   const reload = useCallback(
     async (options?: { forceNetwork?: boolean }) => {
@@ -145,17 +133,18 @@ export function useUserStreams() {
         const cachedHasMore = cached.hasMore;
         const lastDocId = cached.lastDocId ?? cached.streams[cached.streams.length - 1]?.id;
 
-        if (typeof cachedHasMore === "boolean") {
-          await restoreCursor(user.uid, lastDocId);
-          if (token !== loadTokenRef.current) return;
-          setHasMore(cachedHasMore);
-          setFullyLoaded(!cachedHasMore);
+        await restoreCursor(user.uid, lastDocId);
+        if (token !== loadTokenRef.current) return;
+
+        if (cachedHasMore === false) {
+          setHasMore(false);
+          setFullyLoaded(true);
           return;
         }
 
-        await restoreCursor(user.uid, lastDocId);
-        if (token !== loadTokenRef.current) return;
-        void probePagination(user.uid, token);
+        setHasMore(true);
+        setFullyLoaded(false);
+        void loadAllRemaining(user.uid, token);
         return;
       }
 
@@ -177,6 +166,10 @@ export function useUserStreams() {
           return merged;
         });
         setLoading(false);
+
+        if (firstPage.hasMore) {
+          void loadAllRemaining(user.uid, token);
+        }
       } catch (err) {
         if (token !== loadTokenRef.current) return;
         const message = firestoreErrorMessage(err, "Could not load listening history.");
@@ -193,7 +186,7 @@ export function useUserStreams() {
         }
       }
     },
-    [user, applyCache, restoreCursor, probePagination, persistCache]
+    [user, applyCache, restoreCursor, loadAllRemaining, persistCache]
   );
 
   useEffect(() => {

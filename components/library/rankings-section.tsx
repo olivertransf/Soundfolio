@@ -84,8 +84,8 @@ function RankingsSectionInner() {
           </button>
         ))}
       </div>
-      <Card className="border-border/50 bg-card/70">
-        <CardContent className="pt-6">
+      <Card className="border-border/50 bg-card/70" size="sm">
+        <CardContent className="p-2.5 sm:p-3">
           {kind === "tracks" ? (
             <RankedList
               items={tracks.map((track) => ({
@@ -96,9 +96,9 @@ function RankingsSectionInner() {
                 streams: track.streams,
                 minutes: track.minutesListened,
                 leading: track.albumArt ? (
-                  <Image src={track.albumArt} alt={track.albumName} width={44} height={44} className="shrink-0 rounded" />
+                  <Image src={track.albumArt} alt={track.albumName} width={36} height={36} className="size-9 shrink-0 rounded" />
                 ) : (
-                  <div className="h-11 w-11 shrink-0 rounded bg-secondary" />
+                  <div className="size-9 shrink-0 rounded bg-secondary" />
                 ),
               }))}
               sortBy={sortBy}
@@ -120,9 +120,9 @@ function RankingsSectionInner() {
                   <ArtistArt
                     src={artist.artistArt}
                     alt={artist.artistName}
-                    width={44}
-                    height={44}
-                    className="ring-1 ring-border/25"
+                    width={36}
+                    height={36}
+                    className="size-9 ring-1 ring-border/25"
                   />
                 ),
               }))}
@@ -139,9 +139,9 @@ function RankingsSectionInner() {
                 streams: album.streams,
                 minutes: album.minutesListened,
                 leading: album.albumArt ? (
-                  <Image src={album.albumArt} alt={album.albumName} width={44} height={44} className="shrink-0 rounded" />
+                  <Image src={album.albumArt} alt={album.albumName} width={36} height={36} className="size-9 shrink-0 rounded" />
                 ) : (
-                  <div className="h-11 w-11 shrink-0 rounded bg-secondary" />
+                  <div className="size-9 shrink-0 rounded bg-secondary" />
                 ),
               }))}
               sortBy={sortBy}
@@ -172,7 +172,7 @@ function RankedList({
     return <p className="py-8 text-center text-muted-foreground">No data for this time range.</p>;
   }
   return (
-    <div className="grid gap-2 xl:grid-cols-2">
+    <div className="grid gap-0.5 md:grid-cols-2 xl:grid-cols-3">
       {items.map((item, i) => (
         <RankedStreamRow
           key={item.key}

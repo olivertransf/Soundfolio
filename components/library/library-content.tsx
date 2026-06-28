@@ -39,9 +39,9 @@ function LibraryContentInner() {
         actions={<PageHistoryActions />}
       />
 
-      <div className="grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-8">
+      <div className="grid gap-4 lg:grid-cols-[10.5rem_minmax(0,1fr)] lg:items-start lg:gap-5">
         <nav
-          className="flex gap-1 overflow-x-auto rounded-xl border border-border/40 bg-card/30 p-1 lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:flex-col lg:overflow-visible lg:p-2"
+          className="flex gap-1 overflow-x-auto rounded-xl border border-border/40 bg-card/30 p-1 lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:flex-col lg:overflow-visible lg:p-1.5"
           aria-label="Library sections"
         >
           {sections.map((item) => {
@@ -53,7 +53,7 @@ function LibraryContentInner() {
                 type="button"
                 onClick={() => setSection(item.id)}
                 className={cn(
-                  "flex min-w-[8.5rem] shrink-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors lg:min-w-0 lg:w-full",
+                  "flex min-w-[7.5rem] shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors lg:min-w-0 lg:w-full",
                   isActive
                     ? "bg-primary/15 text-primary"
                     : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"

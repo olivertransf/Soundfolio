@@ -60,8 +60,8 @@ function RecentSectionInner() {
         />
         Limit to selected period
       </label>
-      <Card className="border-border/50 bg-card/70">
-        <CardContent className="p-3 sm:p-4">
+      <Card className="border-border/50 bg-card/70" size="sm">
+        <CardContent className="p-2.5 sm:p-3">
           <RecentPlaysList
             linkable
             initialStreams={recent.map((stream) => ({

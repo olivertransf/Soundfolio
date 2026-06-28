@@ -29,43 +29,43 @@ export function RankedStreamRow({
 }: RankedStreamRowProps) {
   const primary = sortBy === "streams" ? "streams" : "minutes";
   const content = (
-    <>
-      <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-        <span className="w-7 shrink-0 text-right text-sm text-muted-foreground">{rank}</span>
-        {leading}
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium">{title}</p>
-          {subtitle != null && subtitle !== "" ? (
-            <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
-          ) : null}
-        </div>
+    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
+      <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground sm:w-6 sm:text-sm">
+        {rank}
+      </span>
+      {leading}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium leading-tight">{title}</p>
+        {subtitle != null && subtitle !== "" ? (
+          <p className="truncate text-xs leading-tight text-muted-foreground">{subtitle}</p>
+        ) : null}
       </div>
-      <div className="flex shrink-0 items-center justify-end gap-3 text-xs tabular-nums text-muted-foreground sm:gap-4 sm:text-sm">
+      <div className="flex shrink-0 items-center gap-2 text-[11px] tabular-nums text-muted-foreground sm:gap-2.5 sm:text-xs">
         <span
           className={cn(
-            "flex items-center gap-1.5 whitespace-nowrap",
-            primary === "minutes" && "font-medium text-foreground"
+            "flex items-center gap-1 whitespace-nowrap",
+            primary === "minutes" ? "font-medium text-foreground" : "hidden sm:flex"
           )}
         >
-          <Clock className="h-3.5 w-3.5 shrink-0" />
-          {minutes.toLocaleString()} min
+          <Clock className="size-3 shrink-0" />
+          {minutes.toLocaleString()}m
         </span>
         <span
           className={cn(
-            "flex items-center gap-1.5",
-            primary === "streams" && "font-medium text-foreground"
+            "flex items-center gap-1 whitespace-nowrap",
+            primary === "streams" ? "font-medium text-foreground" : "hidden sm:flex"
           )}
         >
-          <Headphones className="h-3.5 w-3.5 shrink-0" />
-          {streams.toLocaleString()} plays
+          <Headphones className="size-3 shrink-0" />
+          {streams.toLocaleString()}
         </span>
       </div>
-    </>
+    </div>
   );
 
   const className = cn(
-    "flex flex-col gap-1.5 rounded-lg px-2 transition-colors hover:bg-secondary/50 sm:flex-row sm:items-center sm:gap-4",
-    padding === "compact" ? "py-2.5" : "py-3",
+    "flex rounded-md px-1.5 transition-colors hover:bg-secondary/50 sm:px-2",
+    padding === "compact" ? "py-1.5" : "py-2",
     href && "cursor-pointer"
   );
 

@@ -143,29 +143,27 @@ export function OverviewContent() {
 
       <FilterToolbar context="dashboard" />
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_min(100%,22rem)] xl:items-start xl:gap-6">
-        <div className="space-y-5">
-          <Card className="overflow-hidden border-border/50 bg-card/70 shadow-none">
-            <CardContent className="space-y-5 p-4 sm:p-5">
-              <div>
-                <h2 className="font-display text-lg font-semibold tracking-tight sm:text-xl">
-                  Listening at a glance
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {stats.totalStreams.toLocaleString()} plays · {diversity.uniqueArtists.toLocaleString()} artists ·{" "}
-                  {diversity.uniqueTracks.toLocaleString()} tracks
-                </p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <StatCard label="Minutes" value={stats.totalMinutes.toLocaleString()} sub={`${stats.totalHours.toLocaleString()} hours`} icon={Clock} variant="compact" />
-                <StatCard label="Plays" value={stats.totalStreams.toLocaleString()} sub={filter.label} icon={Play} variant="compact" />
-                <StatCard label="Min / day" value={avgMinPerDay.toLocaleString()} sub={`~${days} days`} icon={Clock} variant="compact" />
-                <StatCard label="Plays / day" value={avgStreamsPerDay.toLocaleString()} icon={Headphones} variant="compact" />
-                <StatCard label="Tracks" value={diversity.uniqueTracks.toLocaleString()} sub="unique" icon={Music} variant="compact" />
-                <StatCard label="Artists" value={diversity.uniqueArtists.toLocaleString()} sub="unique" icon={Users} variant="compact" />
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_min(100%,17rem)] xl:items-start xl:gap-5">
+        <div className="space-y-4">
+          <section className="space-y-2">
+            <div>
+              <h2 className="font-display text-base font-semibold tracking-tight sm:text-lg">
+                Listening at a glance
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
+                {stats.totalStreams.toLocaleString()} plays · {diversity.uniqueArtists.toLocaleString()} artists ·{" "}
+                {diversity.uniqueTracks.toLocaleString()} tracks
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              <StatCard label="Minutes" value={stats.totalMinutes.toLocaleString()} sub={`${stats.totalHours.toLocaleString()} hours`} icon={Clock} variant="compact" />
+              <StatCard label="Plays" value={stats.totalStreams.toLocaleString()} sub={filter.label} icon={Play} variant="compact" />
+              <StatCard label="Min / day" value={avgMinPerDay.toLocaleString()} sub={`~${days} days`} icon={Clock} variant="compact" />
+              <StatCard label="Plays / day" value={avgStreamsPerDay.toLocaleString()} icon={Headphones} variant="compact" />
+              <StatCard label="Tracks" value={diversity.uniqueTracks.toLocaleString()} sub="unique" icon={Music} variant="compact" />
+              <StatCard label="Artists" value={diversity.uniqueArtists.toLocaleString()} sub="unique" icon={Users} variant="compact" />
+            </div>
+          </section>
 
           <Suspense
             fallback={
@@ -205,8 +203,8 @@ export function OverviewContent() {
                 </button>
               ))}
             </div>
-            <Card className="border-border/50 bg-card/70">
-              <CardContent className="p-3 sm:p-4">
+            <Card className="border-border/50 bg-card/70" size="sm">
+              <CardContent className="p-2.5 sm:p-3">
                 <TopPreviewList
                   kind={previewKind}
                   sortBy={sortBy}
@@ -219,8 +217,8 @@ export function OverviewContent() {
           </SectionBlock>
         </div>
 
-        <aside className="space-y-5 xl:sticky xl:top-[calc(4.25rem+env(safe-area-inset-top,0px))]">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+        <aside className="space-y-4 xl:sticky xl:top-[calc(4.25rem+env(safe-area-inset-top,0px))]">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
             <InsightCard
               label="Busiest hour"
               primaryValue={peakHour ? formatHourLabel(peakHour.label) : "—"}
@@ -250,8 +248,8 @@ export function OverviewContent() {
               </Link>
             }
           >
-            <Card className="border-border/50 bg-card/70">
-              <CardContent className="p-3 sm:p-4">
+            <Card className="border-border/50 bg-card/70" size="sm">
+              <CardContent className="p-2.5 sm:p-3">
                 <RecentPlaysList
                   compact
                   linkable

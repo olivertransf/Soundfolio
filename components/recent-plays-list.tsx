@@ -109,40 +109,39 @@ export function RecentPlaysList({
 
   return (
     <div>
-      <div className="hidden border-b border-border/30 px-2 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_10rem]">
-        <span>Track</span>
-        <span className="text-right">Played</span>
-      </div>
-      <div className="divide-y divide-border/30">
+      <div className="grid gap-x-4 gap-y-0 divide-y divide-border/30 md:grid-cols-2 xl:grid-cols-3 xl:divide-y-0">
         {streams.map((stream) => (
           <RowWrapper key={stream.id} stream={stream}>
-            <div className="group grid items-center gap-3 px-1 py-2.5 sm:px-2 md:grid-cols-[minmax(0,1fr)_10rem]">
-              <div className="flex min-w-0 items-center gap-3">
-                <AlbumArt
-                  src={stream.albumArt}
-                  alt={stream.albumName}
-                  width={44}
-                  height={44}
-                  className="size-11 shrink-0 rounded-lg ring-1 ring-border/35"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <p className="truncate text-sm font-medium">{stream.trackName}</p>
-                    {stream.isNowPlaying ? (
-                      <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                        Now
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {stream.artistName} · {stream.albumName}
-                  </p>
+            <div className="group flex items-center gap-2.5 px-1 py-2 sm:px-2">
+              <AlbumArt
+                src={stream.albumArt}
+                alt={stream.albumName}
+                width={36}
+                height={36}
+                className="size-9 shrink-0 rounded-md ring-1 ring-border/35"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p className="truncate text-sm font-medium leading-tight">{stream.trackName}</p>
+                  {stream.isNowPlaying ? (
+                    <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                      Now
+                    </span>
+                  ) : null}
                 </div>
+                <p className="truncate text-xs leading-tight text-muted-foreground">
+                  {stream.artistName}
+                  <span className="hidden sm:inline"> · {stream.albumName}</span>
+                </p>
               </div>
-              <div className="shrink-0 pl-14 text-left md:pl-0 md:text-right">
+              <div className="shrink-0 text-right">
                 {!stream.isNowPlaying ? (
-                  <p className="text-xs tabular-nums text-muted-foreground">
-                    <LocalDateTime date={stream.playedAt} pattern="MMM d, yyyy · h:mm a" />
+                  <p className="text-[11px] tabular-nums leading-tight text-muted-foreground sm:text-xs">
+                    <LocalDateTime date={stream.playedAt} pattern="MMM d" />
+                    <span className="hidden sm:inline">
+                      {" "}
+                      · <LocalDateTime date={stream.playedAt} pattern="h:mm a" />
+                    </span>
                   </p>
                 ) : (
                   <p className="text-xs font-medium text-primary">Playing</p>

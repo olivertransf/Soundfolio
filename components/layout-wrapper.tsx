@@ -34,7 +34,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const shell = (
     <div className="flex min-h-dvh min-h-screen min-w-0 flex-col bg-background">
       <AppHeader mobileOpen={mobileNavOpen} onMobileOpenChange={setMobileNavOpen} />
-      <main className="app-container flex-1 py-5 sm:py-7 lg:py-8">{children}</main>
+      <main className="app-container flex-1 py-4 sm:py-5 lg:py-6">{children}</main>
     </div>
   );
 

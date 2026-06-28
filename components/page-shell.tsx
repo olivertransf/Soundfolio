@@ -9,7 +9,7 @@ export function PageShell({
   className?: string;
 }) {
   return (
-    <div className={cn("mx-auto w-full max-w-[1400px] space-y-5 sm:space-y-6", className)}>
+    <div className={cn("mx-auto w-full max-w-[1400px] space-y-4 sm:space-y-5", className)}>
       {children}
     </div>
   );
@@ -54,7 +54,7 @@ export function SectionBlock({
   className?: string;
 }) {
   return (
-    <section className={cn("space-y-3", className)}>
+    <section className={cn("space-y-2", className)}>
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
