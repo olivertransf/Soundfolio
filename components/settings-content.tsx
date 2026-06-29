@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { DisplayPreferencesPanel } from "@/components/display-preferences-panel";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { SettingsSection } from "@/components/settings-section";
+import { useStreams } from "@/components/streams-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getUserProfile, setLastfmUsername } from "@/lib/firestore/user-profile";
@@ -14,6 +16,7 @@ import { useLastFmSync } from "@/hooks/use-lastfm-sync";
 export function SettingsContent() {
   const { user, signOutUser } = useAuth();
   const { loading: syncing, label, outcome, runningMessage, sync, canSync } = useLastFmSync();
+  const { streams, cacheMeta, refreshing, clearCache, reload } = useStreams();
   const router = useRouter();
   const [lastfmUsername, setLastfmUsernameInput] = useState("");
   const [usernameMessage, setUsernameMessage] = useState<string | null>(null);
@@ -44,17 +47,16 @@ export function SettingsContent() {
   const syncKind = outcome?.kind ?? null;
 
   return (
-    <PageShell className="max-w-5xl">
+    <PageShell width="default">
       <PageHeader
         title="Settings"
         description="Account, sync, and appearance."
       />
 
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
-        <section className="space-y-4 rounded-2xl border border-border/40 bg-card/40 p-5">
-          <h2 className="text-sm font-semibold">Account</h2>
+      <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+        <SettingsSection title="Account" description={user?.email ?? undefined}>
         {user?.email ? (
-          <p className="text-sm text-muted-foreground">{user.email}</p>
+          <p className="sr-only">{user.email}</p>
         ) : null}
         <div className="space-y-2">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -87,10 +89,9 @@ export function SettingsContent() {
         >
           Sign out
         </Button>
-      </section>
+      </SettingsSection>
 
-      <section className="space-y-4 rounded-2xl border border-border/40 bg-card/40 p-5">
-        <h2 className="text-sm font-semibold">Data</h2>
+      <SettingsSection title="Data" description="Sync, import, and local cache.">
         <Button type="button" onClick={() => void sync()} disabled={!canSync}>
           {syncing ? "Syncing…" : "Sync Last.fm"}
         </Button>
@@ -119,12 +120,27 @@ export function SettingsContent() {
             Import Spotify history on web
           </Link>
         </p>
-      </section>
+        <div className="rounded-lg border border-border/40 bg-secondary/20 p-3 text-xs text-muted-foreground">
+          <div className="grid gap-1 sm:grid-cols-2">
+            <p><span className="text-foreground">{streams.length.toLocaleString()}</span> streams loaded</p>
+            <p><span className="text-foreground">{cacheMeta?.streamCount?.toLocaleString() ?? "0"}</span> cached locally</p>
+            <p>Cache: <span className="text-foreground">{cacheMeta?.fullyLoaded ? "full history" : "still filling"}</span></p>
+            <p>{refreshing ? "Refreshing in background" : cacheMeta?.savedAt ? `Updated ${new Date(cacheMeta.savedAt).toLocaleString()}` : "No cache yet"}</p>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => void reload()}>
+              Refresh cache
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => void clearCache()}>
+              Clear local cache
+            </Button>
+          </div>
+        </div>
+      </SettingsSection>
 
-      <section className="space-y-4 rounded-2xl border border-border/40 bg-card/40 p-5 lg:col-span-2">
-        <h2 className="text-sm font-semibold">Appearance</h2>
+      <SettingsSection title="Appearance" className="lg:col-span-2">
         <DisplayPreferencesPanel />
-        </section>
+        </SettingsSection>
       </div>
     </PageShell>
   );

@@ -29,17 +29,15 @@ function LibraryContentInner() {
     router.replace(`/library?${params.toString()}`);
   };
 
-  const active = sections.find((item) => item.id === section) ?? sections[0];
-
   return (
-    <PageShell>
+    <PageShell width="wide">
       <PageHeader
         title="Library"
         description="Explore recent plays, rankings, and listening patterns."
         actions={<PageHistoryActions />}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[10.5rem_minmax(0,1fr)] lg:items-start lg:gap-5">
+      <div className="grid gap-3 lg:grid-cols-[9.5rem_minmax(0,1fr)] lg:items-start">
         <nav
           className="flex gap-1 overflow-x-auto rounded-xl border border-border/40 bg-card/30 p-1 lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:flex-col lg:overflow-visible lg:p-1.5"
           aria-label="Library sections"
@@ -53,7 +51,7 @@ function LibraryContentInner() {
                 type="button"
                 onClick={() => setSection(item.id)}
                 className={cn(
-                  "flex min-w-[7.5rem] shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors lg:min-w-0 lg:w-full",
+                  "flex min-w-[7.25rem] shrink-0 items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors lg:min-w-0 lg:w-full",
                   isActive
                     ? "bg-primary/15 text-primary"
                     : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
@@ -61,7 +59,7 @@ function LibraryContentInner() {
               >
                 <Icon className="size-4 shrink-0 opacity-90" aria-hidden />
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium leading-tight">{item.label}</span>
+                  <span className="block text-xs font-medium leading-tight">{item.label}</span>
                   <span className="hidden text-[11px] leading-tight text-muted-foreground lg:block">
                     {item.description}
                   </span>
@@ -71,12 +69,7 @@ function LibraryContentInner() {
           })}
         </nav>
 
-        <div className="min-w-0 space-y-4">
-          <div className="lg:hidden">
-            <p className="text-sm font-medium">{active.label}</p>
-            <p className="text-xs text-muted-foreground">{active.description}</p>
-          </div>
-
+        <div className="min-w-0 space-y-3">
           {section === "recent" ? <LibraryRecentSection /> : null}
           {section === "rankings" ? <LibraryRankingsSection /> : null}
           {section === "patterns" ? <LibraryPatternsSection /> : null}

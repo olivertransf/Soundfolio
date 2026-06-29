@@ -3,22 +3,22 @@
 import { Suspense, useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { formatDistanceToNow } from "date-fns";
 import { useSearchParams } from "next/navigation";
 import { Clock, Headphones, Music, Play, Users } from "lucide-react";
-import { FilterToolbar } from "@/components/filter-toolbar";
 import { InsightCard } from "@/components/insight-card";
 import { StatCard } from "@/components/stat-card";
 import { ListeningActivity } from "@/components/listening-activity";
-import { RecentPlaysList } from "@/components/recent-plays-list";
 import { ArtistArt } from "@/components/artist-art";
 import { AlbumArt } from "@/components/album-art";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageHeader, PageShell, SectionBlock } from "@/components/page-shell";
+import { ContentPanel, PageHeader, PageShell, SectionBlock } from "@/components/page-shell";
 import { PageHistoryActions } from "@/components/page-history-actions";
 import { LiveSyncStatus } from "@/components/live-sync-status";
 import { useStreams } from "@/components/streams-provider";
+import { EntityKindTabs, type EntityKind } from "@/components/entity-kind-tabs";
+import { RankedEntityList } from "@/components/ranked-entity-list";
+import { RecentPlaysPanel } from "@/components/recent-plays-panel";
 import { librarySectionHref } from "@/components/library/library-content";
 import {
   calendarDaysInFilter,
@@ -41,19 +41,12 @@ import {
   detectViewerTimeZone,
   readViewerTimeZoneCookie,
 } from "@/lib/viewer-timezone-client";
-import { cn } from "@/lib/utils";
-
-const previewKinds = [
-  { id: "tracks", label: "Tracks" },
-  { id: "artists", label: "Artists" },
-  { id: "albums", label: "Albums" },
-] as const;
 
 export function OverviewContent() {
   const searchParams = useSearchParams();
-  const { streams, loading } = useStreams();
+  const { streams, loading, loadingMore, refreshing } = useStreams();
   const deferredStreams = useDeferredValue(streams);
-  const [previewKind, setPreviewKind] = useState<(typeof previewKinds)[number]["id"]>("tracks");
+  const [previewKind, setPreviewKind] = useState<EntityKind>("tracks");
 
   const range = searchParams.get("range") ?? undefined;
   const from = searchParams.get("from") ?? undefined;
@@ -95,7 +88,7 @@ export function OverviewContent() {
 
   if (loading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex py-20 items-center justify-center text-sm text-muted-foreground">
         Loading your stats…
       </div>
     );
@@ -103,12 +96,12 @@ export function OverviewContent() {
 
   if (!hasData) {
     return (
-      <div className="flex h-[60vh] flex-col items-center justify-center gap-4 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <Music className="h-8 w-8 text-primary" />
+      <div className="flex py-24 flex-col items-center justify-center gap-4 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+          <Music className="h-7 w-7 text-primary" />
         </div>
         <h1 className="text-2xl font-bold">No data yet</h1>
-        <p className="max-w-sm text-muted-foreground">
+        <p className="max-w-sm text-sm text-muted-foreground">
           Sync Last.fm or import your listening history to see stats here.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
@@ -122,16 +115,21 @@ export function OverviewContent() {
   }
 
   return (
-    <PageShell>
+    <PageShell width="wide">
       <PageHeader
         title="Dashboard"
-        description={`How you're listening in ${filter.label.toLowerCase()}.`}
+        description={`Dense overview of ${filter.label.toLowerCase()} listening.`}
         actions={<PageHistoryActions />}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 text-primary">
               {filter.label}
             </Badge>
+            {refreshing || loadingMore ? (
+              <Badge variant="secondary" className="rounded-full border border-border/40 bg-secondary/40">
+                Updating history
+              </Badge>
+            ) : null}
             {span ? (
               <span className="text-xs text-muted-foreground">
                 {span.first.toLocaleDateString()} – {span.last.toLocaleDateString()}
@@ -141,11 +139,9 @@ export function OverviewContent() {
         }
       />
 
-      <FilterToolbar context="dashboard" />
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_min(100%,17rem)] xl:items-start xl:gap-5">
-        <div className="space-y-4">
-          <section className="space-y-2">
+      <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:items-start">
+        <div className="space-y-3">
+          <section className="space-y-2.5">
             <div>
               <h2 className="font-display text-base font-semibold tracking-tight sm:text-lg">
                 Listening at a glance
@@ -165,46 +161,30 @@ export function OverviewContent() {
             </div>
           </section>
 
-          <Suspense
-            fallback={
-              <Card className="rounded-2xl border border-border/40 bg-card/40 shadow-none ring-0">
-                <CardContent className="flex h-[280px] items-center justify-center px-4 text-sm text-muted-foreground">
-                  Loading chart…
-                </CardContent>
-              </Card>
-            }
-          >
-            <ListeningActivity periodLabel={filter.label} compact={false} />
-          </Suspense>
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
+            <Suspense
+              fallback={
+                <Card className="rounded-xl border border-border/40 bg-card/40 shadow-none ring-0">
+                  <CardContent className="flex h-[220px] items-center justify-center px-4 text-sm text-muted-foreground">
+                    Loading chart…
+                  </CardContent>
+                </Card>
+              }
+            >
+              <ListeningActivity periodLabel={filter.label} compact />
+            </Suspense>
 
-          <SectionBlock
-            title="Top rankings"
-            description={`By ${sortBy}`}
-            action={
-              <Link href={libraryRankingsHref} className="text-sm font-medium text-primary hover:underline">
-                See all
-              </Link>
-            }
-          >
-            <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-card/30 p-1">
-              {previewKinds.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setPreviewKind(item.id)}
-                  className={cn(
-                    "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-                    previewKind === item.id
-                      ? "bg-primary/15 text-primary"
-                      : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-            <Card className="border-border/50 bg-card/70" size="sm">
-              <CardContent className="p-2.5 sm:p-3">
+            <SectionBlock
+              title="Top rankings"
+              description={`By ${sortBy}`}
+              action={
+                <Link href={libraryRankingsHref} className="text-xs font-medium text-primary hover:underline">
+                  See all
+                </Link>
+              }
+            >
+              <EntityKindTabs value={previewKind} onValueChange={setPreviewKind} />
+              <ContentPanel>
                 <TopPreviewList
                   kind={previewKind}
                   sortBy={sortBy}
@@ -212,13 +192,13 @@ export function OverviewContent() {
                   artists={topArtists}
                   albums={topAlbums}
                 />
-              </CardContent>
-            </Card>
-          </SectionBlock>
+              </ContentPanel>
+            </SectionBlock>
+          </div>
         </div>
 
-        <aside className="space-y-4 xl:sticky xl:top-[calc(4.25rem+env(safe-area-inset-top,0px))]">
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+        <aside className="space-y-3 2xl:sticky 2xl:top-[calc(4.25rem+env(safe-area-inset-top,0px))]">
+          <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-1">
             <InsightCard
               label="Busiest hour"
               primaryValue={peakHour ? formatHourLabel(peakHour.label) : "—"}
@@ -239,32 +219,16 @@ export function OverviewContent() {
             />
           </div>
 
-          <SectionBlock
-            title="Recent plays"
+          <RecentPlaysPanel
+            compact
+            streams={recentStreams}
             description={`Last ${recentStreams.length} listens`}
             action={
-              <Link href={libraryRecentHref} className="text-sm font-medium text-primary hover:underline">
+              <Link href={libraryRecentHref} className="text-xs font-medium text-primary hover:underline">
                 See all
               </Link>
             }
-          >
-            <Card className="border-border/50 bg-card/70" size="sm">
-              <CardContent className="p-2.5 sm:p-3">
-                <RecentPlaysList
-                  compact
-                  linkable
-                  initialStreams={recentStreams.map((stream) => ({
-                    id: stream.id,
-                    trackName: stream.trackName,
-                    artistName: stream.artistName,
-                    albumName: stream.albumName,
-                    albumArt: stream.albumArt,
-                    playedAt: stream.playedAt.toISOString(),
-                  }))}
-                />
-              </CardContent>
-            </Card>
-          </SectionBlock>
+          />
         </aside>
       </div>
     </PageShell>
@@ -278,7 +242,7 @@ function TopPreviewList({
   artists,
   albums,
 }: {
-  kind: (typeof previewKinds)[number]["id"];
+  kind: EntityKind;
   sortBy: "minutes" | "streams";
   tracks: ReturnType<typeof computeTopTracks>;
   artists: ReturnType<typeof computeTopArtists>;
@@ -286,88 +250,60 @@ function TopPreviewList({
 }) {
   if (kind === "tracks") {
     return (
-      <ul className="space-y-1">
-        {tracks.map((track, i) => (
-          <li key={track.trackId}>
-            <Link
-              href={trackPath(track.artistName, track.trackName)}
-              className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/25"
-            >
-              <span className="w-5 text-center text-xs text-muted-foreground">{i + 1}</span>
-              {track.albumArt ? (
-                <Image src={track.albumArt} alt={track.albumName} width={36} height={36} className="rounded" />
-              ) : (
-                <div className="size-9 rounded bg-secondary" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{track.trackName}</p>
-                <p className="truncate text-xs text-muted-foreground">{track.artistName}</p>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {sortBy === "streams"
-                  ? `${track.streams.toLocaleString()} plays`
-                  : `${track.minutesListened.toLocaleString()} min`}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <RankedEntityList
+        columns="one"
+        sortBy={sortBy}
+        items={tracks.map((track) => ({
+          key: track.trackId,
+          href: trackPath(track.artistName, track.trackName),
+          title: track.trackName,
+          subtitle: track.artistName,
+          streams: track.streams,
+          minutes: track.minutesListened,
+          leading: track.albumArt ? (
+            <Image src={track.albumArt} alt={track.albumName} width={34} height={34} className="size-8 shrink-0 rounded" />
+          ) : (
+            <div className="size-8 shrink-0 rounded bg-secondary" />
+          ),
+        }))}
+      />
     );
   }
 
   if (kind === "artists") {
     return (
-      <ul className="space-y-1">
-        {artists.map((artist, i) => (
-          <li key={artist.artistName}>
-            <Link
-              href={artistPath(artist.artistName)}
-              className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/25"
-            >
-              <span className="w-5 text-center text-xs text-muted-foreground">{i + 1}</span>
-              <ArtistArt src={artist.artistArt} alt={artist.artistName} width={36} height={36} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{artist.artistName}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {sortBy === "streams"
-                    ? `${artist.minutesListened.toLocaleString()} min`
-                    : `${artist.streams.toLocaleString()} plays`}
-                </p>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {sortBy === "streams"
-                  ? `${artist.streams.toLocaleString()} plays`
-                  : `${artist.minutesListened.toLocaleString()} min`}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <RankedEntityList
+        columns="one"
+        sortBy={sortBy}
+        items={artists.map((artist) => ({
+          key: artist.artistName,
+          href: artistPath(artist.artistName),
+          title: artist.artistName,
+          subtitle:
+            sortBy === "streams"
+              ? `${artist.minutesListened.toLocaleString()} min`
+              : `${artist.streams.toLocaleString()} plays`,
+          streams: artist.streams,
+          minutes: artist.minutesListened,
+          leading: <ArtistArt src={artist.artistArt} alt={artist.artistName} width={34} height={34} className="size-8 ring-1 ring-border/25" />,
+        }))}
+      />
     );
   }
 
   return (
-    <ul className="space-y-1">
-      {albums.map((album, i) => (
-        <li key={`${album.albumName}-${album.artistName}`}>
-          <Link
-            href={albumPath(album.artistName, album.albumName)}
-            className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/25"
-          >
-            <span className="w-5 text-center text-xs text-muted-foreground">{i + 1}</span>
-            <AlbumArt src={album.albumArt} alt={album.albumName} width={36} height={36} className="size-9 rounded-md" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{album.albumName}</p>
-              <p className="truncate text-xs text-muted-foreground">{album.artistName}</p>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {sortBy === "streams"
-                ? `${album.streams.toLocaleString()} plays`
-                : `${album.minutesListened.toLocaleString()} min`}
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <RankedEntityList
+      columns="one"
+      sortBy={sortBy}
+      items={albums.map((album) => ({
+        key: `${album.albumName}-${album.artistName}`,
+        href: albumPath(album.artistName, album.albumName),
+        title: album.albumName,
+        subtitle: album.artistName,
+        streams: album.streams,
+        minutes: album.minutesListened,
+        leading: <AlbumArt src={album.albumArt} alt={album.albumName} width={34} height={34} className="size-8 shrink-0 rounded-md" />,
+      }))}
+    />
   );
 }

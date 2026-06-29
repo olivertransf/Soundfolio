@@ -2,30 +2,30 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { firestoreErrorMessage, isFirestoreQuotaError } from "@/lib/firestore/errors";
 import {
   fetchStreamDocSnapshot,
   fetchUserStreamsPage,
-  STREAMS_PAGE_SIZE,
 } from "@/lib/firestore/streams";
-import { firestoreErrorMessage, isFirestoreQuotaError } from "@/lib/firestore/errors";
 import {
   clearStreamCache,
+  readStreamCache,
+  upsertStreamCache,
+  writeStreamCache,
+  type StreamCacheMeta,
+  type StreamCachePagination,
+} from "@/lib/stream-idb-cache";
+import {
   isStreamCacheFresh,
   mergeStreamLists,
-  readStreamCache,
-  writeStreamCache,
-  type StreamCachePagination,
 } from "@/lib/stream-cache";
 import type { Stream } from "@/lib/types/stream";
 import type { QueryDocumentSnapshot } from "firebase/firestore";
 
-function paginationFromPage(
-  page: { hasMore: boolean; lastDoc?: QueryDocumentSnapshot },
-  streams: Stream[]
-): StreamCachePagination {
+function paginationFromPage(page: { hasMore: boolean; lastDoc?: QueryDocumentSnapshot }): StreamCachePagination {
   return {
     hasMore: page.hasMore,
-    lastDocId: page.lastDoc?.id ?? streams[streams.length - 1]?.id,
+    lastDocId: page.lastDoc?.id,
   };
 }
 
@@ -34,18 +34,13 @@ export function useUserStreams() {
   const [streams, setStreams] = useState<Stream[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [fullyLoaded, setFullyLoaded] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [cacheMeta, setCacheMeta] = useState<StreamCacheMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loadTokenRef = useRef(0);
   const cursorRef = useRef<QueryDocumentSnapshot | undefined>(undefined);
-
-  const persistCache = useCallback(
-    (uid: string, nextStreams: Stream[], pagination: StreamCachePagination) => {
-      writeStreamCache(uid, nextStreams, pagination);
-    },
-    []
-  );
 
   const restoreCursor = useCallback(async (uid: string, lastDocId?: string) => {
     if (!lastDocId) {
@@ -55,37 +50,86 @@ export function useUserStreams() {
     cursorRef.current = await fetchStreamDocSnapshot(uid, lastDocId);
   }, []);
 
-  const applyCache = useCallback((uid: string) => {
-    const cached = readStreamCache(uid);
+  const applyCache = useCallback(async (uid: string, token: number) => {
+    const cached = await readStreamCache(uid);
+    if (token !== loadTokenRef.current) return null;
     if (!cached?.streams.length) return null;
+
     setStreams(cached.streams);
+    setCacheMeta(cached.meta);
+    setHasMore(cached.meta ? !cached.meta.fullyLoaded : true);
+    setFullyLoaded(Boolean(cached.meta?.fullyLoaded));
     setLoading(false);
     return cached;
   }, []);
 
-  const loadAllRemaining = useCallback(
-    async (uid: string, token: number) => {
-      if (token !== loadTokenRef.current) return;
+  const loadAllRemaining = useCallback(async (uid: string, token: number) => {
+    if (token !== loadTokenRef.current) return;
 
-      setLoadingMore(true);
+    setLoadingMore(true);
+    setError(null);
+
+    try {
+      let keepGoing = true;
+      while (keepGoing && token === loadTokenRef.current) {
+        const page = await fetchUserStreamsPage(uid, undefined, cursorRef.current);
+        if (token !== loadTokenRef.current) return;
+
+        cursorRef.current = page.lastDoc;
+        keepGoing = page.hasMore;
+        setHasMore(page.hasMore);
+        setFullyLoaded(!page.hasMore);
+        setStreams((current) => mergeStreamLists(current, page.streams));
+
+        const meta = await upsertStreamCache(uid, page.streams, paginationFromPage(page));
+        if (token !== loadTokenRef.current) return;
+        setCacheMeta(meta);
+      }
+    } catch (err) {
+      if (token !== loadTokenRef.current) return;
+      setError(firestoreErrorMessage(err, "Could not load listening history."));
+      if (isFirestoreQuotaError(err)) {
+        setFullyLoaded(true);
+        setHasMore(false);
+      }
+    } finally {
+      if (token === loadTokenRef.current) {
+        setLoadingMore(false);
+      }
+    }
+  }, []);
+
+  const refreshFromNetwork = useCallback(
+    async (
+      uid: string,
+      token: number,
+      options: { fullRefresh: boolean; cachedMeta?: StreamCacheMeta | null }
+    ) => {
+      setRefreshing(true);
       setError(null);
 
       try {
-        let keepGoing = true;
-        while (keepGoing && token === loadTokenRef.current) {
-          const page = await fetchUserStreamsPage(uid, STREAMS_PAGE_SIZE, cursorRef.current);
-          if (token !== loadTokenRef.current) return;
+        const firstPage = await fetchUserStreamsPage(uid);
+        if (token !== loadTokenRef.current) return;
 
-          cursorRef.current = page.lastDoc;
-          keepGoing = page.hasMore;
-          setHasMore(page.hasMore);
-          setFullyLoaded(!page.hasMore);
+        cursorRef.current = firstPage.lastDoc;
+        const shouldLoadTail =
+          firstPage.hasMore && (options.fullRefresh || !options.cachedMeta?.fullyLoaded);
 
-          setStreams((current) => {
-            const merged = mergeStreamLists(current, page.streams);
-            persistCache(uid, merged, paginationFromPage(page, merged));
-            return merged;
-          });
+        setStreams((current) => mergeStreamLists(current, firstPage.streams));
+        const meta = await upsertStreamCache(uid, firstPage.streams, {
+          hasMore: shouldLoadTail,
+          lastDocId: firstPage.lastDoc?.id,
+        });
+        if (token !== loadTokenRef.current) return;
+
+        setCacheMeta(meta);
+        setHasMore(shouldLoadTail);
+        setFullyLoaded(!shouldLoadTail);
+        setLoading(false);
+
+        if (shouldLoadTail) {
+          await loadAllRemaining(uid, token);
         }
       } catch (err) {
         if (token !== loadTokenRef.current) return;
@@ -94,28 +138,26 @@ export function useUserStreams() {
           setFullyLoaded(true);
           setHasMore(false);
         }
+        setLoading(false);
       } finally {
         if (token === loadTokenRef.current) {
-          setLoadingMore(false);
+          setRefreshing(false);
         }
       }
     },
-    [persistCache]
+    [loadAllRemaining]
   );
 
-  const loadMore = useCallback(async () => {
-    if (!user || loadingMore || fullyLoaded || !hasMore) return;
-    await loadAllRemaining(user.uid, loadTokenRef.current);
-  }, [user, loadingMore, fullyLoaded, hasMore, loadAllRemaining]);
-
   const reload = useCallback(
-    async (options?: { forceNetwork?: boolean }) => {
+    async (options?: { forceNetwork?: boolean; fullRefresh?: boolean }) => {
       if (!user) {
         setStreams([]);
         setLoading(false);
         setLoadingMore(false);
+        setRefreshing(false);
         setFullyLoaded(true);
         setHasMore(false);
+        setCacheMeta(null);
         cursorRef.current = undefined;
         return;
       }
@@ -127,21 +169,18 @@ export function useUserStreams() {
       setLoadingMore(false);
       cursorRef.current = undefined;
 
-      const cached = applyCache(user.uid);
+      const cached = await applyCache(user.uid, token);
+      const cachedMeta = cached?.meta ?? null;
 
-      if (cached && isStreamCacheFresh(cached.savedAt) && !options?.forceNetwork) {
-        const cachedHasMore = cached.hasMore;
-        const lastDocId = cached.lastDocId ?? cached.streams[cached.streams.length - 1]?.id;
-
-        await restoreCursor(user.uid, lastDocId);
-        if (token !== loadTokenRef.current) return;
-
-        if (cachedHasMore === false) {
+      if (cached && isStreamCacheFresh(cachedMeta?.savedAt ?? null) && !options?.forceNetwork) {
+        if (cachedMeta?.fullyLoaded) {
           setHasMore(false);
           setFullyLoaded(true);
           return;
         }
 
+        await restoreCursor(user.uid, cachedMeta?.lastDocId ?? cached.streams[cached.streams.length - 1]?.id);
+        if (token !== loadTokenRef.current) return;
         setHasMore(true);
         setFullyLoaded(false);
         void loadAllRemaining(user.uid, token);
@@ -152,41 +191,12 @@ export function useUserStreams() {
         setLoading(true);
       }
 
-      try {
-        const firstPage = await fetchUserStreamsPage(user.uid);
-        if (token !== loadTokenRef.current) return;
-
-        cursorRef.current = firstPage.lastDoc;
-        setHasMore(firstPage.hasMore);
-        setFullyLoaded(!firstPage.hasMore);
-
-        setStreams((current) => {
-          const merged = mergeStreamLists(cached?.streams ?? current, firstPage.streams);
-          persistCache(user.uid, merged, paginationFromPage(firstPage, merged));
-          return merged;
-        });
-        setLoading(false);
-
-        if (firstPage.hasMore) {
-          void loadAllRemaining(user.uid, token);
-        }
-      } catch (err) {
-        if (token !== loadTokenRef.current) return;
-        const message = firestoreErrorMessage(err, "Could not load listening history.");
-        setError(message);
-        if (cached?.streams.length) {
-          setLoading(false);
-          setFullyLoaded(true);
-          setHasMore(false);
-        } else {
-          setStreams([]);
-          setLoading(false);
-          setFullyLoaded(true);
-          setHasMore(false);
-        }
-      }
+      await refreshFromNetwork(user.uid, token, {
+        fullRefresh: options?.fullRefresh ?? !cachedMeta?.fullyLoaded,
+        cachedMeta,
+      });
     },
-    [user, applyCache, restoreCursor, loadAllRemaining, persistCache]
+    [user, applyCache, restoreCursor, loadAllRemaining, refreshFromNetwork]
   );
 
   useEffect(() => {
@@ -195,8 +205,10 @@ export function useUserStreams() {
       setStreams([]);
       setLoading(false);
       setLoadingMore(false);
+      setRefreshing(false);
       setFullyLoaded(true);
       setHasMore(false);
+      setCacheMeta(null);
       return;
     }
     void reload();
@@ -208,20 +220,28 @@ export function useUserStreams() {
     }
   }, [user]);
 
+  const loadMore = useCallback(async () => {
+    if (!user || loadingMore || fullyLoaded || !hasMore) return;
+    await loadAllRemaining(user.uid, loadTokenRef.current);
+  }, [user, loadingMore, fullyLoaded, hasMore, loadAllRemaining]);
+
   const setStreamsWithCache = useCallback(
     (next: Stream[]) => {
       if (user) {
-        persistCache(user.uid, next, { hasMore, lastDocId: cursorRef.current?.id });
+        void writeStreamCache(user.uid, next, { hasMore, lastDocId: cursorRef.current?.id }).then(setCacheMeta);
       }
       setStreams(next);
     },
-    [user, hasMore, persistCache]
+    [user, hasMore]
   );
 
-  const clearCache = useCallback(() => {
-    if (user) {
-      clearStreamCache(user.uid);
-    }
+  const clearCache = useCallback(async () => {
+    if (!user) return;
+    await clearStreamCache(user.uid);
+    setStreams([]);
+    setCacheMeta(null);
+    setHasMore(false);
+    setFullyLoaded(false);
   }, [user]);
 
   return useMemo(
@@ -229,10 +249,13 @@ export function useUserStreams() {
       streams,
       loading: authLoading || loading,
       loadingMore,
+      refreshing,
       fullyLoaded,
       hasMore,
+      cacheMeta,
       error,
-      reload: () => reload({ forceNetwork: true }),
+      reload: () => reload({ forceNetwork: true, fullRefresh: true }),
+      refreshHead: () => reload({ forceNetwork: true, fullRefresh: false }),
       loadMore,
       setStreams: setStreamsWithCache,
       clearCache,
@@ -242,8 +265,10 @@ export function useUserStreams() {
       authLoading,
       loading,
       loadingMore,
+      refreshing,
       fullyLoaded,
       hasMore,
+      cacheMeta,
       error,
       reload,
       loadMore,

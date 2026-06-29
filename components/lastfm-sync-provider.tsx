@@ -78,7 +78,10 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
           pending: progress.pendingCount ?? 0,
         });
       });
-      await streamsCtx.reload();
+      if (outcome.written > 0) {
+        streamsCtx.setStreams(working);
+        await streamsCtx.refreshHead();
+      }
       setUiState({ phase: "done", outcome, at: Date.now() });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Last.fm sync failed.";

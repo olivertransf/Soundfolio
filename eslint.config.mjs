@@ -11,6 +11,7 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "lib/generated/**",
     "next-env.d.ts",
   ]),
   // Syncing URL/searchParams into local UI state in effects is intentional here.

@@ -205,7 +205,7 @@ export async function getTrackDurationMs(
   const n = parseInt(String(raw), 10);
   if (!Number.isFinite(n) || n <= 0) return null;
   // Last.fm uses seconds; very large values are sometimes ms mislabeled.
-  let ms = n > 7200 ? n : n * 1000;
+  const ms = n > 7200 ? n : n * 1000;
   return normalizeCatalogDurationMs(ms);
 }
 

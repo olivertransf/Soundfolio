@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { PageHeader, PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import {
   Music2,
   Loader2,
 } from "lucide-react";
+import { useOptionalStreams } from "@/components/streams-provider";
 import { cn } from "@/lib/utils";
 
 type Status = "idle" | "uploading" | "success" | "error";
@@ -29,6 +31,7 @@ interface ImportResult {
 
 export default function HistoryImportPage() {
   const router = useRouter();
+  const streamsCtx = useOptionalStreams();
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +82,10 @@ export default function HistoryImportPage() {
             ? `Added ${totalSynced} scrobbles`
             : lastMessage ?? "No new scrobbles",
       });
-      if (totalSynced > 0) router.refresh();
+      if (totalSynced > 0) {
+        await streamsCtx?.refreshHead();
+        router.refresh();
+      }
     } catch {
       setLastfmResult({ synced: 0, error: "Network error" });
     } finally {
@@ -100,7 +106,10 @@ export default function HistoryImportPage() {
       if (!res.ok) throw new Error(data.error ?? "Backfill failed");
       setBackfillResult({ updated: data.updated, total: data.total ?? 0, remaining: data.remaining });
       setBackfillStatus("done");
-      if ((data.updated ?? 0) > 0) router.refresh();
+      if ((data.updated ?? 0) > 0) {
+        await streamsCtx?.refreshHead();
+        router.refresh();
+      }
     } catch (e) {
       setBackfillStatus("error");
       const msg = e instanceof Error ? e.message : "Backfill failed";
@@ -143,7 +152,10 @@ export default function HistoryImportPage() {
       setResult(data);
       setStatus("success");
       setProgress(100);
-      if ((data.inserted ?? 0) > 0) router.refresh();
+      if ((data.inserted ?? 0) > 0) {
+        await streamsCtx?.reload();
+        router.refresh();
+      }
     } catch {
       setError("Network error. Please try again.");
       setStatus("error");
@@ -163,21 +175,19 @@ export default function HistoryImportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Data center</h1>
-        <p className="mt-1 text-muted-foreground">
-          Import history, sync new plays, and fill missing artwork from one place.
-        </p>
-      </div>
+    <PageShell width="wide">
+      <PageHeader
+        title="Data center"
+        description="Import history, sync new plays, and fill missing artwork from one dense workspace."
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
-      <Card className="lg:row-span-2">
-        <CardHeader>
+      <div className="grid gap-3 xl:grid-cols-[minmax(18rem,0.75fr)_minmax(0,1.25fr)_minmax(19rem,0.8fr)]">
+      <Card className="border-border/50 bg-card/65 shadow-none" size="sm">
+        <CardHeader className="pb-2">
           <CardTitle className="text-base">How to get your data export</CardTitle>
           <CardDescription>Takes 1-5 days for Spotify to prepare</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
+        <CardContent className="space-y-2.5 text-sm">
           {[
             <>Go to <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">spotify.com/account/privacy <ExternalLink className="h-3 w-3" /></a></>,
             <>Check <strong className="text-foreground">Extended streaming history</strong> only (uncheck everything else)</>,
@@ -185,7 +195,7 @@ export default function HistoryImportPage() {
             <>Wait 1-5 days — you&apos;ll get another email with a download link</>,
             <>Download the ZIP file and upload it here</>,
           ].map((step, i) => (
-            <div key={i} className="flex gap-3">
+            <div key={i} className="flex gap-2.5">
               <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
                 {i + 1}
               </span>
@@ -195,11 +205,15 @@ export default function HistoryImportPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="pt-6">
+      <Card className="border-border/50 bg-card/65 shadow-none xl:row-span-2" size="sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Spotify import</CardTitle>
+          <CardDescription>Upload the Extended Streaming History ZIP.</CardDescription>
+        </CardHeader>
+        <CardContent>
           <div
             className={cn(
-              "cursor-pointer rounded-xl border-2 border-dashed p-12 text-center transition-colors",
+              "cursor-pointer rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors sm:py-10",
               dragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50",
               status === "uploading" && "pointer-events-none opacity-60"
             )}
@@ -218,7 +232,7 @@ export default function HistoryImportPage() {
               className="hidden"
               onChange={onInputChange}
             />
-            <Upload className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+            <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
             <p className="font-medium">Drop your ZIP file here</p>
             <p className="mt-1 text-sm text-muted-foreground">or click to browse</p>
           </div>
@@ -266,8 +280,8 @@ export default function HistoryImportPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-border/50 bg-card/65 shadow-none" size="sm">
+        <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Music2 className="h-4 w-4" />
             Sync from Last.fm
@@ -277,7 +291,7 @@ export default function HistoryImportPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="space-y-1.5 text-xs text-muted-foreground">
             <p>1. Create a free account at last.fm</p>
             <p>2. In Spotify: Settings → Social → Connect to Last.fm</p>
             <p>3. Create an API key at last.fm/api/account/create</p>
@@ -291,7 +305,7 @@ export default function HistoryImportPage() {
             type="button"
             onClick={runLastfmSync}
             disabled={lastfmLoading}
-            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 disabled:pointer-events-none disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-xs font-medium hover:bg-secondary/80 disabled:pointer-events-none disabled:opacity-60"
           >
             {lastfmLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -307,10 +321,9 @@ export default function HistoryImportPage() {
           )}
         </CardContent>
       </Card>
-      </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-border/50 bg-card/65 shadow-none xl:col-start-3" size="sm">
+        <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <ImageIcon className="h-4 w-4" />
             Backfill album artwork
@@ -324,7 +337,7 @@ export default function HistoryImportPage() {
             type="button"
             onClick={runBackfill}
             disabled={backfillStatus === "running"}
-            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary/80 disabled:pointer-events-none disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-xs font-medium transition-colors hover:bg-secondary/80 disabled:pointer-events-none disabled:opacity-60"
           >
             {backfillStatus === "running" ? (
               <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
@@ -359,6 +372,7 @@ export default function HistoryImportPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </PageShell>
   );
 }

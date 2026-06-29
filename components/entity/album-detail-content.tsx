@@ -3,8 +3,9 @@
 import { Suspense, useMemo } from "react";
 import Image from "next/image";
 import { useParams, useSearchParams } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
-import { RankedStreamRow } from "@/components/ranked-stream-row";
+import { EntityHero, EntityStatPill } from "@/components/entity/entity-hero";
+import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
+import { RankedEntityList } from "@/components/ranked-entity-list";
 import { useStreams } from "@/components/streams-provider";
 import { computeAlbumDetail, parseTimeRange } from "@/lib/stats-compute";
 import { trackPath } from "@/lib/entity-paths";
@@ -17,7 +18,7 @@ import {
 function AlbumDetailInner() {
   const params = useParams<{ artist: string; name: string }>();
   const searchParams = useSearchParams();
-  const { streams, loading } = useStreams();
+  const { streams, loading, refreshing } = useStreams();
   const artistName = decodeURIComponent(params.artist);
   const albumName = decodeURIComponent(params.name);
   const range = searchParams.get("range") ?? undefined;
@@ -37,54 +38,60 @@ function AlbumDetailInner() {
   );
 
   if (loading) {
-    return <p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>;
+    return <p className="py-16 text-center text-sm text-muted-foreground">Loading album…</p>;
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex gap-4">
-        {detail.albumArt ? (
-          <Image src={detail.albumArt} alt={detail.albumName} width={96} height={96} className="rounded-xl" />
-        ) : (
-          <div className="size-24 rounded-xl bg-secondary" />
-        )}
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">{detail.albumName}</h1>
-          <p className="text-muted-foreground">{detail.artistName}</p>
-          <p className="text-sm text-muted-foreground">
-            {detail.streams.toLocaleString()} plays · {detail.minutesListened.toLocaleString()} min
-          </p>
-        </div>
-      </div>
+    <PageShell width="default">
+      <EntityHero
+        eyebrow="Album"
+        title={detail.albumName}
+        subtitle={detail.artistName}
+        artwork={
+          detail.albumArt ? (
+            <Image src={detail.albumArt} alt={detail.albumName} width={112} height={112} className="size-full object-cover" />
+          ) : (
+            <div className="size-full bg-secondary" />
+          )
+        }
+        stats={
+          <>
+            <EntityStatPill label="Plays" value={detail.streams.toLocaleString()} />
+            <EntityStatPill label="Minutes" value={detail.minutesListened.toLocaleString()} />
+            <EntityStatPill label="Tracks" value={detail.tracks.length.toLocaleString()} />
+            {refreshing ? <EntityStatPill label="Cache" value="updating" /> : null}
+          </>
+        }
+      />
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Tracks</h2>
-        <Card>
-          <CardContent className="pt-4">
-            {detail.tracks.map((track, i) => (
-              <RankedStreamRow
-                key={track.trackName}
-                rank={i + 1}
-                href={trackPath(detail.artistName, track.trackName)}
-                leading={detail.albumArt ? <Image src={detail.albumArt} alt={detail.albumName} width={44} height={44} className="rounded" /> : <div className="size-11 rounded bg-secondary" />}
-                title={track.trackName}
-                subtitle={`${track.streams.toLocaleString()} plays`}
-                streams={track.streams}
-                minutes={track.minutes}
-                sortBy="minutes"
-                padding="compact"
-              />
-            ))}
-          </CardContent>
-        </Card>
-      </section>
-    </div>
+      <SectionBlock title="Tracks">
+        <ContentPanel>
+          <RankedEntityList
+            columns="two"
+            sortBy="minutes"
+            items={detail.tracks.map((track) => ({
+              key: track.trackName,
+              href: trackPath(detail.artistName, track.trackName),
+              title: track.trackName,
+              subtitle: `${track.streams.toLocaleString()} plays`,
+              streams: track.streams,
+              minutes: track.minutes,
+              leading: detail.albumArt ? (
+                <Image src={detail.albumArt} alt={detail.albumName} width={36} height={36} className="size-9 rounded" />
+              ) : (
+                <div className="size-9 rounded bg-secondary" />
+              ),
+            }))}
+          />
+        </ContentPanel>
+      </SectionBlock>
+    </PageShell>
   );
 }
 
 export function AlbumDetailContent() {
   return (
-    <Suspense fallback={<p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>}>
+    <Suspense fallback={<p className="py-16 text-center text-sm text-muted-foreground">Loading album…</p>}>
       <AlbumDetailInner />
     </Suspense>
   );

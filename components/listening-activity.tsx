@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GroupBySelect, type GroupByMode } from "@/components/group-by-select";
 import { TimeRangeTabs } from "@/components/time-range-tabs";
 import { cn } from "@/lib/utils";
-import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
 import {
   detectViewerTimeZone,
   readViewerTimeZoneCookie,

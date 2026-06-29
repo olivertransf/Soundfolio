@@ -3,9 +3,10 @@
 import { Suspense, useMemo, useState } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+import { ContentPanel } from "@/components/page-shell";
 import { FilterToolbar } from "@/components/filter-toolbar";
-import { RankedStreamRow } from "@/components/ranked-stream-row";
+import { EntityKindTabs, type EntityKind } from "@/components/entity-kind-tabs";
+import { RankedEntityList, type RankedEntityItem } from "@/components/ranked-entity-list";
 import { ArtistArt } from "@/components/artist-art";
 import { useStreams } from "@/components/streams-provider";
 import {
@@ -21,18 +22,11 @@ import {
   detectViewerTimeZone,
   readViewerTimeZoneCookie,
 } from "@/lib/viewer-timezone-client";
-import { cn } from "@/lib/utils";
-
-const kinds = [
-  { id: "tracks", label: "Tracks" },
-  { id: "artists", label: "Artists" },
-  { id: "albums", label: "Albums" },
-] as const;
 
 function RankingsSectionInner() {
   const searchParams = useSearchParams();
   const { streams, loading } = useStreams();
-  const [kind, setKind] = useState<(typeof kinds)[number]["id"]>("tracks");
+  const [kind, setKind] = useState<EntityKind>("tracks");
 
   const range = searchParams.get("range") ?? undefined;
   const from = searchParams.get("from") ?? undefined;
@@ -65,27 +59,10 @@ function RankingsSectionInner() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <FilterToolbar context="rankings" />
-      <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-card/30 p-1">
-        {kinds.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setKind(item.id)}
-            className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              kind === item.id
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      <Card className="border-border/50 bg-card/70" size="sm">
-        <CardContent className="p-2.5 sm:p-3">
+      <EntityKindTabs value={kind} onValueChange={setKind} />
+      <ContentPanel>
           {kind === "tracks" ? (
             <RankedList
               items={tracks.map((track) => ({
@@ -147,8 +124,7 @@ function RankingsSectionInner() {
               sortBy={sortBy}
             />
           ) : null}
-        </CardContent>
-      </Card>
+      </ContentPanel>
     </div>
   );
 }
@@ -157,38 +133,10 @@ function RankedList({
   items,
   sortBy,
 }: {
-  items: Array<{
-    key: string;
-    href: string;
-    title: string;
-    subtitle?: string;
-    streams: number;
-    minutes: number;
-    leading: React.ReactNode;
-  }>;
+  items: RankedEntityItem[];
   sortBy: "streams" | "minutes";
 }) {
-  if (items.length === 0) {
-    return <p className="py-8 text-center text-muted-foreground">No data for this time range.</p>;
-  }
-  return (
-    <div className="grid gap-0.5 md:grid-cols-2 xl:grid-cols-3">
-      {items.map((item, i) => (
-        <RankedStreamRow
-          key={item.key}
-          rank={i + 1}
-          padding="compact"
-          sortBy={sortBy}
-          href={item.href}
-          leading={item.leading}
-          title={item.title}
-          subtitle={item.subtitle}
-          streams={item.streams}
-          minutes={item.minutes}
-        />
-      ))}
-    </div>
-  );
+  return <RankedEntityList items={items} sortBy={sortBy} columns="three" />;
 }
 
 export function LibraryRankingsSection() {

@@ -4,13 +4,13 @@ import { Suspense, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
-import { RankedStreamRow } from "@/components/ranked-stream-row";
+import { EntityHero, EntityStatPill } from "@/components/entity/entity-hero";
+import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
+import { LocalDateTime } from "@/components/local-datetime";
 import { useStreams } from "@/components/streams-provider";
 import {
   computeTrackDetail,
   parseTimeRange,
-  parseTopSortBy,
 } from "@/lib/stats-compute";
 import { albumPath } from "@/lib/entity-paths";
 import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
@@ -22,7 +22,7 @@ import {
 function TrackDetailInner() {
   const params = useParams<{ artist: string; name: string }>();
   const searchParams = useSearchParams();
-  const { streams, loading } = useStreams();
+  const { streams, loading, refreshing } = useStreams();
 
   const artistName = decodeURIComponent(params.artist);
   const trackName = decodeURIComponent(params.name);
@@ -43,59 +43,72 @@ function TrackDetailInner() {
   );
 
   if (loading) {
-    return <p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>;
+    return <p className="py-16 text-center text-sm text-muted-foreground">Loading track…</p>;
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex gap-4">
-        {detail.albumArt ? (
-          <Image src={detail.albumArt} alt={detail.albumName} width={96} height={96} className="rounded-xl" />
-        ) : (
-          <div className="size-24 rounded-xl bg-secondary" />
-        )}
-        <div className="min-w-0">
-          <h1 className="font-display text-2xl font-semibold tracking-tight">{detail.trackName}</h1>
-          <p className="text-muted-foreground">{detail.artistName}</p>
-          <Link href={albumPath(detail.artistName, detail.albumName)} className="text-sm text-primary hover:underline">
-            {detail.albumName}
-          </Link>
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Card><CardContent className="p-4"><p className="text-xs uppercase text-muted-foreground">Plays</p><p className="text-2xl font-semibold">{detail.streams.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs uppercase text-muted-foreground">Minutes</p><p className="text-2xl font-semibold">{detail.minutesListened.toLocaleString()}</p></CardContent></Card>
-      </div>
-
-      {detail.firstPlayedAt && detail.lastPlayedAt ? (
-        <p className="text-sm text-muted-foreground">
-          First: {detail.firstPlayedAt.toLocaleString()} · Last: {detail.lastPlayedAt.toLocaleString()}
-        </p>
-      ) : null}
+    <PageShell width="default">
+      <EntityHero
+        eyebrow="Track"
+        title={detail.trackName}
+        subtitle={
+          <span>
+            {detail.artistName}
+            {detail.albumName ? (
+              <>
+                {" · "}
+                <Link href={albumPath(detail.artistName, detail.albumName)} className="text-primary hover:underline">
+                  {detail.albumName}
+                </Link>
+              </>
+            ) : null}
+          </span>
+        }
+        artwork={
+          detail.albumArt ? (
+            <Image src={detail.albumArt} alt={detail.albumName} width={112} height={112} className="size-full object-cover" />
+          ) : (
+            <div className="size-full bg-secondary" />
+          )
+        }
+        stats={
+          <>
+            <EntityStatPill label="Plays" value={detail.streams.toLocaleString()} />
+            <EntityStatPill label="Minutes" value={detail.minutesListened.toLocaleString()} />
+            {detail.firstPlayedAt ? (
+              <EntityStatPill label="First" value={<LocalDateTime date={detail.firstPlayedAt.toISOString()} pattern="MMM d, yyyy" />} />
+            ) : null}
+            {detail.lastPlayedAt ? (
+              <EntityStatPill label="Last" value={<LocalDateTime date={detail.lastPlayedAt.toISOString()} pattern="MMM d, yyyy" />} />
+            ) : null}
+            {refreshing ? <EntityStatPill label="Cache" value="updating" /> : null}
+          </>
+        }
+      />
 
       {detail.recentPlays.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Recent plays in period</h2>
-          <Card>
-            <CardContent className="divide-y divide-border/30 p-3">
+        <SectionBlock title="Recent plays in period">
+          <ContentPanel>
+            <div className="grid gap-x-4 divide-y divide-border/30 md:grid-cols-2 md:divide-y-0 xl:grid-cols-3">
               {detail.recentPlays.map((play) => (
-                <div key={play.id} className="flex justify-between gap-3 py-2 text-sm">
-                  <span className="text-muted-foreground">{play.playedAt.toLocaleString()}</span>
-                  <span className="truncate">{play.albumName}</span>
+                <div key={play.id} className="flex items-center justify-between gap-3 px-1 py-2 text-sm">
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    <LocalDateTime date={play.playedAt.toISOString()} pattern="MMM d · h:mm a" />
+                  </span>
+                  <span className="min-w-0 truncate text-xs">{play.albumName}</span>
                 </div>
               ))}
-            </CardContent>
-          </Card>
-        </section>
+            </div>
+          </ContentPanel>
+        </SectionBlock>
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
 export function TrackDetailContent() {
   return (
-    <Suspense fallback={<p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>}>
+    <Suspense fallback={<p className="py-16 text-center text-sm text-muted-foreground">Loading track…</p>}>
       <TrackDetailInner />
     </Suspense>
   );

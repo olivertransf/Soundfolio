@@ -2,8 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
-import { RecentPlaysList } from "@/components/recent-plays-list";
+import { RecentPlaysPanel } from "@/components/recent-plays-panel";
 import { FilterToolbar } from "@/components/filter-toolbar";
 import { useStreams } from "@/components/streams-provider";
 import {
@@ -49,9 +48,9 @@ function RecentSectionInner() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <FilterToolbar context="recent" />
-      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <input
           type="checkbox"
           checked={limitToPeriod}
@@ -60,21 +59,7 @@ function RecentSectionInner() {
         />
         Limit to selected period
       </label>
-      <Card className="border-border/50 bg-card/70" size="sm">
-        <CardContent className="p-2.5 sm:p-3">
-          <RecentPlaysList
-            linkable
-            initialStreams={recent.map((stream) => ({
-              id: stream.id,
-              trackName: stream.trackName,
-              artistName: stream.artistName,
-              albumName: stream.albumName,
-              albumArt: stream.albumArt,
-              playedAt: stream.playedAt.toISOString(),
-            }))}
-          />
-        </CardContent>
-      </Card>
+      <RecentPlaysPanel title="Latest listens" streams={recent} />
     </div>
   );
 }
