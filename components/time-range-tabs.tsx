@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_TIME_RANGE } from "@/lib/time-range";
@@ -27,6 +27,7 @@ const presets = [
 
 export function TimeRangeTabs() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const from = searchParams.get("from") ?? "";
   const to = searchParams.get("to") ?? "";
@@ -42,6 +43,11 @@ export function TimeRangeTabs() {
     setCustomFrom(from || "");
     setCustomTo(to || "");
   }, [from, to]);
+
+  function hrefFor(params: URLSearchParams) {
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }
 
   useEffect(() => {
     if (hydratedFromStorage.current) return;
@@ -75,8 +81,10 @@ export function TimeRangeTabs() {
         // ignore
       }
     }
-    router.replace(`?${params.toString()}`);
-  }, [router, searchParams]);
+    router.replace(hrefFor(params), { scroll: false });
+    // hrefFor closes over pathname; pathname is listed as a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per mount/search change
+  }, [router, searchParams, pathname]);
 
   function applyViewerTimeZone(params: URLSearchParams) {
     try {
@@ -94,7 +102,7 @@ export function TimeRangeTabs() {
     params.set("range", value);
     applyViewerTimeZone(params);
     setStoredTimeFilter({ kind: "preset", range: value });
-    router.push(`?${params.toString()}`);
+    router.push(hrefFor(params), { scroll: false });
     setCustomOpen(false);
   }
 
@@ -106,7 +114,7 @@ export function TimeRangeTabs() {
     params.set("to", customTo);
     applyViewerTimeZone(params);
     setStoredTimeFilter({ kind: "custom", from: customFrom, to: customTo });
-    router.push(`?${params.toString()}`);
+    router.push(hrefFor(params), { scroll: false });
     setCustomOpen(false);
   }
 
@@ -114,7 +122,7 @@ export function TimeRangeTabs() {
     isCustom && from && to ? `${from} → ${to}` : "Custom";
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="relative z-20 flex flex-wrap gap-1">
       <div
         role="tablist"
         aria-label="Time period"
@@ -130,7 +138,7 @@ export function TimeRangeTabs() {
               aria-selected={active}
               onClick={() => applyPreset(p.value)}
               className={cn(
-                "min-h-11 shrink-0 px-2.5 py-2 text-xs font-medium transition-colors sm:px-3",
+                "relative z-20 min-h-11 shrink-0 px-2.5 py-2 text-xs font-medium transition-colors sm:px-3",
                 active
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -146,7 +154,7 @@ export function TimeRangeTabs() {
         <PopoverTrigger
           type="button"
           className={cn(
-            "min-h-11 shrink-0 border border-border px-3 py-2 text-xs font-medium transition-colors",
+            "relative z-20 min-h-11 shrink-0 border border-border px-3 py-2 text-xs font-medium transition-colors",
             isCustom
               ? "bg-primary/15 text-primary"
               : "bg-background text-muted-foreground hover:bg-secondary hover:text-foreground"
