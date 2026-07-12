@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,16 @@ const presets = [
   { value: "all", label: "All" },
 ] as const;
 
+function withViewerTimeZone(params: URLSearchParams) {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz) params.set(VIEWER_TIMEZONE_PARAM, tz);
+  } catch {
+    // no-op
+  }
+  return params;
+}
+
 export function TimeRangeTabs() {
   const router = useRouter();
   const pathname = usePathname();
@@ -47,6 +58,15 @@ export function TimeRangeTabs() {
   function hrefFor(params: URLSearchParams) {
     const query = params.toString();
     return query ? `${pathname}?${query}` : pathname;
+  }
+
+  function presetHref(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("from");
+    params.delete("to");
+    params.set("range", value);
+    withViewerTimeZone(params);
+    return hrefFor(params);
   }
 
   useEffect(() => {
@@ -73,38 +93,9 @@ export function TimeRangeTabs() {
       params.set("from", stored.from);
       params.set("to", stored.to);
     }
-    if (!params.has(VIEWER_TIMEZONE_PARAM)) {
-      try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        if (tz) params.set(VIEWER_TIMEZONE_PARAM, tz);
-      } catch {
-        // ignore
-      }
-    }
+    withViewerTimeZone(params);
     router.replace(hrefFor(params), { scroll: false });
-    // hrefFor closes over pathname; pathname is listed as a dependency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per mount/search change
   }, [router, searchParams, pathname]);
-
-  function applyViewerTimeZone(params: URLSearchParams) {
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (tz) params.set(VIEWER_TIMEZONE_PARAM, tz);
-    } catch {
-      // no-op
-    }
-  }
-
-  function applyPreset(value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("from");
-    params.delete("to");
-    params.set("range", value);
-    applyViewerTimeZone(params);
-    setStoredTimeFilter({ kind: "preset", range: value });
-    router.push(hrefFor(params), { scroll: false });
-    setCustomOpen(false);
-  }
 
   function applyCustom() {
     if (!customFrom || !customTo) return;
@@ -112,7 +103,7 @@ export function TimeRangeTabs() {
     params.delete("range");
     params.set("from", customFrom);
     params.set("to", customTo);
-    applyViewerTimeZone(params);
+    withViewerTimeZone(params);
     setStoredTimeFilter({ kind: "custom", from: customFrom, to: customTo });
     router.push(hrefFor(params), { scroll: false });
     setCustomOpen(false);
@@ -122,30 +113,34 @@ export function TimeRangeTabs() {
     isCustom && from && to ? `${from} → ${to}` : "Custom";
 
   return (
-    <div className="relative z-20 flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1">
       <div
         role="tablist"
         aria-label="Time period"
-        className="flex min-w-0 flex-1 overflow-x-auto border border-border bg-background p-0.5 sm:flex-none"
+        className="flex flex-wrap border border-border bg-background p-0.5"
       >
         {presets.map((p) => {
           const active = !isCustom && range === p.value;
           return (
-            <button
+            <Link
               key={p.value}
-              type="button"
+              href={presetHref(p.value)}
+              scroll={false}
               role="tab"
               aria-selected={active}
-              onClick={() => applyPreset(p.value)}
+              onClick={() => {
+                setStoredTimeFilter({ kind: "preset", range: p.value });
+                setCustomOpen(false);
+              }}
               className={cn(
-                "relative z-20 min-h-11 shrink-0 px-2.5 py-2 text-xs font-medium transition-colors sm:px-3",
+                "inline-flex min-h-11 items-center px-2.5 py-2 text-xs font-medium sm:px-3",
                 active
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               )}
             >
               {p.label}
-            </button>
+            </Link>
           );
         })}
       </div>
@@ -154,7 +149,7 @@ export function TimeRangeTabs() {
         <PopoverTrigger
           type="button"
           className={cn(
-            "relative z-20 min-h-11 shrink-0 border border-border px-3 py-2 text-xs font-medium transition-colors",
+            "inline-flex min-h-11 items-center border border-border px-3 py-2 text-xs font-medium",
             isCustom
               ? "bg-primary/15 text-primary"
               : "bg-background text-muted-foreground hover:bg-secondary hover:text-foreground"

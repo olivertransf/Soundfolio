@@ -129,7 +129,7 @@ export function OverviewContent() {
   return (
     <PageShell className="space-y-3">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        <div className="relative z-10 min-w-0 space-y-3">
+        <div className="min-w-0 space-y-3">
           <FilterToolbar context="dashboard" />
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -198,7 +198,7 @@ export function OverviewContent() {
           </section>
         </div>
 
-        <aside className="relative z-0 flex min-h-[24rem] min-w-0 flex-col lg:sticky lg:top-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-4.5rem-env(safe-area-inset-top,0px))]">
+        <aside className="flex min-h-[24rem] min-w-0 flex-col lg:sticky lg:top-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-4.5rem-env(safe-area-inset-top,0px))]">
           <RecentPlaysPanel
             compact
             className="min-h-0 flex-1"

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,13 @@ export function TopSortTabs() {
     return query ? `${pathname}?${query}` : pathname;
   }
 
+  function sortHref(next: TopSortBy) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "minutes") params.delete(TOP_SORT_PARAM);
+    else params.set(TOP_SORT_PARAM, next);
+    return hrefFor(params);
+  }
+
   useEffect(() => {
     if (hydratedFromStorage.current) return;
     if (searchParams.has(TOP_SORT_PARAM)) {
@@ -40,38 +48,31 @@ export function TopSortTabs() {
     router.replace(hrefFor(params), { scroll: false });
   }, [router, searchParams, pathname]);
 
-  function apply(next: TopSortBy) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "minutes") params.delete(TOP_SORT_PARAM);
-    else params.set(TOP_SORT_PARAM, next);
-    setStoredTopSort(next);
-    router.push(hrefFor(params), { scroll: false });
-  }
-
   return (
     <div
       role="tablist"
       aria-label="Rank by"
-      className="relative z-20 flex w-full border border-border bg-background p-0.5 sm:w-auto"
+      className="flex border border-border bg-background p-0.5"
     >
       {options.map((o) => {
         const active = sort === o.value;
         return (
-          <button
+          <Link
             key={o.value}
-            type="button"
+            href={sortHref(o.value)}
+            scroll={false}
             role="tab"
             aria-selected={active}
-            onClick={() => apply(o.value)}
+            onClick={() => setStoredTopSort(o.value)}
             className={cn(
-              "relative z-20 min-h-11 flex-1 px-3 py-2 text-xs font-medium transition-colors sm:flex-none sm:min-w-[4.5rem]",
+              "inline-flex min-h-11 min-w-[4.5rem] flex-1 items-center justify-center px-3 py-2 text-xs font-medium sm:flex-none",
               active
                 ? "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
             )}
           >
             {o.label}
-          </button>
+          </Link>
         );
       })}
     </div>
