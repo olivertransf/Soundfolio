@@ -4,22 +4,14 @@ import type { ReactNode } from "react";
 export function PageShell({
   children,
   className,
-  width = "default",
 }: {
   children: ReactNode;
   className?: string;
+  /** @deprecated Single content width; ignored. */
   width?: "wide" | "default" | "narrow";
 }) {
   return (
-    <div
-      className={cn(
-        "mx-auto w-full space-y-3.5 sm:space-y-4",
-        width === "wide" && "max-w-[1600px]",
-        width === "default" && "max-w-[1320px]",
-        width === "narrow" && "max-w-[1040px]",
-        className
-      )}
-    >
+    <div className={cn("mx-auto w-full max-w-6xl space-y-4 xl:max-w-[87.5rem]", className)}>
       {children}
     </div>
   );
@@ -37,11 +29,11 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-2.5 border-b border-border/30 pb-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 space-y-0.5">
-        <h1 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+    <header className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 space-y-1">
+        <h1 className="text-lg font-semibold tracking-tight sm:text-xl">{title}</h1>
         {description ? (
-          <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">{description}</p>
+          <p className="max-w-2xl text-xs text-muted-foreground sm:text-sm">{description}</p>
         ) : null}
         {meta ? <div className="pt-0.5">{meta}</div> : null}
       </div>
@@ -87,7 +79,7 @@ export function ContentPanel({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-xl border border-border/45 bg-card/65 p-2.5 shadow-none ring-1 ring-border/20 sm:p-3", className)}>
+    <div className={cn("border border-border bg-card p-2 sm:p-3", className)}>
       {children}
     </div>
   );

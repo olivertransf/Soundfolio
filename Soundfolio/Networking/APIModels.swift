@@ -269,8 +269,23 @@ enum AppAccent: String, CaseIterable, Identifiable {
     case blue
     case violet
     case sunset
+    case rose
+    case teal
+    case mono
 
     var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .spotify: "Spotify"
+        case .blue: "Ocean"
+        case .violet: "Violet"
+        case .sunset: "Sunset"
+        case .rose: "Rose"
+        case .teal: "Teal"
+        case .mono: "Mono"
+        }
+    }
 
     var color: ColorAsset {
         switch self {
@@ -278,6 +293,9 @@ enum AppAccent: String, CaseIterable, Identifiable {
         case .blue: .blue
         case .violet: .violet
         case .sunset: .sunset
+        case .rose: .rose
+        case .teal: .teal
+        case .mono: .mono
         }
     }
 }
@@ -286,14 +304,17 @@ import SwiftUI
 
 extension AppAccent {
     enum ColorAsset {
-        case spotifyGreen, blue, violet, sunset
+        case spotifyGreen, blue, violet, sunset, rose, teal, mono
 
         var swiftUIColor: Color {
             switch self {
             case .spotifyGreen: Color(red: 30 / 255, green: 215 / 255, blue: 96 / 255)
-            case .blue: Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255)
+            case .blue: Color(red: 56 / 255, green: 189 / 255, blue: 248 / 255)
             case .violet: Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)
-            case .sunset: Color(red: 251 / 255, green: 113 / 255, blue: 133 / 255)
+            case .sunset: Color(red: 249 / 255, green: 115 / 255, blue: 22 / 255)
+            case .rose: Color(red: 251 / 255, green: 113 / 255, blue: 133 / 255)
+            case .teal: Color(red: 45 / 255, green: 212 / 255, blue: 191 / 255)
+            case .mono: Color(red: 228 / 255, green: 228 / 255, blue: 231 / 255)
             }
         }
     }

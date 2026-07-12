@@ -11,7 +11,7 @@ struct TopTracksView: View {
 
     var body: some View {
         TopListContainer(
-            title: "Top tracks",
+            title: "Tracks",
             embedInNavigation: embedInNavigation,
             preferences: preferences,
             loading: loading,
@@ -23,9 +23,17 @@ struct TopTracksView: View {
                     rank: index + 1,
                     title: track.trackName,
                     subtitle: track.artistName,
-                    value: RankValueFormatter.primary(minutes: track.minutesListened, streams: track.streams, sort: preferences.sort),
+                    value: RankValueFormatter.primary(
+                        minutes: track.minutesListened,
+                        streams: track.streams,
+                        sort: preferences.sort
+                    ),
                     artworkURL: track.albumArt,
-                    destination: TrackDetailView(trackName: track.trackName, artistName: track.artistName, preferences: preferences)
+                    destination: TrackDetailView(
+                        trackName: track.trackName,
+                        artistName: track.artistName,
+                        preferences: preferences
+                    )
                 )
             }
         }
@@ -60,7 +68,7 @@ struct TopArtistsView: View {
 
     var body: some View {
         TopListContainer(
-            title: "Top artists",
+            title: "Artists",
             embedInNavigation: embedInNavigation,
             preferences: preferences,
             loading: loading,
@@ -71,8 +79,12 @@ struct TopArtistsView: View {
                 RankedRow(
                     rank: index + 1,
                     title: artist.artistName,
-                    subtitle: RankValueFormatter.secondary(minutes: artist.minutesListened, streams: artist.streams, sort: preferences.sort),
-                    value: RankValueFormatter.primary(minutes: artist.minutesListened, streams: artist.streams, sort: preferences.sort),
+                    subtitle: "",
+                    value: RankValueFormatter.primary(
+                        minutes: artist.minutesListened,
+                        streams: artist.streams,
+                        sort: preferences.sort
+                    ),
                     artworkURL: artist.artistArt,
                     isCircleArt: true,
                     destination: ArtistDetailView(artistName: artist.artistName, preferences: preferences)
@@ -110,7 +122,7 @@ struct TopAlbumsView: View {
 
     var body: some View {
         TopListContainer(
-            title: "Top albums",
+            title: "Albums",
             embedInNavigation: embedInNavigation,
             preferences: preferences,
             loading: loading,
@@ -122,9 +134,17 @@ struct TopAlbumsView: View {
                     rank: index + 1,
                     title: album.albumName,
                     subtitle: album.artistName,
-                    value: RankValueFormatter.primary(minutes: album.minutesListened, streams: album.streams, sort: preferences.sort),
+                    value: RankValueFormatter.primary(
+                        minutes: album.minutesListened,
+                        streams: album.streams,
+                        sort: preferences.sort
+                    ),
                     artworkURL: album.albumArt,
-                    destination: AlbumDetailView(albumName: album.albumName, artistName: album.artistName, preferences: preferences)
+                    destination: AlbumDetailView(
+                        albumName: album.albumName,
+                        artistName: album.artistName,
+                        preferences: preferences
+                    )
                 )
             }
         }
@@ -157,8 +177,6 @@ private struct TopListContainer<Rows: View>: View {
     let onRetry: () -> Void
     @ViewBuilder var rows: () -> Rows
 
-    @Environment(\.horizontalSizeClass) private var sizeClass
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SoundfolioTheme.sectionSpacing) {
@@ -171,30 +189,20 @@ private struct TopListContainer<Rows: View>: View {
                 } else if let error {
                     VStack(spacing: 8) {
                         Text(error)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(SoundfolioTheme.rowSubtitleFont)
+                            .foregroundStyle(SoundfolioTheme.mutedForeground)
                         Button("Retry", action: onRetry).buttonStyle(.bordered)
                     }
                     .frame(maxWidth: .infinity, minHeight: 120)
                 } else {
-                    listContent
+                    RankColumn(title: title) {
+                        VStack(spacing: 0) { rows() }
+                    }
                 }
             }
             .soundfolioPage()
         }
         .navigationTitle(embedInNavigation ? title : "")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    @ViewBuilder
-    private var listContent: some View {
-        if sizeClass == .regular {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 0) {
-                rows()
-            }
-            .soundfolioCard()
-        } else {
-            VStack(spacing: 0) { rows() }.soundfolioCard()
-        }
     }
 }

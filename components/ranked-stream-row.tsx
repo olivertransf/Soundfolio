@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Clock, Headphones } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TopSortBy } from "@/lib/top-sort";
 
@@ -27,55 +26,48 @@ export function RankedStreamRow({
   padding = "default",
   href,
 }: RankedStreamRowProps) {
-  const primary = sortBy === "streams" ? "streams" : "minutes";
+  const metric =
+    sortBy === "streams" ? streams.toLocaleString() : `${minutes.toLocaleString()}m`;
+
   const content = (
-    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
-      <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground sm:w-6 sm:text-sm">
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {rank}
       </span>
       {leading}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 overflow-hidden">
         <p className="truncate text-sm font-medium leading-tight">{title}</p>
         {subtitle != null && subtitle !== "" ? (
           <p className="truncate text-xs leading-tight text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-2 text-[11px] tabular-nums text-muted-foreground sm:gap-2.5 sm:text-xs">
-        <span
-          className={cn(
-            "flex items-center gap-1 whitespace-nowrap",
-            primary === "minutes" ? "font-medium text-foreground" : "hidden sm:flex"
-          )}
-        >
-          <Clock className="size-3 shrink-0" />
-          {minutes.toLocaleString()}m
-        </span>
-        <span
-          className={cn(
-            "flex items-center gap-1 whitespace-nowrap",
-            primary === "streams" ? "font-medium text-foreground" : "hidden sm:flex"
-          )}
-        >
-          <Headphones className="size-3 shrink-0" />
-          {streams.toLocaleString()}
-        </span>
-      </div>
+      <span className="shrink-0 text-xs font-medium tabular-nums text-foreground">
+        {metric}
+      </span>
     </div>
   );
 
   const className = cn(
-    "flex rounded-md px-1.5 transition-colors hover:bg-secondary/50 sm:px-2",
+    "flex px-1.5 transition-colors hover:bg-secondary/60",
     padding === "compact" ? "py-1.5" : "py-2",
     href && "cursor-pointer"
   );
 
+  const wrapped = (
+    <div data-row className={className}>
+      {content}
+    </div>
+  );
+
   if (href) {
     return (
-      <Link href={href} className={className}>
-        {content}
+      <Link href={href} className="block">
+        <div data-row className={className}>
+          {content}
+        </div>
       </Link>
     );
   }
 
-  return <div className={className}>{content}</div>;
+  return wrapped;
 }

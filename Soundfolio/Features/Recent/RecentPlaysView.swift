@@ -13,82 +13,36 @@ struct RecentPlaysView: View {
     @State private var usesPeriodFilter = false
 
     var body: some View {
-        Group {
-            if loading && streams.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error, streams.isEmpty {
-                VStack(spacing: 12) {
-                    Text(error)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    Button("Retry") { Task { await load() } }
-                        .buttonStyle(.bordered)
+        ScrollView {
+            VStack(alignment: .leading, spacing: SoundfolioTheme.sectionSpacing) {
+                if embedInLibrary {
+                    FilterToolbar(
+                        preferences: preferences,
+                        context: .recent,
+                        recentUsesPeriodFilter: $usesPeriodFilter
+                    )
                 }
-                .padding()
-            } else {
-                Group {
-                    if horizontalSizeClass == .regular {
-                        ScrollView {
-                            LazyVGrid(
-                                columns: [
-                                    GridItem(.adaptive(minimum: 320, maximum: 520), spacing: 12, alignment: .top)
-                                ],
-                                spacing: 12
-                            ) {
-                                ForEach(streams) { stream in
-                                    NavigationLink {
-                                        TrackDetailView(
-                                            trackName: stream.trackName,
-                                            artistName: stream.artistName,
-                                            preferences: preferences
-                                        )
-                                    } label: {
-                                        recentRow(stream)
-                                            .padding(12)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(
-                                                SoundfolioTheme.cardBackground,
-                                                in: RoundedRectangle(cornerRadius: SoundfolioTheme.cardCornerRadius, style: .continuous)
-                                            )
-                                            .overlay {
-                                                RoundedRectangle(cornerRadius: SoundfolioTheme.cardCornerRadius, style: .continuous)
-                                                    .strokeBorder(Color.primary.opacity(0.06))
-                                            }
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .soundfolioPage()
-                        }
-                    } else {
-                        List(streams) { stream in
-                            NavigationLink {
-                                TrackDetailView(
-                                    trackName: stream.trackName,
-                                    artistName: stream.artistName,
-                                    preferences: preferences
-                                )
-                            } label: {
-                                recentRow(stream)
-                            }
-                        }
-                        .listStyle(.plain)
+
+                if loading && streams.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, minHeight: 120)
+                } else if let error, streams.isEmpty {
+                    VStack(spacing: 12) {
+                        Text(error)
+                            .font(SoundfolioTheme.rowSubtitleFont)
+                            .foregroundStyle(SoundfolioTheme.mutedForeground)
+                            .multilineTextAlignment(.center)
+                        Button("Retry") { Task { await load() } }
+                            .buttonStyle(.bordered)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 120)
+                } else {
+                    RankColumn(title: "Recent") {
+                        recentGroupedList
                     }
                 }
             }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if embedInLibrary {
-                FilterToolbar(
-                    preferences: preferences,
-                    context: .recent,
-                    recentUsesPeriodFilter: $usesPeriodFilter
-                )
-                .padding(.horizontal, SoundfolioTheme.pagePadding)
-                .padding(.vertical, 8)
-                .background(.bar)
-            }
+            .soundfolioPage()
         }
         .navigationTitle(embedInLibrary ? "" : "Recent")
         .navigationBarTitleDisplayMode(.inline)
@@ -108,74 +62,86 @@ struct RecentPlaysView: View {
         "\(usesPeriodFilter)-\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(streamStore.revision)"
     }
 
-    @ViewBuilder
-    private func recentRow(_ stream: RecentStream) -> some View {
-        HStack(spacing: 12) {
-            ArtworkView(urlString: stream.albumArt, size: 48)
+    private var recentGroupedList: some View {
+        let grouped = Dictionary(grouping: streams) { stream -> String in
+            guard let date = parseISO8601(stream.playedAt) else { return "Unknown" }
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            return formatter.string(from: date)
+        }
+        let days = grouped.keys.sorted { lhs, rhs in
+            guard
+                let left = grouped[lhs]?.first.flatMap({ parseISO8601($0.playedAt) }),
+                let right = grouped[rhs]?.first.flatMap({ parseISO8601($0.playedAt) })
+            else { return lhs > rhs }
+            return left > right
+        }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(stream.trackName)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                Text(stream.artistName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                if let date = parseISO8601(stream.playedAt) {
-                    Text(absoluteTimestamp(date))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(days, id: \.self) { day in
+                Text(day.uppercased())
+                    .font(SoundfolioFont.semibold(10))
+                    .tracking(0.6)
+                    .foregroundStyle(SoundfolioTheme.mutedForeground)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
+
+                ForEach(grouped[day] ?? []) { stream in
+                    NavigationLink {
+                        TrackDetailView(
+                            trackName: stream.trackName,
+                            artistName: stream.artistName,
+                            preferences: preferences
+                        )
+                    } label: {
+                        recentRow(stream)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .layoutPriority(1)
+        }
+    }
 
-            Spacer(minLength: 8)
-
-            if let date = parseISO8601(stream.playedAt) {
-                Text(relativeTimestamp(date))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private func recentRow(_ stream: RecentStream) -> some View {
+        let artSize = SoundfolioTheme.artworkSize(from: preferences, list: false)
+        return HStack(spacing: 10) {
+            if artSize > 0 {
+                ArtworkView(urlString: stream.albumArt, size: artSize)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(stream.trackName)
+                    .font(SoundfolioTheme.rowTitleFont)
                     .lineLimit(1)
+                Text(stream.artistName)
+                    .font(SoundfolioTheme.rowSubtitleFont)
+                    .foregroundStyle(SoundfolioTheme.mutedForeground)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if let date = parseISO8601(stream.playedAt) {
+                Text(formatPlayTime(date, preference: preferences.timeDisplay))
+                    .font(SoundfolioTheme.captionFont)
+                    .foregroundStyle(SoundfolioTheme.mutedForeground)
                     .fixedSize(horizontal: true, vertical: false)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .padding(.vertical, SoundfolioTheme.rowVerticalPadding(from: preferences))
+        .contentShape(Rectangle())
     }
 
     private func load() async {
         loading = true
         defer { loading = false }
         error = nil
-        let revision = streamStore.revision
-        if usesPeriodFilter {
-            streams = statsCache.recentStreams(
-                from: streamStore.streams,
-                limit: 100,
-                preferences: preferences,
-                revision: revision
-            )
-        } else {
-            streams = statsCache.recentStreams(
-                from: streamStore.streams,
-                limit: 100,
-                preferences: nil,
-                revision: revision
-            )
-        }
-        appState.refreshFreshness(from: streamStore)
-    }
-
-    private func relativeTimestamp(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
-
-    private func absoluteTimestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        streams = statsCache.recentStreams(
+            from: streamStore.streams,
+            limit: 200,
+            preferences: usesPeriodFilter ? preferences : nil,
+            revision: streamStore.revision
+        )
     }
 
     private func refresh() async {

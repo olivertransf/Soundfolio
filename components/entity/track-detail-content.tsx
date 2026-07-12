@@ -1,9 +1,9 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
+import { AlbumArt } from "@/components/album-art";
 import { EntityHero, EntityStatPill } from "@/components/entity/entity-hero";
 import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
 import { LocalDateTime } from "@/components/local-datetime";
@@ -65,11 +65,13 @@ function TrackDetailInner() {
           </span>
         }
         artwork={
-          detail.albumArt ? (
-            <Image src={detail.albumArt} alt={detail.albumName} width={112} height={112} className="size-full object-cover" />
-          ) : (
-            <div className="size-full bg-secondary" />
-          )
+          <AlbumArt
+            src={detail.albumArt}
+            alt={detail.albumName}
+            width={112}
+            height={112}
+            className="size-full object-cover"
+          />
         }
         stats={
           <>

@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { RecentPlaysPanel } from "@/components/recent-plays-panel";
+import { PatternsSidePanel } from "@/components/home-patterns-section";
 import { FilterToolbar } from "@/components/filter-toolbar";
 import { useStreams } from "@/components/streams-provider";
 import {
@@ -35,8 +36,10 @@ function RecentSectionInner() {
   );
 
   const recent = useMemo(() => {
-    const source = limitToPeriod ? filterForStats(streams, filter) : streams.filter((s) => !s.isDemo);
-    return computeRecentStreams(source, 100);
+    const source = limitToPeriod
+      ? filterForStats(streams, filter)
+      : streams.filter((s) => !s.isDemo);
+    return computeRecentStreams(source, 150);
   }, [streams, filter, limitToPeriod]);
 
   if (loading) {
@@ -49,17 +52,29 @@ function RecentSectionInner() {
 
   return (
     <div className="space-y-3">
-      <FilterToolbar context="recent" />
-      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={limitToPeriod}
-          onChange={(e) => setLimitToPeriod(e.target.checked)}
-          className="rounded border-border"
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <FilterToolbar context="recent" />
+        </div>
+        <label className="flex min-h-11 shrink-0 items-center gap-2 border border-border bg-card px-3 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={limitToPeriod}
+            onChange={(e) => setLimitToPeriod(e.target.checked)}
+            className="accent-primary"
+          />
+          Limit to period
+        </label>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+        <RecentPlaysPanel
+          title="Recent"
+          streams={recent}
+          className="min-h-[28rem] lg:min-h-[calc(100dvh-12rem)]"
         />
-        Limit to selected period
-      </label>
-      <RecentPlaysPanel title="Latest listens" streams={recent} />
+        <PatternsSidePanel className="min-h-[20rem] lg:sticky lg:top-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-12rem)]" />
+      </div>
     </div>
   );
 }

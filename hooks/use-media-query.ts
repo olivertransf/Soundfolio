@@ -23,8 +23,3 @@ function getServerSnapshot() {
 export function useViewportWidth() {
   return useSyncExternalStore(subscribeResize, getWidthSnapshot, getServerSnapshot);
 }
-
-export function useIsNarrowChart() {
-  const w = useViewportWidth();
-  return w < 560;
-}

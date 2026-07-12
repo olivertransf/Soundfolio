@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { format, formatDistanceToNowStrict, isToday, isYesterday } from "date-fns";
 import { AlbumArt } from "@/components/album-art";
-import { LocalDateTime } from "@/components/local-datetime";
 import { trackPath } from "@/lib/entity-paths";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 
 type RecentStream = {
   id: string;
@@ -16,141 +17,147 @@ type RecentStream = {
   isNowPlaying?: boolean;
 };
 
+function dayKey(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  if (isToday(d)) return "Today";
+  if (isYesterday(d)) return "Yesterday";
+  return format(d, "EEE, MMM d");
+}
+
+function PlayTime({ iso, isNowPlaying }: { iso: string; isNowPlaying?: boolean }) {
+  const [relative, setRelative] = useState(false);
+  const [text, setText] = useState(() => format(new Date(iso), "h:mm a"));
+
+  useEffect(() => {
+    const update = () => {
+      const useRelative =
+        document.documentElement.dataset.timeDisplay === "relative";
+      setRelative(useRelative);
+      const d = new Date(iso);
+      setText(
+        useRelative
+          ? formatDistanceToNowStrict(d, { addSuffix: true })
+          : format(d, "h:mm a")
+      );
+    };
+    update();
+    window.addEventListener("soundfolio:prefs", update);
+    return () => window.removeEventListener("soundfolio:prefs", update);
+  }, [iso]);
+
+  if (isNowPlaying) {
+    return <span className="text-xs font-medium text-primary">Now</span>;
+  }
+
+  return (
+    <time
+      dateTime={iso}
+      className={cn(
+        "shrink-0 text-right text-[11px] tabular-nums text-muted-foreground",
+        relative && "max-w-[5.5rem] truncate"
+      )}
+      title={format(new Date(iso), "PPpp")}
+    >
+      {text}
+    </time>
+  );
+}
+
 export function RecentPlaysList({
   initialStreams,
   compact = false,
   linkable = false,
+  groupByDay = true,
 }: {
   initialStreams: RecentStream[];
   compact?: boolean;
   linkable?: boolean;
+  groupByDay?: boolean;
 }) {
   const streams = initialStreams;
 
   if (streams.length === 0) {
     return (
-      <p
-        className={cn(
-          "text-center text-sm text-muted-foreground",
-          compact ? "px-2 py-6" : "py-10"
-        )}
-      >
-        No plays yet. Import your Spotify data to get started.
+      <p className={cn("text-center text-sm text-muted-foreground", compact ? "px-2 py-6" : "py-10")}>
+        No plays yet.
       </p>
     );
   }
 
-  const RowWrapper = ({
-    stream,
-    children,
-  }: {
-    stream: RecentStream;
-    children: React.ReactNode;
-  }) => {
-    if (!linkable) return <>{children}</>;
-    return (
-      <Link
-        href={trackPath(stream.artistName, stream.trackName)}
-        className="block transition-colors hover:bg-muted/25"
-      >
-        {children}
-      </Link>
-    );
-  };
-
-  if (compact) {
-    return (
-      <ul className="divide-y divide-border/25">
-        {streams.map((stream) => (
-          <li key={stream.id}>
-            <RowWrapper stream={stream}>
-              <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-                <AlbumArt
-                  src={stream.albumArt}
-                  alt={stream.albumName}
-                  width={32}
-                  height={32}
-                  className="size-8 shrink-0 rounded-md ring-1 ring-border/25"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <p className="truncate text-sm font-medium leading-snug">{stream.trackName}</p>
-                    {stream.isNowPlaying ? (
-                      <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                        Now
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="truncate text-xs leading-snug text-muted-foreground">
-                    {stream.artistName}
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  {stream.isNowPlaying ? (
-                    <p className="text-xs font-medium text-primary">Playing</p>
-                  ) : (
-                    <>
-                      <p className="text-xs tabular-nums leading-none text-muted-foreground">
-                        <LocalDateTime date={stream.playedAt} pattern="MMM d" />
-                      </p>
-                      <p className="text-xs tabular-nums leading-none text-muted-foreground">
-                        <LocalDateTime date={stream.playedAt} pattern="h:mm a" />
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-            </RowWrapper>
-          </li>
-        ))}
-      </ul>
-    );
+  const groups: { key: string; label: string; items: RecentStream[] }[] = [];
+  if (groupByDay) {
+    for (const stream of streams) {
+      const key = dayKey(stream.playedAt);
+      const last = groups[groups.length - 1];
+      if (last?.key === key) last.items.push(stream);
+      else groups.push({ key, label: dayLabel(stream.playedAt), items: [stream] });
+    }
+  } else {
+    groups.push({ key: "all", label: "", items: streams });
   }
 
   return (
-    <div>
-      <div className="grid gap-x-4 gap-y-0 divide-y divide-border/30 md:grid-cols-2 xl:grid-cols-3 xl:divide-y-0">
-        {streams.map((stream) => (
-          <RowWrapper key={stream.id} stream={stream}>
-            <div className="group flex items-center gap-2.5 px-1 py-2 sm:px-2">
-              <AlbumArt
-                src={stream.albumArt}
-                alt={stream.albumName}
-                width={36}
-                height={36}
-                className="size-9 shrink-0 rounded-md ring-1 ring-border/35"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <p className="truncate text-sm font-medium leading-tight">{stream.trackName}</p>
-                  {stream.isNowPlaying ? (
-                    <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                      Now
-                    </span>
-                  ) : null}
+    <div className="space-y-3">
+      {groups.map((group) => (
+        <section key={group.key} className="min-w-0">
+          {group.label ? (
+            <h3 className="sticky top-0 z-[1] border-b border-border bg-card px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {group.label}
+            </h3>
+          ) : null}
+          <ul>
+            {group.items.map((stream) => {
+              const row = (
+                <div
+                  data-row
+                  className={cn(
+                    "flex items-center gap-2.5 px-2 transition-colors hover:bg-secondary/50",
+                    compact ? "py-1.5" : "py-2"
+                  )}
+                >
+                  <AlbumArt
+                    src={stream.albumArt}
+                    alt={stream.albumName}
+                    width={compact ? 32 : 40}
+                    height={compact ? 32 : 40}
+                    className={cn(
+                      "shrink-0 rounded",
+                      compact ? "size-8" : "size-10"
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium leading-tight">{stream.trackName}</p>
+                    <p className="truncate text-xs leading-tight text-muted-foreground">
+                      {stream.artistName}
+                    </p>
+                  </div>
+                  <PlayTime iso={stream.playedAt} isNowPlaying={stream.isNowPlaying} />
                 </div>
-                <p className="truncate text-xs leading-tight text-muted-foreground">
-                  {stream.artistName}
-                  <span className="hidden sm:inline"> · {stream.albumName}</span>
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                {!stream.isNowPlaying ? (
-                  <p className="text-[11px] tabular-nums leading-tight text-muted-foreground sm:text-xs">
-                    <LocalDateTime date={stream.playedAt} pattern="MMM d" />
-                    <span className="hidden sm:inline">
-                      {" "}
-                      · <LocalDateTime date={stream.playedAt} pattern="h:mm a" />
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-xs font-medium text-primary">Playing</p>
-                )}
-              </div>
-            </div>
-          </RowWrapper>
-        ))}
-      </div>
+              );
+
+              return (
+                <li key={stream.id}>
+                  {linkable ? (
+                    <Link
+                      href={trackPath(stream.artistName, stream.trackName)}
+                      className="block"
+                    >
+                      {row}
+                    </Link>
+                  ) : (
+                    row
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

@@ -20,6 +20,7 @@ export function AlbumArt({ src, alt, width = 40, height = 40, className }: Album
   if (!src || error || isPlaceholder) {
     return (
       <div
+        data-art
         className={`bg-secondary shrink-0 flex items-center justify-center ${className ?? ""}`}
         style={{ width, height }}
       />
@@ -28,6 +29,7 @@ export function AlbumArt({ src, alt, width = 40, height = 40, className }: Album
 
   return (
     <Image
+      data-art
       src={src}
       alt={alt}
       width={width}

@@ -7,18 +7,25 @@ struct PeriodPicker: View {
     @State private var customToDate = Date()
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                if preferences.usesCustomRange {
-                    customRangeChip
-                }
-                ForEach(StatsPeriod.allCases) { period in
-                    if period == .all || !preferences.usesCustomRange {
-                        periodChip(period)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("PERIOD")
+                .font(SoundfolioTheme.labelFont)
+                .tracking(0.6)
+                .foregroundStyle(SoundfolioTheme.mutedForeground)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    if preferences.usesCustomRange {
+                        customRangeChip
                     }
-                }
-                if !preferences.usesCustomRange {
-                    customButton
+                    ForEach(StatsPeriod.allCases) { period in
+                        if period == .all || !preferences.usesCustomRange {
+                            periodChip(period)
+                        }
+                    }
+                    if !preferences.usesCustomRange {
+                        customButton
+                    }
                 }
             }
         }
@@ -27,18 +34,21 @@ struct PeriodPicker: View {
         }
     }
 
+    private var accent: Color { SoundfolioTheme.accent(from: preferences) }
+    private var radius: CGFloat { SoundfolioTheme.cornerRadius(from: preferences) }
+
     private var customRangeChip: some View {
         Button {
             prepareCustomDates()
             showCustomRange = true
         } label: {
             Text(preferences.customFrom.isEmpty ? "Custom" : "\(preferences.customFrom) – \(preferences.customTo)")
-                .font(.caption.weight(.semibold))
+                .font(SoundfolioFont.medium(12))
                 .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(SoundfolioTheme.accent(from: preferences).opacity(0.18))
-                .foregroundStyle(SoundfolioTheme.accent(from: preferences))
-                .clipShape(Capsule())
+                .frame(minHeight: SoundfolioTheme.controlMinHeight - 8)
+                .background(accent.opacity(0.15))
+                .foregroundStyle(accent)
+                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -49,12 +59,12 @@ struct PeriodPicker: View {
             showCustomRange = true
         } label: {
             Text("Custom")
-                .font(.caption.weight(.semibold))
+                .font(SoundfolioFont.medium(12))
                 .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(.tertiarySystemFill))
+                .frame(minHeight: SoundfolioTheme.controlMinHeight - 8)
+                .background(SoundfolioTheme.mutedFill)
                 .foregroundStyle(.primary)
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -67,12 +77,12 @@ struct PeriodPicker: View {
             preferences.period = period
         } label: {
             Text(period.label)
-                .font(.caption.weight(.semibold))
+                .font(SoundfolioFont.medium(12))
                 .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(selected ? SoundfolioTheme.accent(from: preferences).opacity(0.18) : Color(.tertiarySystemFill))
-                .foregroundStyle(selected ? SoundfolioTheme.accent(from: preferences) : .primary)
-                .clipShape(Capsule())
+                .frame(minHeight: SoundfolioTheme.controlMinHeight - 8)
+                .background(selected ? accent.opacity(0.15) : SoundfolioTheme.mutedFill)
+                .foregroundStyle(selected ? accent : .primary)
+                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -129,47 +139,27 @@ struct SortPicker: View {
     @Bindable var preferences: StatsPreferences
 
     var body: some View {
-        Picker("Rank by", selection: $preferences.sort) {
-            ForEach(TopSortMode.allCases) { mode in
-                Text(mode.label).tag(mode)
-            }
-        }
-        .pickerStyle(.segmented)
+        SoundfolioSegmentedControl(
+            title: "Rank by",
+            options: TopSortMode.allCases.map { ($0, $0.label) },
+            selection: $preferences.sort
+        )
     }
 }
 
 struct MetricsGrid: View {
+    @Environment(StatsPreferences.self) private var preferences
     let metrics: [OverviewMetric]
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var columns: [GridItem] {
-        let count = horizontalSizeClass == .regular ? 6 : 3
-        return Array(repeating: GridItem(.flexible(), spacing: 6), count: count)
+        SoundfolioTheme.metricColumns(for: horizontalSizeClass)
     }
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 6) {
+        LazyVGrid(columns: columns, spacing: 8) {
             ForEach(metrics) { metric in
-                VStack(spacing: 2) {
-                    Text(metric.label.uppercased())
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Text(metric.value)
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    if let hint = metric.hint {
-                        Text(hint)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, minHeight: SoundfolioTheme.metricCellHeight)
-                .padding(.vertical, 6)
-                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                StatCard(label: metric.label, value: metric.value, hint: metric.hint)
             }
         }
     }
@@ -186,8 +176,8 @@ struct SyncStatusLabel: View {
                     .controlSize(.small)
             }
             Text(statusText)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(SoundfolioTheme.captionFont)
+                .foregroundStyle(SoundfolioTheme.mutedForeground)
                 .lineLimit(1)
         }
     }

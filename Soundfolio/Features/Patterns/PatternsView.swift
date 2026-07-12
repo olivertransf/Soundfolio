@@ -10,7 +10,7 @@ struct PatternsView: View {
     @State private var data: PatternsResponse?
     @State private var loading = true
     @State private var error: String?
-    @State private var metric: ChartMetric = .minutes
+    @State private var metric: TopSortMode = .minutes
 
     private var accent: Color { SoundfolioTheme.accent(from: preferences) }
 
@@ -19,71 +19,35 @@ struct PatternsView: View {
             VStack(alignment: .leading, spacing: SoundfolioTheme.sectionSpacing(for: horizontalSizeClass)) {
                 FilterToolbar(preferences: preferences, context: .patterns)
 
-                Text("Hours use your local timezone (\(TimeZone.current.identifier.replacingOccurrences(of: "_", with: " "))).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                SoundfolioSegmentedControl(
+                    title: "Show",
+                    options: [(TopSortMode.minutes, "Time"), (TopSortMode.streams, "Plays")],
+                    selection: $metric
+                )
 
                 if loading {
                     ProgressView().frame(maxWidth: .infinity, minHeight: 120)
                 } else if let error {
                     VStack(spacing: 8) {
                         Text(error)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(SoundfolioTheme.rowSubtitleFont)
+                            .foregroundStyle(SoundfolioTheme.mutedForeground)
                         Button("Retry") { Task { await load() } }
                             .buttonStyle(.bordered)
                     }
                     .frame(maxWidth: .infinity, minHeight: 80)
                 } else if let data {
                     insightRow(data)
-                    metricPicker
+
                     if horizontalSizeClass == .regular {
-                        HStack(alignment: .top, spacing: 16) {
-                            patternCard(title: "By hour of day") {
-                                SoundfolioBarChart(
-                                    points: data.byHour.map { ($0.label, Double(metric == .minutes ? $0.minutes : $0.streams)) },
-                                    labelStyle: .hourOfDay,
-                                    yValueSuffix: metric == .minutes ? "m" : nil,
-                                    accent: accent
-                                )
-                            }
-                            patternCard(title: "By weekday") {
-                                SoundfolioBarChart(
-                                    points: data.byDay.map { ($0.label, Double(metric == .minutes ? $0.minutes : $0.streams)) },
-                                    labelStyle: .weekday,
-                                    yValueSuffix: metric == .minutes ? "m" : nil,
-                                    accent: accent
-                                )
-                            }
+                        HStack(alignment: .top, spacing: 12) {
+                            rankedList(title: "By hour", rows: hourRows(data))
+                            rankedList(title: "By weekday", rows: dayRows(data))
                         }
                     } else {
-                        patternCard(title: "By hour of day") {
-                            SoundfolioBarChart(
-                                points: data.byHour.map { ($0.label, Double(metric == .minutes ? $0.minutes : $0.streams)) },
-                                labelStyle: .hourOfDay,
-                                yValueSuffix: metric == .minutes ? "m" : nil,
-                                accent: accent
-                            )
-                        }
-                        patternCard(title: "By weekday") {
-                            SoundfolioBarChart(
-                                points: data.byDay.map { ($0.label, Double(metric == .minutes ? $0.minutes : $0.streams)) },
-                                labelStyle: .weekday,
-                                yValueSuffix: metric == .minutes ? "m" : nil,
-                                accent: accent
-                            )
-                        }
+                        rankedList(title: "By hour", rows: hourRows(data))
+                        rankedList(title: "By weekday", rows: dayRows(data))
                     }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Week × hour")
-                            .font(.subheadline.weight(.semibold))
-                        ListeningHeatmapView(
-                            grid: data.heatmap.grid,
-                            dayNames: data.heatmap.dayNames,
-                            accent: accent
-                        )
-                    }
-                    .soundfolioCard()
                 }
             }
             .soundfolioPage()
@@ -105,15 +69,6 @@ struct PatternsView: View {
         "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(streamStore.revision)"
     }
 
-    private var metricPicker: some View {
-        Picker("Metric", selection: $metric) {
-            ForEach(ChartMetric.allCases) { m in
-                Text(m.rawValue.capitalized).tag(m)
-            }
-        }
-        .pickerStyle(.segmented)
-    }
-
     @ViewBuilder
     private func insightRow(_ data: PatternsResponse) -> some View {
         let peakHour = StatsEngine.peakHour(from: data)
@@ -122,25 +77,74 @@ struct PatternsView: View {
             InsightCard(
                 label: "Busiest hour",
                 primaryValue: peakHour.map { formatHourLabel($0.label) } ?? "—",
-                detail: peakHour.map { "\($0.minutes.formatted()) min · \($0.streams.formatted()) plays" } ?? "No plays in this range.",
+                detail: peakHour.map { metricDetail($0.minutes, $0.streams) } ?? "No plays in this range.",
                 accent: accent
             )
             InsightCard(
                 label: "Busiest day",
                 primaryValue: peakDay?.label ?? "—",
-                detail: peakDay.map { "\($0.minutes.formatted()) min · \($0.streams.formatted()) plays" } ?? "No plays in this range.",
+                detail: peakDay.map { metricDetail($0.minutes, $0.streams) } ?? "No plays in this range.",
                 accent: accent
             )
         }
     }
 
-    private func patternCard<Content: View>(title: String, @ViewBuilder chart: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-            chart()
+    private func metricDetail(_ minutes: Int, _ streams: Int) -> String {
+        metric == .streams
+            ? "\(streams.formatted()) plays"
+            : "\(minutes.formatted()) min"
+    }
+
+    private struct PatternRowData: Identifiable {
+        let id: String
+        let label: String
+        let value: String
+        let fraction: Double
+    }
+
+    private func hourRows(_ data: PatternsResponse) -> [PatternRowData] {
+        let values = data.byHour.map { metric == .minutes ? $0.minutes : $0.streams }
+        let maxValue = max(values.max() ?? 1, 1)
+        return data.byHour.map { point in
+            let raw = metric == .minutes ? point.minutes : point.streams
+            return PatternRowData(
+                id: point.label,
+                label: formatHourLabel(point.label),
+                value: RankValueFormatter.primary(minutes: point.minutes, streams: point.streams, sort: metric),
+                fraction: Double(raw) / Double(maxValue)
+            )
         }
-        .soundfolioCard()
+        .sorted { $0.fraction > $1.fraction }
+    }
+
+    private func dayRows(_ data: PatternsResponse) -> [PatternRowData] {
+        let values = data.byDay.map { metric == .minutes ? $0.minutes : $0.streams }
+        let maxValue = max(values.max() ?? 1, 1)
+        return data.byDay.map { point in
+            let raw = metric == .minutes ? point.minutes : point.streams
+            return PatternRowData(
+                id: point.label,
+                label: point.label,
+                value: RankValueFormatter.primary(minutes: point.minutes, streams: point.streams, sort: metric),
+                fraction: Double(raw) / Double(maxValue)
+            )
+        }
+        .sorted { $0.fraction > $1.fraction }
+    }
+
+    private func rankedList(title: String, rows: [PatternRowData]) -> some View {
+        RankColumn(title: title) {
+            VStack(spacing: 0) {
+                ForEach(rows) { row in
+                    PatternRankRow(
+                        label: row.label,
+                        value: row.value,
+                        fraction: row.fraction,
+                        accent: accent
+                    )
+                }
+            }
+        }
     }
 
     private func load() async {

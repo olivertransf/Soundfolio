@@ -55,6 +55,7 @@ struct RootView: View {
         .environment(navigation)
         .tint(SoundfolioTheme.accent(from: preferences))
         .preferredColorScheme(preferences.preferredColorScheme)
+        .background(SoundfolioTheme.pageBackground.ignoresSafeArea())
         .task(id: auth.isSignedIn && !auth.needsOnboarding) {
             guard auth.isSignedIn, !auth.needsOnboarding, let uid = auth.user?.uid else {
                 streamStore.stop()

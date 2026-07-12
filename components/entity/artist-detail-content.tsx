@@ -1,9 +1,9 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import Image from "next/image";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArtistArt } from "@/components/artist-art";
+import { AlbumArt } from "@/components/album-art";
 import { EntityHero, EntityStatPill } from "@/components/entity/entity-hero";
 import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
 import { RankedEntityList } from "@/components/ranked-entity-list";
@@ -74,10 +74,14 @@ function ArtistDetailInner() {
                 subtitle: track.albumName,
                 streams: track.streams,
                 minutes: track.minutesListened,
-                leading: track.albumArt ? (
-                  <Image src={track.albumArt} alt={track.albumName} width={36} height={36} className="size-9 rounded" />
-                ) : (
-                  <div className="size-9 rounded bg-secondary" />
+                leading: (
+                  <AlbumArt
+                    src={track.albumArt}
+                    alt={track.albumName}
+                    width={36}
+                    height={36}
+                    className="size-9 rounded"
+                  />
                 ),
               }))}
             />
@@ -96,10 +100,14 @@ function ArtistDetailInner() {
                 subtitle: album.artistName,
                 streams: album.streams,
                 minutes: album.minutesListened,
-                leading: album.albumArt ? (
-                  <Image src={album.albumArt} alt={album.albumName} width={36} height={36} className="size-9 rounded" />
-                ) : (
-                  <div className="size-9 rounded bg-secondary" />
+                leading: (
+                  <AlbumArt
+                    src={album.albumArt}
+                    alt={album.albumName}
+                    width={36}
+                    height={36}
+                    className="size-9 rounded"
+                  />
                 ),
               }))}
             />

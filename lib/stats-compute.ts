@@ -29,6 +29,12 @@ import {
 export type { TopSortBy } from "@/lib/top-sort";
 export { parseTopSortBy, TOP_SORT_PARAM, topSortLabel } from "@/lib/top-sort";
 
+const ART_PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
+
+export function isUsableArtUrl(url: string | null | undefined): url is string {
+  return Boolean(url && !url.includes(ART_PLACEHOLDER_HASH));
+}
+
 export type TimeRangePreset = "30d" | "3m" | "6m" | "1y" | "ytd" | "all";
 export { DEFAULT_TIME_RANGE } from "@/lib/time-range";
 
@@ -172,9 +178,19 @@ export function computeTopArtists(
   filter?: TimeRangeFilter,
   sortBy: TopSortBy = "minutes"
 ) {
-  const PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
+  const artistArtByKey = new Map<string, string>();
+  for (const row of streams) {
+    const key = artistGroupKey(row.artistName);
+    if (!artistArtByKey.has(key) && isUsableArtUrl(row.artistArt)) {
+      artistArtByKey.set(key, row.artistArt);
+    }
+  }
+
   const rows = filterForStats(streams, filter);
-  const groups = new Map<string, { artistName: string; streams: number; durationMs: number; artistArt: string | null }>();
+  const groups = new Map<
+    string,
+    { artistName: string; streams: number; durationMs: number }
+  >();
 
   for (const row of rows) {
     const key = artistGroupKey(row.artistName);
@@ -182,25 +198,17 @@ export function computeTopArtists(
       artistName: row.artistName,
       streams: 0,
       durationMs: 0,
-      artistArt: null,
     };
     group.streams += 1;
     group.durationMs += row.durationMs;
     group.artistName = pickBetterDisplayName(group.artistName, row.artistName);
-    if (
-      row.artistArt &&
-      !row.artistArt.includes(PLACEHOLDER) &&
-      !group.artistArt
-    ) {
-      group.artistArt = row.artistArt;
-    }
     groups.set(key, group);
   }
 
-  return [...groups.values()]
-    .map((group) => ({
+  return [...groups.entries()]
+    .map(([key, group]) => ({
       artistName: group.artistName,
-      artistArt: group.artistArt,
+      artistArt: artistArtByKey.get(key) ?? null,
       streams: group.streams,
       minutesListened: Math.round(group.durationMs / 60000),
     }))
@@ -531,7 +539,11 @@ export function computeArtistDetail(
   );
   return {
     artistName: artistNameResolved,
-    artistArt: rows.find((row) => row.artistArt)?.artistArt ?? null,
+    artistArt:
+      streams.find(
+        (row) =>
+          matchesEntity(row.artistName, artistName) && isUsableArtUrl(row.artistArt)
+      )?.artistArt ?? null,
     streams: rows.length,
     minutesListened: Math.round(totalMs / 60000),
     topTracks: computeTopTracks(rows, 10, filter, sortBy),

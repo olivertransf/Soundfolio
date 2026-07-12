@@ -25,8 +25,8 @@
     "db:seed-demo-firestore": "npx tsx scripts/seed-demo-firestore.ts",
     "db:repair-streams": "npx tsx scripts/repair-inflated-streams.ts",
     "db:repair-streams:dry-run": "npx tsx scripts/repair-inflated-streams.ts --dry-run",
-    "db:backfill-lfm-duration": "npx tsx scripts/backfill-lastfm-catalog-duration.ts",
-    "db:backfill-lfm-duration:dry-run": "npx tsx scripts/backfill-lastfm-catalog-duration.ts --dry-run",
+    "db:backfill-lfm-duration": "npx tsx scripts/backfill-lastfm-catalog-duration-firestore.ts",
+    "db:backfill-lfm-duration:dry-run": "npx tsx scripts/backfill-lastfm-catalog-duration-firestore.ts --dry-run",
     "db:recompute-lfm-listen": "npx tsx scripts/recompute-lastfm-listen-duration.ts",
     "db:recompute-lfm-listen:dry-run": "npx tsx scripts/recompute-lastfm-listen-duration.ts --dry-run",
     "db:validate-listen": "npx tsx scripts/validate-listen-durations.ts",
@@ -50,7 +50,6 @@
     "next": "^16.2.9",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "recharts": "^3.8.0",
     "shadcn": "^4.0.3",
     "tailwind-merge": "^3.5.0",
     "tw-animate-css": "^1.4.0"

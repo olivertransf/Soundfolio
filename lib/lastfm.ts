@@ -14,6 +14,11 @@ export function isLastFmConfigured() {
   return Boolean(lastFmApiKey() && lastFmUsername());
 }
 
+/** True when track/artist/album lookups can run (username not required). */
+export function lastFmApiKeyConfigured() {
+  return Boolean(lastFmApiKey());
+}
+
 interface LastFmTrack {
   artist: { "#text": string };
   name: string;

@@ -227,27 +227,14 @@ enum StatsEngine {
         var buckets: [String: (minutes: Int, streams: Int)] = [:]
 
         for row in rows {
-            let key: String
-            switch preferences.chartGroupBy {
-            case .months:
-                key = monthKey(for: row.playedAt, calendar: calendar)
-            case .weeks:
-                key = weekKey(for: row.playedAt, calendar: calendar)
-            case .days:
-                key = dayKey(for: row.playedAt, calendar: calendar)
-            }
+            let key = weekKey(for: row.playedAt, calendar: calendar)
             var bucket = buckets[key] ?? (0, 0)
             bucket.streams += 1
             bucket.minutes += row.durationMs / 60_000
             buckets[key] = bucket
         }
 
-        let cap: Int
-        switch preferences.chartGroupBy {
-        case .days: cap = 90
-        case .weeks: cap = 26
-        case .months: cap = 12
-        }
+        let cap = 26
 
         return buckets.keys.sorted().suffix(cap).map { label in
             let bucket = buckets[label] ?? (0, 0)

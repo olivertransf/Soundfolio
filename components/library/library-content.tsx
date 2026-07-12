@@ -2,18 +2,16 @@
 
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BarChart3, Clock, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader, PageShell } from "@/components/page-shell";
-import { PageHistoryActions } from "@/components/page-history-actions";
 import { LibraryRecentSection } from "@/components/library/recent-section";
 import { LibraryRankingsSection } from "@/components/library/rankings-section";
 import { LibraryPatternsSection } from "@/components/library/patterns-section";
 
 const sections = [
-  { id: "recent", label: "Recent", description: "Latest listens", icon: Clock },
-  { id: "rankings", label: "Rankings", description: "Top tracks, artists, albums", icon: Trophy },
-  { id: "patterns", label: "Patterns", description: "When and how you listen", icon: BarChart3 },
+  { id: "recent", label: "Recent" },
+  { id: "rankings", label: "Rankings" },
+  { id: "patterns", label: "Patterns" },
 ] as const;
 
 type LibrarySection = (typeof sections)[number]["id"];
@@ -30,50 +28,40 @@ function LibraryContentInner() {
   };
 
   return (
-    <PageShell width="wide">
-      <PageHeader
-        title="Library"
-        description="Explore recent plays, rankings, and listening patterns."
-        actions={<PageHistoryActions />}
-      />
+    <PageShell>
+      <PageHeader title="Library" />
 
-      <div className="grid gap-3 lg:grid-cols-[9.5rem_minmax(0,1fr)] lg:items-start">
-        <nav
-          className="flex gap-1 overflow-x-auto rounded-xl border border-border/40 bg-card/30 p-1 lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:flex-col lg:overflow-visible lg:p-1.5"
-          aria-label="Library sections"
-        >
-          {sections.map((item) => {
-            const Icon = item.icon;
-            const isActive = section === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setSection(item.id)}
-                className={cn(
-                  "flex min-w-[7.25rem] shrink-0 items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors lg:min-w-0 lg:w-full",
-                  isActive
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-                )}
-              >
-                <Icon className="size-4 shrink-0 opacity-90" aria-hidden />
-                <span className="min-w-0">
-                  <span className="block text-xs font-medium leading-tight">{item.label}</span>
-                  <span className="hidden text-[11px] leading-tight text-muted-foreground lg:block">
-                    {item.description}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </nav>
+      <nav
+        role="tablist"
+        aria-label="Library sections"
+        className="flex w-full border border-border bg-card p-0.5"
+      >
+        {sections.map((item) => {
+          const isActive = section === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setSection(item.id)}
+              className={cn(
+                "min-h-11 flex-1 px-3 py-2 text-xs font-medium transition-colors",
+                isActive
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              )}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
 
-        <div className="min-w-0 space-y-3">
-          {section === "recent" ? <LibraryRecentSection /> : null}
-          {section === "rankings" ? <LibraryRankingsSection /> : null}
-          {section === "patterns" ? <LibraryPatternsSection /> : null}
-        </div>
+      <div className="min-w-0 space-y-3">
+        {section === "recent" ? <LibraryRecentSection /> : null}
+        {section === "rankings" ? <LibraryRankingsSection /> : null}
+        {section === "patterns" ? <LibraryPatternsSection /> : null}
       </div>
     </PageShell>
   );

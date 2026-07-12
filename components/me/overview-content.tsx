@@ -1,37 +1,30 @@
 "use client";
 
-import { Suspense, useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Clock, Headphones, Music, Play, Users } from "lucide-react";
-import { InsightCard } from "@/components/insight-card";
 import { StatCard } from "@/components/stat-card";
-import { ListeningActivity } from "@/components/listening-activity";
 import { ArtistArt } from "@/components/artist-art";
 import { AlbumArt } from "@/components/album-art";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { ContentPanel, PageHeader, PageShell, SectionBlock } from "@/components/page-shell";
-import { PageHistoryActions } from "@/components/page-history-actions";
+import { PageShell } from "@/components/page-shell";
 import { LiveSyncStatus } from "@/components/live-sync-status";
 import { useStreams } from "@/components/streams-provider";
 import { EntityKindTabs, type EntityKind } from "@/components/entity-kind-tabs";
 import { RankedEntityList } from "@/components/ranked-entity-list";
-import { RecentPlaysPanel } from "@/components/recent-plays-panel";
+import { RankColumn, ResponsiveColumns } from "@/components/responsive-columns";
+import { RecentPlaysPanel, RecentPlaysSeeAllLink } from "@/components/recent-plays-panel";
+import { FilterToolbar } from "@/components/filter-toolbar";
 import { librarySectionHref } from "@/components/library/library-content";
 import {
   calendarDaysInFilter,
   computeListeningDiversity,
   computeListeningSpan,
-  computePeakDay,
-  computePeakHour,
   computeRecentStreams,
   computeTopAlbums,
   computeTopArtists,
   computeTopTracks,
   computeTotalStats,
-  formatHourLabel,
   parseTimeRange,
   parseTopSortBy,
 } from "@/lib/stats-compute";
@@ -41,6 +34,9 @@ import {
   detectViewerTimeZone,
   readViewerTimeZoneCookie,
 } from "@/lib/viewer-timezone-client";
+
+const TOP_PREVIEW = 20;
+const RECENT_PREVIEW = 40;
 
 export function OverviewContent() {
   const searchParams = useSearchParams();
@@ -63,19 +59,29 @@ export function OverviewContent() {
   );
 
   const stats = useMemo(() => computeTotalStats(deferredStreams, filter), [deferredStreams, filter]);
-  const topTracks = useMemo(() => computeTopTracks(deferredStreams, 5, filter, sortBy), [deferredStreams, filter, sortBy]);
-  const topArtists = useMemo(() => computeTopArtists(deferredStreams, 5, filter, sortBy), [deferredStreams, filter, sortBy]);
-  const topAlbums = useMemo(() => computeTopAlbums(deferredStreams, 5, filter, sortBy), [deferredStreams, filter, sortBy]);
-  const diversity = useMemo(() => computeListeningDiversity(deferredStreams, filter), [deferredStreams, filter]);
-  const span = useMemo(() => computeListeningSpan(deferredStreams, filter), [deferredStreams, filter]);
-  const recentStreams = useMemo(() => computeRecentStreams(deferredStreams, 7), [deferredStreams]);
-  const peakHour = useMemo(
-    () => computePeakHour(deferredStreams, filter, viewerTimeZone ?? undefined),
-    [deferredStreams, filter, viewerTimeZone]
+  const topTracks = useMemo(
+    () => computeTopTracks(deferredStreams, TOP_PREVIEW, filter, sortBy),
+    [deferredStreams, filter, sortBy]
   );
-  const peakDay = useMemo(
-    () => computePeakDay(deferredStreams, filter, viewerTimeZone ?? undefined),
-    [deferredStreams, filter, viewerTimeZone]
+  const topArtists = useMemo(
+    () => computeTopArtists(deferredStreams, TOP_PREVIEW, filter, sortBy),
+    [deferredStreams, filter, sortBy]
+  );
+  const topAlbums = useMemo(
+    () => computeTopAlbums(deferredStreams, TOP_PREVIEW, filter, sortBy),
+    [deferredStreams, filter, sortBy]
+  );
+  const diversity = useMemo(
+    () => computeListeningDiversity(deferredStreams, filter),
+    [deferredStreams, filter]
+  );
+  const span = useMemo(
+    () => computeListeningSpan(deferredStreams, filter),
+    [deferredStreams, filter]
+  );
+  const recentStreams = useMemo(
+    () => computeRecentStreams(deferredStreams, RECENT_PREVIEW),
+    [deferredStreams]
   );
 
   const days = calendarDaysInFilter(filter, span, viewerTimeZone ?? undefined);
@@ -83,8 +89,14 @@ export function OverviewContent() {
   const avgStreamsPerDay = Math.round(stats.totalStreams / days);
   const hasData = stats.totalStreams > 0;
 
-  const libraryRecentHref = librarySectionHref("recent", new URLSearchParams(searchParams.toString()));
-  const libraryRankingsHref = librarySectionHref("rankings", new URLSearchParams(searchParams.toString()));
+  const libraryRecentHref = librarySectionHref(
+    "recent",
+    new URLSearchParams(searchParams.toString())
+  );
+  const libraryRankingsHref = librarySectionHref(
+    "rankings",
+    new URLSearchParams(searchParams.toString())
+  );
 
   if (loading) {
     return (
@@ -97,7 +109,7 @@ export function OverviewContent() {
   if (!hasData) {
     return (
       <div className="flex py-24 flex-col items-center justify-center gap-4 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+        <div className="flex h-14 w-14 items-center justify-center bg-primary/10">
           <Music className="h-7 w-7 text-primary" />
         </div>
         <h1 className="text-2xl font-bold">No data yet</h1>
@@ -115,119 +127,83 @@ export function OverviewContent() {
   }
 
   return (
-    <PageShell width="wide">
-      <PageHeader
-        title="Dashboard"
-        description={`Dense overview of ${filter.label.toLowerCase()} listening.`}
-        actions={<PageHistoryActions />}
-        meta={
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 text-primary">
-              {filter.label}
-            </Badge>
-            {refreshing || loadingMore ? (
-              <Badge variant="secondary" className="rounded-full border border-border/40 bg-secondary/40">
-                Updating history
-              </Badge>
-            ) : null}
-            {span ? (
-              <span className="text-xs text-muted-foreground">
-                {span.first.toLocaleDateString()} – {span.last.toLocaleDateString()}
-              </span>
-            ) : null}
-          </div>
-        }
-      />
+    <PageShell className="space-y-3">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+        <div className="min-w-0 space-y-3">
+          <FilterToolbar context="dashboard" />
 
-      <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:items-start">
-        <div className="space-y-3">
-          <section className="space-y-2.5">
-            <div>
-              <h2 className="font-display text-base font-semibold tracking-tight sm:text-lg">
-                Listening at a glance
-              </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-                {stats.totalStreams.toLocaleString()} plays · {diversity.uniqueArtists.toLocaleString()} artists ·{" "}
-                {diversity.uniqueTracks.toLocaleString()} tracks
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              <StatCard label="Minutes" value={stats.totalMinutes.toLocaleString()} sub={`${stats.totalHours.toLocaleString()} hours`} icon={Clock} variant="compact" />
-              <StatCard label="Plays" value={stats.totalStreams.toLocaleString()} sub={filter.label} icon={Play} variant="compact" />
-              <StatCard label="Min / day" value={avgMinPerDay.toLocaleString()} sub={`~${days} days`} icon={Clock} variant="compact" />
-              <StatCard label="Plays / day" value={avgStreamsPerDay.toLocaleString()} icon={Headphones} variant="compact" />
-              <StatCard label="Tracks" value={diversity.uniqueTracks.toLocaleString()} sub="unique" icon={Music} variant="compact" />
-              <StatCard label="Artists" value={diversity.uniqueArtists.toLocaleString()} sub="unique" icon={Users} variant="compact" />
-            </div>
-          </section>
-
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
-            <Suspense
-              fallback={
-                <Card className="rounded-xl border border-border/40 bg-card/40 shadow-none ring-0">
-                  <CardContent className="flex h-[220px] items-center justify-center px-4 text-sm text-muted-foreground">
-                    Loading chart…
-                  </CardContent>
-                </Card>
-              }
-            >
-              <ListeningActivity periodLabel={filter.label} compact />
-            </Suspense>
-
-            <SectionBlock
-              title="Top rankings"
-              description={`By ${sortBy}`}
-              action={
-                <Link href={libraryRankingsHref} className="text-xs font-medium text-primary hover:underline">
-                  See all
-                </Link>
-              }
-            >
-              <EntityKindTabs value={previewKind} onValueChange={setPreviewKind} />
-              <ContentPanel>
-                <TopPreviewList
-                  kind={previewKind}
-                  sortBy={sortBy}
-                  tracks={topTracks}
-                  artists={topArtists}
-                  albums={topAlbums}
-                />
-              </ContentPanel>
-            </SectionBlock>
-          </div>
-        </div>
-
-        <aside className="space-y-3 2xl:sticky 2xl:top-[calc(4.25rem+env(safe-area-inset-top,0px))]">
-          <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-1">
-            <InsightCard
-              label="Busiest hour"
-              primaryValue={peakHour ? formatHourLabel(peakHour.label) : "—"}
-              detail={
-                peakHour
-                  ? `${peakHour.minutes.toLocaleString()} min · ${peakHour.streams.toLocaleString()} plays`
-                  : "No plays in this range."
-              }
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <StatCard
+              label="Minutes"
+              value={stats.totalMinutes.toLocaleString()}
+              sub={`${stats.totalHours.toLocaleString()} hrs`}
+              icon={Clock}
+              variant="compact"
             />
-            <InsightCard
-              label="Busiest day"
-              primaryValue={peakDay?.label ?? "—"}
-              detail={
-                peakDay
-                  ? `${peakDay.minutes.toLocaleString()} min · ${peakDay.streams.toLocaleString()} plays`
-                  : "No plays in this range."
-              }
+            <StatCard
+              label="Plays"
+              value={stats.totalStreams.toLocaleString()}
+              icon={Play}
+              variant="compact"
+            />
+            <StatCard
+              label="Min / day"
+              value={avgMinPerDay.toLocaleString()}
+              sub={`~${days}d`}
+              icon={Clock}
+              variant="compact"
+            />
+            <StatCard
+              label="Plays / day"
+              value={avgStreamsPerDay.toLocaleString()}
+              icon={Headphones}
+              variant="compact"
+            />
+            <StatCard
+              label="Tracks"
+              value={diversity.uniqueTracks.toLocaleString()}
+              icon={Music}
+              variant="compact"
+            />
+            <StatCard
+              label="Artists"
+              value={diversity.uniqueArtists.toLocaleString()}
+              icon={Users}
+              variant="compact"
             />
           </div>
 
-          <RecentPlaysPanel
-            compact
-            streams={recentStreams}
-            description={`Last ${recentStreams.length} listens`}
-            action={
-              <Link href={libraryRecentHref} className="text-xs font-medium text-primary hover:underline">
+          {(refreshing || loadingMore) ? (
+            <p className="text-xs text-muted-foreground">Updating history…</p>
+          ) : null}
+
+          <section className="space-y-2">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold tracking-tight">Top rankings</h2>
+              <Link
+                href={libraryRankingsHref}
+                className="text-xs font-medium text-primary hover:underline"
+              >
                 See all
               </Link>
-            }
+            </div>
+            <DashboardTopRankings
+              sortBy={sortBy}
+              previewKind={previewKind}
+              onPreviewKindChange={setPreviewKind}
+              tracks={topTracks}
+              artists={topArtists}
+              albums={topAlbums}
+            />
+          </section>
+        </div>
+
+        <aside className="flex min-h-[24rem] min-w-0 flex-col lg:sticky lg:top-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-4.5rem-env(safe-area-inset-top,0px))]">
+          <RecentPlaysPanel
+            compact
+            className="min-h-0 flex-1"
+            streams={recentStreams}
+            action={<RecentPlaysSeeAllLink href={libraryRecentHref} />}
           />
         </aside>
       </div>
@@ -235,75 +211,97 @@ export function OverviewContent() {
   );
 }
 
-function TopPreviewList({
-  kind,
+function DashboardTopRankings({
   sortBy,
+  previewKind,
+  onPreviewKindChange,
   tracks,
   artists,
   albums,
 }: {
-  kind: EntityKind;
   sortBy: "minutes" | "streams";
+  previewKind: EntityKind;
+  onPreviewKindChange: (kind: EntityKind) => void;
   tracks: ReturnType<typeof computeTopTracks>;
   artists: ReturnType<typeof computeTopArtists>;
   albums: ReturnType<typeof computeTopAlbums>;
 }) {
-  if (kind === "tracks") {
-    return (
-      <RankedEntityList
-        columns="one"
-        sortBy={sortBy}
-        items={tracks.map((track) => ({
-          key: track.trackId,
-          href: trackPath(track.artistName, track.trackName),
-          title: track.trackName,
-          subtitle: track.artistName,
-          streams: track.streams,
-          minutes: track.minutesListened,
-          leading: track.albumArt ? (
-            <Image src={track.albumArt} alt={track.albumName} width={34} height={34} className="size-8 shrink-0 rounded" />
-          ) : (
-            <div className="size-8 shrink-0 rounded bg-secondary" />
-          ),
-        }))}
+  const trackItems = tracks.map((track) => ({
+    key: track.trackId,
+    href: trackPath(track.artistName, track.trackName),
+    title: track.trackName,
+    subtitle: track.artistName,
+    streams: track.streams,
+    minutes: track.minutesListened,
+    leading: (
+      <AlbumArt
+        src={track.albumArt}
+        alt={track.albumName}
+        width={32}
+        height={32}
+        className="size-8 shrink-0 rounded"
       />
-    );
-  }
-
-  if (kind === "artists") {
-    return (
-      <RankedEntityList
-        columns="one"
-        sortBy={sortBy}
-        items={artists.map((artist) => ({
-          key: artist.artistName,
-          href: artistPath(artist.artistName),
-          title: artist.artistName,
-          subtitle:
-            sortBy === "streams"
-              ? `${artist.minutesListened.toLocaleString()} min`
-              : `${artist.streams.toLocaleString()} plays`,
-          streams: artist.streams,
-          minutes: artist.minutesListened,
-          leading: <ArtistArt src={artist.artistArt} alt={artist.artistName} width={34} height={34} className="size-8 ring-1 ring-border/25" />,
-        }))}
+    ),
+  }));
+  const artistItems = artists.map((artist) => ({
+    key: artist.artistName,
+    href: artistPath(artist.artistName),
+    title: artist.artistName,
+    streams: artist.streams,
+    minutes: artist.minutesListened,
+    leading: (
+      <ArtistArt
+        src={artist.artistArt}
+        alt={artist.artistName}
+        width={32}
+        height={32}
+        className="size-8 ring-1 ring-border"
       />
-    );
-  }
+    ),
+  }));
+  const albumItems = albums.map((album) => ({
+    key: `${album.albumName}-${album.artistName}`,
+    href: albumPath(album.artistName, album.albumName),
+    title: album.albumName,
+    subtitle: album.artistName,
+    streams: album.streams,
+    minutes: album.minutesListened,
+    leading: (
+      <AlbumArt
+        src={album.albumArt}
+        alt={album.albumName}
+        width={32}
+        height={32}
+        className="size-8 shrink-0 rounded"
+      />
+    ),
+  }));
+  const singleItems =
+    previewKind === "tracks"
+      ? trackItems
+      : previewKind === "artists"
+        ? artistItems
+        : albumItems;
 
   return (
-    <RankedEntityList
-      columns="one"
-      sortBy={sortBy}
-      items={albums.map((album) => ({
-        key: `${album.albumName}-${album.artistName}`,
-        href: albumPath(album.artistName, album.albumName),
-        title: album.albumName,
-        subtitle: album.artistName,
-        streams: album.streams,
-        minutes: album.minutesListened,
-        leading: <AlbumArt src={album.albumArt} alt={album.albumName} width={34} height={34} className="size-8 shrink-0 rounded-md" />,
-      }))}
-    />
+    <>
+      <div className="space-y-2 xl:hidden">
+        <EntityKindTabs value={previewKind} onValueChange={onPreviewKindChange} />
+        <div className="border border-border bg-card p-1.5">
+          <RankedEntityList items={singleItems} sortBy={sortBy} columns="one" />
+        </div>
+      </div>
+      <ResponsiveColumns className="hidden xl:grid" cols={3}>
+        <RankColumn title="Tracks" stickyHeader={false}>
+          <RankedEntityList items={trackItems} sortBy={sortBy} columns="one" />
+        </RankColumn>
+        <RankColumn title="Artists" stickyHeader={false}>
+          <RankedEntityList items={artistItems} sortBy={sortBy} columns="one" />
+        </RankColumn>
+        <RankColumn title="Albums" stickyHeader={false}>
+          <RankedEntityList items={albumItems} sortBy={sortBy} columns="one" />
+        </RankColumn>
+      </ResponsiveColumns>
+    </>
   );
 }

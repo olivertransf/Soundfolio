@@ -86,7 +86,7 @@ final class StatsCache {
         let key = baseKey(
             preferences: preferences,
             revision: revision,
-            suffix: "history-\(preferences.chartGroupBy.rawValue)-\(preferences.chartMetric.rawValue)"
+            suffix: "history-weeks-minutes"
         )
         if let cached = historyByKey[key] { return cached }
         let value = StatsEngine.historyPoints(from: streams, preferences: preferences)

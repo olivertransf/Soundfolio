@@ -29,7 +29,7 @@ export function EntityHero({
               {eyebrow}
             </p>
           ) : null}
-          <h1 className="truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">
             {title}
           </h1>
           {subtitle ? <div className="mt-0.5 text-sm text-muted-foreground">{subtitle}</div> : null}

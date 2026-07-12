@@ -4,24 +4,32 @@ import { getRecentTracks, isLastFmConfigured } from "@/lib/lastfm";
 import {
   filterNovelScrobbles,
   prepareLastFmScrobbleStreams,
-  type IncomingScrobble,
 } from "@/lib/lastfm-sync";
+import { normalizeEntityKey } from "@/lib/entity-normalize";
+import { resolveArtistArt } from "@/lib/resolve-art";
+import { isUsableArtUrl } from "@/lib/stats-compute";
 import {
   VIEWER_TIMEZONE_COOKIE,
   VIEWER_TIMEZONE_PARAM,
   resolveStatsTimeZone,
 } from "@/lib/stats-timezone";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const SYNC_BATCH_SIZE = 40;
 /** Re-fetch this window so middle gaps still import after a partial sync. */
 const SYNC_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
+const MAX_ARTIST_ART_RESOLVES = 8;
 
 type SyncRequestBody = {
   lastfmUsername?: string;
   latestPlayedAt?: string | null;
-  existing?: Array<{ artistName: string; trackName: string; playedAt: string }>;
+  existing?: Array<{
+    artistName: string;
+    trackName: string;
+    playedAt: string;
+    artistArt?: string | null;
+  }>;
 };
 
 function bearerToken(request: NextRequest) {
@@ -67,9 +75,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const latestPlayedAt = body.latestPlayedAt ? new Date(body.latestPlayedAt) : null;
-    const fromTimestamp = latestPlayedAt && !isNaN(latestPlayedAt.getTime())
-      ? Math.max(0, Math.floor((latestPlayedAt.getTime() - SYNC_LOOKBACK_MS) / 1000))
-      : undefined;
+    const fromTimestamp =
+      latestPlayedAt && !isNaN(latestPlayedAt.getTime())
+        ? Math.max(0, Math.floor((latestPlayedAt.getTime() - SYNC_LOOKBACK_MS) / 1000))
+        : undefined;
 
     const tracks = await getRecentTracks(username, 6000, fromTimestamp);
     if (tracks.length === 0) {
@@ -79,7 +88,12 @@ export async function POST(req: NextRequest) {
     const readyThroughMs = Date.now() + 5 * 60 * 1000;
     const readyTracks = tracks.filter((track) => track.playedAt.getTime() <= readyThroughMs);
     if (readyTracks.length === 0) {
-      return NextResponse.json({ synced: 0, streams: [], fetched: tracks.length, message: "No current scrobbles ready" });
+      return NextResponse.json({
+        synced: 0,
+        streams: [],
+        fetched: tracks.length,
+        message: "No current scrobbles ready",
+      });
     }
 
     const existing = (body.existing ?? []).map((row) => ({
@@ -89,7 +103,12 @@ export async function POST(req: NextRequest) {
     }));
     const novel = filterNovelScrobbles(readyTracks, existing);
     if (novel.length === 0) {
-      return NextResponse.json({ synced: 0, streams: [], fetched: tracks.length, message: "No new scrobbles" });
+      return NextResponse.json({
+        synced: 0,
+        streams: [],
+        fetched: tracks.length,
+        message: "No new scrobbles",
+      });
     }
 
     const timeZone = resolveStatsTimeZone(
@@ -99,7 +118,37 @@ export async function POST(req: NextRequest) {
     const batch = [...novel]
       .sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime())
       .slice(0, SYNC_BATCH_SIZE);
-    const streams = prepareLastFmScrobbleStreams(batch, timeZone, { fast: true });
+
+    const artistArtByKey = new Map<string, string>();
+    for (const row of body.existing ?? []) {
+      if (!isUsableArtUrl(row.artistArt)) continue;
+      const key = normalizeEntityKey(row.artistName);
+      if (!artistArtByKey.has(key)) artistArtByKey.set(key, row.artistArt);
+    }
+
+    const missingArtists: string[] = [];
+    const seenMissing = new Set<string>();
+    for (const item of batch) {
+      const key = normalizeEntityKey(item.artist);
+      if (artistArtByKey.has(key) || seenMissing.has(key)) continue;
+      seenMissing.add(key);
+      missingArtists.push(item.artist);
+    }
+
+    for (const artistName of missingArtists.slice(0, MAX_ARTIST_ART_RESOLVES)) {
+      try {
+        const art = await resolveArtistArt(artistName);
+        if (isUsableArtUrl(art)) {
+          artistArtByKey.set(normalizeEntityKey(artistName), art);
+        }
+      } catch {
+        // keep null; backfill can fill later
+      }
+    }
+
+    const streams = await prepareLastFmScrobbleStreams(batch, timeZone, {
+      artistArtByKey,
+    });
     const hasMore = novel.length > batch.length;
 
     return NextResponse.json({

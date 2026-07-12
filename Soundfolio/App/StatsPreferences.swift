@@ -10,10 +10,12 @@ final class StatsPreferences {
         static let customFrom = "soundfolioCustomFrom"
         static let customTo = "soundfolioCustomTo"
         static let sort = "soundfolioTopSort"
-        static let chartGroup = "soundfolioChartGroupBy"
-        static let chartMetric = "soundfolioChartMetric"
         static let accent = "soundfolioAccent"
         static let colorScheme = "soundfolioColorScheme"
+        static let density = "soundfolioDensity"
+        static let radius = "soundfolioRadius"
+        static let artwork = "soundfolioArtwork"
+        static let timeDisplay = "soundfolioTimeDisplay"
     }
 
     var period: StatsPeriod {
@@ -32,14 +34,6 @@ final class StatsPreferences {
         didSet { UserDefaults.standard.set(sort.rawValue, forKey: Keys.sort) }
     }
 
-    var chartGroupBy: ChartGroupBy {
-        didSet { UserDefaults.standard.set(chartGroupBy.rawValue, forKey: Keys.chartGroup) }
-    }
-
-    var chartMetric: ChartMetric {
-        didSet { UserDefaults.standard.set(chartMetric.rawValue, forKey: Keys.chartMetric) }
-    }
-
     var accent: AppAccent {
         didSet { UserDefaults.standard.set(accent.rawValue, forKey: Keys.accent) }
     }
@@ -54,6 +48,22 @@ final class StatsPreferences {
         }
     }
 
+    var density: DisplayDensity {
+        didSet { UserDefaults.standard.set(density.rawValue, forKey: Keys.density) }
+    }
+
+    var radius: DisplayRadius {
+        didSet { UserDefaults.standard.set(radius.rawValue, forKey: Keys.radius) }
+    }
+
+    var artwork: ArtworkPref {
+        didSet { UserDefaults.standard.set(artwork.rawValue, forKey: Keys.artwork) }
+    }
+
+    var timeDisplay: TimeDisplayPref {
+        didSet { UserDefaults.standard.set(timeDisplay.rawValue, forKey: Keys.timeDisplay) }
+    }
+
     var usesCustomRange: Bool {
         !customFrom.isEmpty && !customTo.isEmpty
     }
@@ -64,12 +74,15 @@ final class StatsPreferences {
         customFrom = defaults.string(forKey: Keys.customFrom) ?? ""
         customTo = defaults.string(forKey: Keys.customTo) ?? ""
         sort = TopSortMode(rawValue: defaults.string(forKey: Keys.sort) ?? "") ?? .minutes
-        chartGroupBy = ChartGroupBy(rawValue: defaults.string(forKey: Keys.chartGroup) ?? "") ?? .weeks
-        chartMetric = ChartMetric(rawValue: defaults.string(forKey: Keys.chartMetric) ?? "") ?? .minutes
         accent = AppAccent(rawValue: defaults.string(forKey: Keys.accent) ?? "") ?? .spotify
+        density = DisplayDensity(rawValue: defaults.string(forKey: Keys.density) ?? "") ?? .cozy
+        radius = DisplayRadius(rawValue: defaults.string(forKey: Keys.radius) ?? "") ?? .soft
+        artwork = ArtworkPref(rawValue: defaults.string(forKey: Keys.artwork) ?? "") ?? .show
+        timeDisplay = TimeDisplayPref(rawValue: defaults.string(forKey: Keys.timeDisplay) ?? "") ?? .absolute
         switch defaults.string(forKey: Keys.colorScheme) {
         case "dark": preferredColorScheme = .dark
         case "light": preferredColorScheme = .light
+        case "system": preferredColorScheme = nil
         default: preferredColorScheme = .dark
         }
     }

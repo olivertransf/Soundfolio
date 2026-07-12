@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct RankedRow: View {
+    @Environment(StatsPreferences.self) private var preferences
+
     let rank: Int
     let title: String
     let subtitle: String
@@ -41,33 +43,44 @@ struct RankedRow: View {
     }
 
     private var rowContent: some View {
-        HStack(spacing: 12) {
+        let artSize = SoundfolioTheme.artworkSize(from: preferences)
+        return HStack(spacing: 10) {
             Text("\(rank)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, alignment: .center)
-                .monospacedDigit()
+                .font(SoundfolioTheme.metricFont)
+                .foregroundStyle(SoundfolioTheme.mutedForeground)
+                .frame(width: 20, alignment: .trailing)
 
-            ArtworkView(urlString: artworkURL, size: 44, isCircle: isCircleArt)
+            if artSize > 0 {
+                ArtworkView(
+                    urlString: artworkURL,
+                    size: artSize,
+                    cornerRadius: max(2, SoundfolioTheme.cornerRadius(from: preferences) - 2),
+                    isCircle: isCircleArt,
+                    letterFallback: isCircleArt ? String(title.prefix(1)).uppercased() : nil
+                )
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.subheadline.weight(.medium))
+                    .font(SoundfolioTheme.rowTitleFont)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(SoundfolioTheme.rowSubtitleFont)
+                        .foregroundStyle(SoundfolioTheme.mutedForeground)
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 8)
 
             Text(value)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+                .font(SoundfolioTheme.metricFont)
+                .foregroundStyle(SoundfolioTheme.mutedForeground)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .padding(.vertical, SoundfolioTheme.rowVerticalPadding(from: preferences))
         .contentShape(Rectangle())
     }
 }

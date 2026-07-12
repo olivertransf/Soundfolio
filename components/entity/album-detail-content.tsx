@@ -1,8 +1,8 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import Image from "next/image";
 import { useParams, useSearchParams } from "next/navigation";
+import { AlbumArt } from "@/components/album-art";
 import { EntityHero, EntityStatPill } from "@/components/entity/entity-hero";
 import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
 import { RankedEntityList } from "@/components/ranked-entity-list";
@@ -48,11 +48,13 @@ function AlbumDetailInner() {
         title={detail.albumName}
         subtitle={detail.artistName}
         artwork={
-          detail.albumArt ? (
-            <Image src={detail.albumArt} alt={detail.albumName} width={112} height={112} className="size-full object-cover" />
-          ) : (
-            <div className="size-full bg-secondary" />
-          )
+          <AlbumArt
+            src={detail.albumArt}
+            alt={detail.albumName}
+            width={112}
+            height={112}
+            className="size-full object-cover"
+          />
         }
         stats={
           <>
@@ -76,10 +78,14 @@ function AlbumDetailInner() {
               subtitle: `${track.streams.toLocaleString()} plays`,
               streams: track.streams,
               minutes: track.minutes,
-              leading: detail.albumArt ? (
-                <Image src={detail.albumArt} alt={detail.albumName} width={36} height={36} className="size-9 rounded" />
-              ) : (
-                <div className="size-9 rounded bg-secondary" />
+              leading: (
+                <AlbumArt
+                  src={detail.albumArt}
+                  alt={detail.albumName}
+                  width={36}
+                  height={36}
+                  className="size-9 rounded"
+                />
               ),
             }))}
           />

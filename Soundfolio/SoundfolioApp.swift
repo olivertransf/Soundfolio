@@ -46,6 +46,7 @@ struct SoundfolioApp: App {
                 .environment(authManager)
                 .environment(streamStore)
                 .environment(statsCache)
+                .environment(appState.preferences)
                 .onAppear {
                     appState.bindAuth(authManager)
                     appState.bindStreamStore(streamStore)

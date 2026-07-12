@@ -143,6 +143,117 @@ export async function writeUserStreams(uid: string, streams: StreamInput[], skip
   return written;
 }
 
+/** Patch durationMs on existing stream docs (catalog length backfill). */
+export async function patchUserStreamDurations(
+  uid: string,
+  updates: Array<{ id: string; durationMs: number }>
+) {
+  if (updates.length === 0) return 0;
+
+  const db = getFirebaseFirestore();
+  let written = 0;
+
+  for (let i = 0; i < updates.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    let batchCount = 0;
+    const now = Timestamp.now();
+
+    for (const update of updates.slice(i, i + BATCH_LIMIT)) {
+      const ref = doc(userStreamsRef(uid), update.id);
+      batch.set(
+        ref,
+        {
+          durationMs: update.durationMs,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+      batchCount += 1;
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+      written += batchCount;
+    }
+  }
+
+  return written;
+}
+
+/** Patch artistArt on existing stream docs (artwork backfill). */
+export async function patchUserStreamArtistArt(
+  uid: string,
+  updates: Array<{ id: string; artistArt: string }>
+) {
+  if (updates.length === 0) return 0;
+
+  const db = getFirebaseFirestore();
+  let written = 0;
+
+  for (let i = 0; i < updates.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    let batchCount = 0;
+    const now = Timestamp.now();
+
+    for (const update of updates.slice(i, i + BATCH_LIMIT)) {
+      const ref = doc(userStreamsRef(uid), update.id);
+      batch.set(
+        ref,
+        {
+          artistArt: update.artistArt,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+      batchCount += 1;
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+      written += batchCount;
+    }
+  }
+
+  return written;
+}
+
+/** Patch albumArt on existing stream docs (cover art backfill). */
+export async function patchUserStreamAlbumArt(
+  uid: string,
+  updates: Array<{ id: string; albumArt: string }>
+) {
+  if (updates.length === 0) return 0;
+
+  const db = getFirebaseFirestore();
+  let written = 0;
+
+  for (let i = 0; i < updates.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    let batchCount = 0;
+    const now = Timestamp.now();
+
+    for (const update of updates.slice(i, i + BATCH_LIMIT)) {
+      const ref = doc(userStreamsRef(uid), update.id);
+      batch.set(
+        ref,
+        {
+          albumArt: update.albumArt,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+      batchCount += 1;
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+      written += batchCount;
+    }
+  }
+
+  return written;
+}
+
 export async function countUserStreams(uid: string) {
   const snap = await getDocs(query(userStreamsRef(uid), limit(1)));
   return snap.size;

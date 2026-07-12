@@ -6,8 +6,8 @@ import {
   getAlbumArt,
   getArtistArt,
   getTrackArt,
-  isLastFmConfigured,
   isLastFmPlaceholderUrl,
+  lastFmApiKeyConfigured,
 } from "@/lib/lastfm";
 
 export async function resolveAlbumArt(m: {
@@ -20,7 +20,7 @@ export async function resolveAlbumArt(m: {
     return m.scrobbleImage;
   }
 
-  if (isLastFmConfigured()) {
+  if (lastFmApiKeyConfigured()) {
     try {
       const fromTrack = await getTrackArt(m.artistName, m.trackName);
       if (fromTrack) return fromTrack;
@@ -60,7 +60,7 @@ export async function resolveAlbumArt(m: {
 
 /** Last.fm artist image when available; otherwise Discogs → Deezer. */
 export async function resolveArtistArt(artistName: string): Promise<string | null> {
-  if (isLastFmConfigured()) {
+  if (lastFmApiKeyConfigured()) {
     try {
       const fromLastFm = await getArtistArt(artistName);
       if (fromLastFm) return fromLastFm;

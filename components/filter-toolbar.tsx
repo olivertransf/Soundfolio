@@ -10,27 +10,25 @@ export function FilterToolbar({ context }: { context: FilterToolbarContext }) {
   const showSort = context === "dashboard" || context === "rankings";
 
   return (
-    <div className="rounded-xl border border-border/45 bg-card/35 p-2.5 sm:p-3">
-      <div className="flex flex-col gap-2.5 lg:flex-row lg:flex-wrap lg:items-end lg:gap-x-5 lg:gap-y-2">
-        <div className="min-w-0 space-y-1 overflow-visible lg:flex-1 lg:min-w-[12rem]">
+    <div className="flex flex-col gap-3 border border-border bg-card p-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-6 sm:gap-y-2">
+      <div className="min-w-0 space-y-1.5 sm:flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Period
+        </p>
+        <Suspense>
+          <TimeRangeTabs />
+        </Suspense>
+      </div>
+      {showSort ? (
+        <div className="min-w-0 space-y-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Period
+            Rank by
           </p>
           <Suspense>
-            <TimeRangeTabs />
+            <TopSortTabs />
           </Suspense>
         </div>
-        {showSort ? (
-          <div className="min-w-0 space-y-1 overflow-visible lg:w-auto">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Rank by
-            </p>
-            <Suspense>
-              <TopSortTabs />
-            </Suspense>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   );
 }

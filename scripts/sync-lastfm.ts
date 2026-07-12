@@ -50,7 +50,7 @@ async function main() {
 
   const novel = filterNovelScrobbles(readyTracks, existing);
   const batch = [...novel].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
-  const prepared = prepareLastFmScrobbleStreams(batch, undefined, { fast: true });
+  const prepared = await prepareLastFmScrobbleStreams(batch, undefined);
   let totalWritten = 0;
   const BATCH = 450;
   let writeBatch = firestore.batch();

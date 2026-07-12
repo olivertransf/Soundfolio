@@ -2,7 +2,6 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_TIME_RANGE } from "@/lib/time-range";
 import { Input } from "@/components/ui/input";
@@ -19,23 +18,12 @@ import {
 
 const presets = [
   { value: "30d", label: "30d" },
-  { value: "3m", label: "3 mo" },
-  { value: "6m", label: "6 mo" },
-  { value: "1y", label: "1 yr" },
-  { value: "ytd", label: "This year" },
-  { value: "all", label: "All time" },
+  { value: "3m", label: "3m" },
+  { value: "6m", label: "6m" },
+  { value: "1y", label: "1y" },
+  { value: "ytd", label: "YTD" },
+  { value: "all", label: "All" },
 ] as const;
-
-function periodButtonLabel(
-  range: string,
-  from: string,
-  to: string,
-  isCustom: boolean
-): string {
-  if (isCustom && from && to) return `${from} → ${to}`;
-  const preset = presets.find((p) => p.value === range);
-  return preset?.label ?? "This year";
-}
 
 export function TimeRangeTabs() {
   const router = useRouter();
@@ -43,13 +31,11 @@ export function TimeRangeTabs() {
   const from = searchParams.get("from") ?? "";
   const to = searchParams.get("to") ?? "";
   const isCustom = Boolean(from && to);
-
   const range = searchParams.get("range") ?? DEFAULT_TIME_RANGE;
 
   const [customFrom, setCustomFrom] = useState(from || "");
   const [customTo, setCustomTo] = useState(to || "");
-  const [open, setOpen] = useState(false);
-  const [customExpanded, setCustomExpanded] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
   const hydratedFromStorage = useRef(false);
 
   useEffect(() => {
@@ -92,20 +78,12 @@ export function TimeRangeTabs() {
     router.replace(`?${params.toString()}`);
   }, [router, searchParams]);
 
-  useEffect(() => {
-    if (!open) {
-      setCustomExpanded(false);
-      return;
-    }
-    setCustomExpanded(isCustom);
-  }, [open, isCustom]);
-
   function applyViewerTimeZone(params: URLSearchParams) {
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (tz) params.set(VIEWER_TIMEZONE_PARAM, tz);
     } catch {
-      // no-op: keep links functional even if timezone detection fails
+      // no-op
     }
   }
 
@@ -117,8 +95,7 @@ export function TimeRangeTabs() {
     applyViewerTimeZone(params);
     setStoredTimeFilter({ kind: "preset", range: value });
     router.push(`?${params.toString()}`);
-    setOpen(false);
-    setCustomExpanded(false);
+    setCustomOpen(false);
   }
 
   function applyCustom() {
@@ -130,90 +107,81 @@ export function TimeRangeTabs() {
     applyViewerTimeZone(params);
     setStoredTimeFilter({ kind: "custom", from: customFrom, to: customTo });
     router.push(`?${params.toString()}`);
-    setOpen(false);
-    setCustomExpanded(false);
+    setCustomOpen(false);
   }
 
-  const summary = periodButtonLabel(range, from, to, isCustom);
+  const customLabel =
+    isCustom && from && to ? `${from} → ${to}` : "Custom";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        type="button"
-        className={cn(
-          "box-border inline-flex min-h-10 w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-border/60 bg-secondary/25 px-3 py-2 text-left text-sm font-medium leading-snug text-foreground shadow-none outline-none transition-colors hover:bg-secondary/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 sm:w-auto sm:min-w-[11rem]"
-        )}
+    <div className="flex flex-wrap gap-1">
+      <div
+        role="tablist"
+        aria-label="Time period"
+        className="flex min-w-0 flex-1 overflow-x-auto border border-border bg-background p-0.5 sm:flex-none"
       >
-        <span className="min-w-0 truncate" title={summary}>
-          {summary}
-        </span>
-        <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden />
-      </PopoverTrigger>
-      <PopoverContent
-        className="flex w-[min(100vw-2rem,20rem)] flex-col gap-0 p-0 sm:min-w-[12rem]"
-        align="start"
-      >
-        <div className="flex max-h-[min(50vh,18rem)] flex-col gap-0.5 overflow-y-auto p-1">
-          {presets.map((p) => (
+        {presets.map((p) => {
+          const active = !isCustom && range === p.value;
+          return (
             <button
               key={p.value}
               type="button"
-              className={cn(
-                "rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                !isCustom && range === p.value
-                  ? "bg-primary/15 font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
+              role="tab"
+              aria-selected={active}
               onClick={() => applyPreset(p.value)}
+              className={cn(
+                "min-h-11 shrink-0 px-2.5 py-2 text-xs font-medium transition-colors sm:px-3",
+                active
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              )}
             >
               {p.label}
             </button>
-          ))}
-        </div>
-        <div className="border-t border-border/60 p-1">
+          );
+        })}
+      </div>
+
+      <Popover open={customOpen} onOpenChange={setCustomOpen}>
+        <PopoverTrigger
+          type="button"
+          className={cn(
+            "min-h-11 shrink-0 border border-border px-3 py-2 text-xs font-medium transition-colors",
+            isCustom
+              ? "bg-primary/15 text-primary"
+              : "bg-background text-muted-foreground hover:bg-secondary hover:text-foreground"
+          )}
+        >
+          {customLabel}
+        </PopoverTrigger>
+        <PopoverContent className="w-[min(100vw-2rem,18rem)] space-y-3 p-3" align="start">
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">From</label>
+            <Input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="h-10"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">To</label>
+            <Input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="h-10"
+            />
+          </div>
           <button
             type="button"
-            className={cn(
-              "flex w-full rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-              isCustom
-                ? "bg-primary/15 font-medium text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            onClick={() => setCustomExpanded((e) => !e)}
+            onClick={applyCustom}
+            className="h-10 w-full bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            Custom range…
+            Apply
           </button>
-          {customExpanded ? (
-            <div className="space-y-3 border-t border-border/40 px-2 pb-2 pt-3">
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">From</label>
-                <Input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="h-8"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">To</label>
-                <Input
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="h-8"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={applyCustom}
-                className="h-8 w-full rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Apply
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </PopoverContent>
-    </Popover>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }

@@ -24,13 +24,12 @@ struct SyncToolbarButton: View {
             }
             .foregroundStyle(foregroundColor)
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(buttonBackground, in: Capsule())
+            .frame(minHeight: 32)
+            .background(buttonBackground, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .overlay {
-                Capsule()
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(borderColor)
             }
-            .shadow(color: shadowColor, radius: 8, x: 0, y: 3)
             .animation(.easeInOut(duration: 0.2), value: appState.isSyncing)
             .animation(.easeInOut(duration: 0.2), value: appState.syncSavedCount)
             .animation(.easeInOut(duration: 0.2), value: appState.syncPendingCount)

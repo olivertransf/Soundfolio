@@ -22,17 +22,23 @@ export function EntityKindTabs({
   kinds?: EntityKind[];
 }) {
   return (
-    <div className={cn("inline-flex rounded-lg border border-border/40 bg-card/40 p-0.5", className)}>
+    <div
+      role="tablist"
+      aria-label="Entity type"
+      className={cn("flex w-full border border-border bg-card p-0.5 sm:w-auto", className)}
+    >
       {kinds.map((kind) => (
         <button
           key={kind}
           type="button"
+          role="tab"
+          aria-selected={value === kind}
           onClick={() => onValueChange(kind)}
           className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+            "min-h-11 flex-1 px-3 py-2 text-xs font-medium transition-colors sm:flex-none sm:min-w-[5.5rem]",
             value === kind
               ? "bg-primary/15 text-primary"
-              : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
           )}
         >
           {labels[kind]}

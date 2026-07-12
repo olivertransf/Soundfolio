@@ -31,6 +31,7 @@ function existingPayload(streams: Stream[]) {
     artistName: stream.artistName,
     trackName: stream.trackName,
     playedAt: stream.playedAt.toISOString(),
+    artistArt: stream.artistArt,
   }));
 }
 

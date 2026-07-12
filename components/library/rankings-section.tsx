@@ -1,13 +1,13 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
-import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { ContentPanel } from "@/components/page-shell";
 import { FilterToolbar } from "@/components/filter-toolbar";
 import { EntityKindTabs, type EntityKind } from "@/components/entity-kind-tabs";
 import { RankedEntityList, type RankedEntityItem } from "@/components/ranked-entity-list";
+import { RankColumn, ResponsiveColumns } from "@/components/responsive-columns";
 import { ArtistArt } from "@/components/artist-art";
+import { AlbumArt } from "@/components/album-art";
 import { useStreams } from "@/components/streams-provider";
 import {
   computeTopAlbums,
@@ -54,89 +54,90 @@ function RankingsSectionInner() {
     [streams, filter, sortBy]
   );
 
+  const trackItems: RankedEntityItem[] = tracks.map((track) => ({
+    key: track.trackId,
+    href: trackPath(track.artistName, track.trackName),
+    title: track.trackName,
+    subtitle: track.artistName,
+    streams: track.streams,
+    minutes: track.minutesListened,
+    leading: (
+      <AlbumArt
+        src={track.albumArt}
+        alt={track.albumName}
+        width={36}
+        height={36}
+        className="size-9 shrink-0 rounded"
+      />
+    ),
+  }));
+
+  const artistItems: RankedEntityItem[] = artists.map((artist) => ({
+    key: artist.artistName,
+    href: artistPath(artist.artistName),
+    title: artist.artistName,
+    streams: artist.streams,
+    minutes: artist.minutesListened,
+    leading: (
+      <ArtistArt
+        src={artist.artistArt}
+        alt={artist.artistName}
+        width={36}
+        height={36}
+        className="size-9 ring-1 ring-border"
+      />
+    ),
+  }));
+
+  const albumItems: RankedEntityItem[] = albums.map((album) => ({
+    key: `${album.albumName}-${album.artistName}`,
+    href: albumPath(album.artistName, album.albumName),
+    title: album.albumName,
+    subtitle: album.artistName,
+    streams: album.streams,
+    minutes: album.minutesListened,
+    leading: (
+      <AlbumArt
+        src={album.albumArt}
+        alt={album.albumName}
+        width={36}
+        height={36}
+        className="size-9 shrink-0 rounded"
+      />
+    ),
+  }));
+
   if (loading) {
     return <p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>;
   }
 
+  const singleItems =
+    kind === "tracks" ? trackItems : kind === "artists" ? artistItems : albumItems;
+
   return (
     <div className="space-y-3">
       <FilterToolbar context="rankings" />
-      <EntityKindTabs value={kind} onValueChange={setKind} />
-      <ContentPanel>
-          {kind === "tracks" ? (
-            <RankedList
-              items={tracks.map((track) => ({
-                key: track.trackId,
-                href: trackPath(track.artistName, track.trackName),
-                title: track.trackName,
-                subtitle: track.artistName,
-                streams: track.streams,
-                minutes: track.minutesListened,
-                leading: track.albumArt ? (
-                  <Image src={track.albumArt} alt={track.albumName} width={36} height={36} className="size-9 shrink-0 rounded" />
-                ) : (
-                  <div className="size-9 shrink-0 rounded bg-secondary" />
-                ),
-              }))}
-              sortBy={sortBy}
-            />
-          ) : null}
-          {kind === "artists" ? (
-            <RankedList
-              items={artists.map((artist) => ({
-                key: artist.artistName,
-                href: artistPath(artist.artistName),
-                title: artist.artistName,
-                subtitle:
-                  sortBy === "streams"
-                    ? `${artist.minutesListened.toLocaleString()} min`
-                    : `${artist.streams.toLocaleString()} plays`,
-                streams: artist.streams,
-                minutes: artist.minutesListened,
-                leading: (
-                  <ArtistArt
-                    src={artist.artistArt}
-                    alt={artist.artistName}
-                    width={36}
-                    height={36}
-                    className="size-9 ring-1 ring-border/25"
-                  />
-                ),
-              }))}
-              sortBy={sortBy}
-            />
-          ) : null}
-          {kind === "albums" ? (
-            <RankedList
-              items={albums.map((album) => ({
-                key: `${album.albumName}-${album.artistName}`,
-                href: albumPath(album.artistName, album.albumName),
-                title: album.albumName,
-                subtitle: album.artistName,
-                streams: album.streams,
-                minutes: album.minutesListened,
-                leading: album.albumArt ? (
-                  <Image src={album.albumArt} alt={album.albumName} width={36} height={36} className="size-9 shrink-0 rounded" />
-                ) : (
-                  <div className="size-9 shrink-0 rounded bg-secondary" />
-                ),
-              }))}
-              sortBy={sortBy}
-            />
-          ) : null}
-      </ContentPanel>
+
+      <div className="xl:hidden">
+        <EntityKindTabs value={kind} onValueChange={setKind} />
+        <div className="mt-3 border border-border bg-card p-1.5 sm:p-2">
+          <RankedEntityList items={singleItems} sortBy={sortBy} columns="one" />
+        </div>
+      </div>
+
+      <ResponsiveColumns className="hidden xl:grid" cols={3}>
+        <RankColumn title="Tracks">
+          <RankedEntityList items={trackItems} sortBy={sortBy} columns="one" />
+        </RankColumn>
+        <RankColumn title="Artists">
+          <RankedEntityList items={artistItems} sortBy={sortBy} columns="one" />
+        </RankColumn>
+        <RankColumn title="Albums">
+          <RankedEntityList items={albumItems} sortBy={sortBy} columns="one" />
+        </RankColumn>
+      </ResponsiveColumns>
     </div>
   );
-}
-
-function RankedList({
-  items,
-  sortBy,
-}: {
-  items: RankedEntityItem[];
-  sortBy: "streams" | "minutes";
-}) {
-  return <RankedEntityList items={items} sortBy={sortBy} columns="three" />;
 }
 
 export function LibraryRankingsSection() {

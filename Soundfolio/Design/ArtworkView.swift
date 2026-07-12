@@ -1,16 +1,21 @@
 import SwiftUI
 
 struct ArtworkView: View {
+    @Environment(StatsPreferences.self) private var preferences
+
     let urlString: String?
-    var size: CGFloat = 44
-    var cornerRadius: CGFloat = 8
+    var size: CGFloat = 32
+    var cornerRadius: CGFloat = 4
     var isCircle = false
+    var letterFallback: String?
 
     @State private var image: UIImage?
 
     var body: some View {
         Group {
-            if let image {
+            if preferences.artwork == .hide {
+                EmptyView()
+            } else if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -18,8 +23,13 @@ struct ArtworkView: View {
                 placeholder
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: preferences.artwork == .hide ? 0 : size, height: preferences.artwork == .hide ? 0 : size)
         .modifier(ArtworkClipModifier(isCircle: isCircle, cornerRadius: cornerRadius))
+        .overlay {
+            if isCircle && preferences.artwork != .hide {
+                Circle().strokeBorder(SoundfolioTheme.border, lineWidth: 1)
+            }
+        }
         .task(id: urlString) {
             await loadImage()
         }
@@ -27,6 +37,7 @@ struct ArtworkView: View {
 
     private func loadImage() async {
         image = nil
+        guard preferences.artwork != .hide else { return }
         guard let urlString, let url = URL(string: urlString) else { return }
         if let cached = ArtworkCache.image(for: url) {
             image = cached
@@ -44,10 +55,16 @@ struct ArtworkView: View {
 
     private var placeholder: some View {
         ZStack {
-            Color(.tertiarySystemFill)
-            Image(systemName: isCircle ? "person.fill" : "music.note")
-                .font(.system(size: size * 0.35))
-                .foregroundStyle(.secondary)
+            SoundfolioTheme.mutedFill
+            if let letterFallback, !letterFallback.isEmpty {
+                Text(letterFallback)
+                    .font(SoundfolioFont.semibold(size * 0.4))
+                    .foregroundStyle(SoundfolioTheme.mutedForeground)
+            } else {
+                Image(systemName: isCircle ? "person.fill" : "music.note")
+                    .font(.system(size: size * 0.35))
+                    .foregroundStyle(SoundfolioTheme.mutedForeground)
+            }
         }
     }
 }

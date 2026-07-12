@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
 import {
@@ -8,39 +9,67 @@ import {
   readViewerTimeZoneCookie,
 } from "@/lib/viewer-timezone-client";
 import {
-  computeListeningHeatmap,
   computeStreamsByDayOfWeek,
   computeStreamsByHour,
   parseTimeRange,
 } from "@/lib/stats-compute";
 import { useStreams } from "@/components/streams-provider";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListeningChart } from "@/components/listening-chart";
-import { ListeningHeatmap } from "@/components/listening-heatmap";
+import { ContentPanel, SectionBlock } from "@/components/page-shell";
+import { cn } from "@/lib/utils";
+import { librarySectionHref } from "@/components/library/library-content";
 
-const CHART_H = 200;
+type PatternRow = { label: string; minutes: number; streams: number };
 
-const panelTitle = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
-const cardShell =
-  "overflow-hidden rounded-2xl border border-border/40 bg-card/40 shadow-none ring-0";
-const cardHeaderPad = "border-b border-border/30 px-4 py-3";
-const cardContentPad = "px-4 pb-4 pt-3";
+function RankedMetricRows({
+  rows,
+  empty,
+  compact = false,
+}: {
+  rows: PatternRow[];
+  empty: string;
+  compact?: boolean;
+}) {
+  if (rows.length === 0) {
+    return <p className="px-2 py-6 text-center text-sm text-muted-foreground">{empty}</p>;
+  }
 
-type PatternsPayload = {
-  timeZone: string;
-  byHour: { label: string; minutes: number; streams: number }[];
-  byDay: { label: string; minutes: number; streams: number }[];
-  heatmap: {
-    grid: { day: number; hour: number; count: number }[];
-    dayNames: string[];
-  };
-};
+  const maxMinutes = Math.max(...rows.map((r) => r.minutes), 1);
 
-export function HomePatternsSection({ periodLabel }: { periodLabel: string }) {
+  return (
+    <ul className="divide-y divide-border">
+      {rows.map((row, i) => (
+        <li
+          key={row.label}
+          data-row
+          className={cn("flex items-center gap-2 text-sm", compact ? "py-1.5" : "gap-3 py-2")}
+        >
+          <span className="w-5 shrink-0 tabular-nums text-xs text-muted-foreground">{i + 1}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-xs font-medium sm:text-sm">{row.label}</span>
+              <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">
+                {row.minutes.toLocaleString()}m
+              </span>
+            </div>
+            <div className="mt-1 h-1 overflow-hidden bg-secondary">
+              <div
+                className="h-full bg-primary/70"
+                style={{ width: `${Math.round((row.minutes / maxMinutes) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function usePatternsData() {
   const { streams, loading: streamsLoading } = useStreams();
   const searchParams = useSearchParams();
   const [timeZone, setTimeZone] = useState("");
-  const [data, setData] = useState<PatternsPayload | null>(null);
+  const [byHour, setByHour] = useState<PatternRow[]>([]);
+  const [byDay, setByDay] = useState<PatternRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,12 +92,8 @@ export function HomePatternsSection({ periodLabel }: { periodLabel: string }) {
     setError(null);
     try {
       const filter = parseTimeRange(range || undefined, from || undefined, to || undefined, timeZone);
-      setData({
-        timeZone,
-        byHour: computeStreamsByHour(streams, filter, timeZone),
-        byDay: computeStreamsByDayOfWeek(streams, filter, timeZone),
-        heatmap: computeListeningHeatmap(streams, filter, timeZone),
-      });
+      setByHour(computeStreamsByHour(streams, filter, timeZone));
+      setByDay(computeStreamsByDayOfWeek(streams, filter, timeZone));
     } catch {
       setError("Could not load listening patterns.");
     } finally {
@@ -76,126 +101,157 @@ export function HomePatternsSection({ periodLabel }: { periodLabel: string }) {
     }
   }, [timeZone, range, from, to, streams, streamsLoading]);
 
-  const { peakHour, peakDay, hourChartData, dayChartData } = useMemo(() => {
-    if (!data) {
-      return {
-        peakHour: null,
-        peakDay: null,
-        hourChartData: [] as PatternsPayload["byHour"],
-        dayChartData: [] as PatternsPayload["byDay"],
-      };
-    }
+  const derived = useMemo(() => {
     const peakHour =
-      data.byHour.length > 0
-        ? data.byHour.reduce((a, b) => (a.minutes >= b.minutes ? a : b))
+      byHour.length > 0
+        ? byHour.reduce((a, b) => (a.minutes >= b.minutes ? a : b))
         : null;
     const peakDay =
-      data.byDay.length > 0
-        ? data.byDay.reduce((a, b) => (a.minutes >= b.minutes ? a : b))
+      byDay.length > 0
+        ? byDay.reduce((a, b) => (a.minutes >= b.minutes ? a : b))
         : null;
-    return {
-      peakHour,
-      peakDay,
-      hourChartData: data.byHour,
-      dayChartData: data.byDay,
-    };
-  }, [data]);
+    const topHours = [...byHour]
+      .filter((r) => r.minutes > 0 || r.streams > 0)
+      .sort((a, b) => b.minutes - a.minutes || b.streams - a.streams)
+      .slice(0, 12);
+    const topDays = [...byDay].sort(
+      (a, b) => b.minutes - a.minutes || b.streams - a.streams
+    );
+    return { peakHour, peakDay, topHours, topDays };
+  }, [byHour, byDay]);
+
+  return {
+    loading: loading || streamsLoading,
+    error,
+    ...derived,
+  };
+}
+
+/** Compact sidebar column for the dashboard, beside Recent. */
+export function PatternsSidePanel({ className }: { className?: string }) {
+  const searchParams = useSearchParams();
+  const { loading, error, peakHour, peakDay, topHours, topDays } = usePatternsData();
+  const patternsHref = librarySectionHref(
+    "patterns",
+    new URLSearchParams(searchParams.toString())
+  );
 
   return (
-    <section
-      id="patterns"
-      className="scroll-mt-28 space-y-4"
-      aria-labelledby="home-patterns-heading"
-    >
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-        <h2
-          id="home-patterns-heading"
-          className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl"
-        >
-          Listening patterns
+    <div className={cn("flex min-h-0 flex-col border border-border bg-card", className)}>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Patterns
         </h2>
-        <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-          {periodLabel}. Hours use your local timezone
-          {timeZone ? ` (${timeZone.replace(/_/g, " ")})` : ""}.
-        </p>
+        <Link href={patternsHref} className="text-xs font-medium text-primary hover:underline">
+          All
+        </Link>
+      </div>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-2">
+        {loading ? (
+          <p className="px-2 py-8 text-center text-sm text-muted-foreground">Loading…</p>
+        ) : error ? (
+          <p className="px-2 py-8 text-center text-sm text-destructive">{error}</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="border border-border bg-background p-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Peak hour
+                </p>
+                <p className="mt-1 truncate text-sm font-semibold tabular-nums">
+                  {peakHour?.label ?? "—"}
+                </p>
+              </div>
+              <div className="border border-border bg-background p-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Peak day
+                </p>
+                <p className="mt-1 truncate text-sm font-semibold">
+                  {peakDay?.label ?? "—"}
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                By hour
+              </p>
+              <RankedMetricRows rows={topHours} empty="No hourly data." compact />
+            </div>
+            <div>
+              <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                By weekday
+              </p>
+              <RankedMetricRows rows={topDays} empty="No weekday data." compact />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function HomePatternsSection() {
+  const { loading, error, peakHour, peakDay, topHours, topDays } = usePatternsData();
+
+  if (loading) {
+    return (
+      <div className="border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+        Loading patterns…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="border border-destructive/30 bg-destructive/10 px-4 py-10 text-center text-sm text-destructive">
+        {error}
+      </div>
+    );
+  }
+
+  return (
+    <section id="patterns" className="scroll-mt-28 space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="border border-border bg-card p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Busiest hour
+          </p>
+          <p className="mt-2 text-xl font-semibold tabular-nums tracking-tight">
+            {peakHour ? peakHour.label : "—"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {peakHour
+              ? `${peakHour.minutes.toLocaleString()}m · ${peakHour.streams.toLocaleString()} plays`
+              : "No plays in this range."}
+          </p>
+        </div>
+        <div className="border border-border bg-card p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Busiest day
+          </p>
+          <p className="mt-2 text-xl font-semibold tracking-tight">
+            {peakDay ? peakDay.label : "—"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {peakDay
+              ? `${peakDay.minutes.toLocaleString()}m · ${peakDay.streams.toLocaleString()} plays`
+              : "No plays in this range."}
+          </p>
+        </div>
       </div>
 
-      {loading || streamsLoading ? (
-        <div className="rounded-2xl border border-border/40 bg-card/40 px-4 py-10 text-center text-sm text-muted-foreground">
-          Loading patterns…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-10 text-center text-sm text-destructive">
-          {error}
-        </div>
-      ) : !data ? null : (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-            <div className={`rounded-2xl border border-border/40 bg-card/40 ${cardContentPad}`}>
-              <p className={panelTitle}>Busiest hour</p>
-              <p className="mt-2 font-display text-xl font-semibold tabular-nums tracking-tight text-foreground">
-                {peakHour ? peakHour.label : "—"}
-              </p>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                {peakHour
-                  ? `${peakHour.minutes.toLocaleString()} minutes · ${peakHour.streams.toLocaleString()} streams`
-                  : "No plays in this range."}
-              </p>
-            </div>
-            <div className={`rounded-2xl border border-border/40 bg-card/40 ${cardContentPad}`}>
-              <p className={panelTitle}>Busiest day</p>
-              <p className="mt-2 font-display text-xl font-semibold tracking-tight text-foreground">
-                {peakDay ? peakDay.label : "—"}
-              </p>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                {peakDay
-                  ? `${peakDay.minutes.toLocaleString()} minutes · ${peakDay.streams.toLocaleString()} streams`
-                  : "No plays in this range."}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className={cardShell}>
-              <CardHeader className={`space-y-0 ${cardHeaderPad}`}>
-                <CardTitle className={panelTitle}>By hour of day</CardTitle>
-              </CardHeader>
-              <CardContent className={cardContentPad}>
-                <ListeningChart
-                  data={hourChartData}
-                  xAxis="hour"
-                  timeZone={timeZone}
-                  metric="both"
-                  height={CHART_H}
-                />
-              </CardContent>
-            </Card>
-            <Card className={cardShell}>
-              <CardHeader className={`space-y-0 ${cardHeaderPad}`}>
-                <CardTitle className={panelTitle}>By weekday</CardTitle>
-              </CardHeader>
-              <CardContent className={cardContentPad}>
-                <ListeningChart
-                  data={dayChartData}
-                  xAxis="weekday"
-                  timeZone={timeZone}
-                  metric="both"
-                  height={CHART_H}
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className={cardShell}>
-            <CardHeader className={`space-y-0 ${cardHeaderPad}`}>
-              <CardTitle className={panelTitle}>Week × hour</CardTitle>
-            </CardHeader>
-            <CardContent className={`overflow-x-auto ${cardContentPad}`}>
-              <ListeningHeatmap grid={data.heatmap.grid} dayNames={data.heatmap.dayNames} />
-            </CardContent>
-          </Card>
-        </>
-      )}
+      <div className={cn("grid gap-3", "xl:grid-cols-2")}>
+        <SectionBlock title="By hour">
+          <ContentPanel>
+            <RankedMetricRows rows={topHours} empty="No hourly data." />
+          </ContentPanel>
+        </SectionBlock>
+        <SectionBlock title="By weekday">
+          <ContentPanel>
+            <RankedMetricRows rows={topDays} empty="No weekday data." />
+          </ContentPanel>
+        </SectionBlock>
+      </div>
     </section>
   );
 }
