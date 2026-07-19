@@ -72,6 +72,18 @@ final class APIClient {
         )
     }
 
+    func resolveArtistArt(artists: [String]) async throws -> ResolveArtResponse {
+        try await post("/api/resolve-artist-art", body: ResolveArtistArtRequest(artists: artists))
+    }
+
+    func resolveAlbumArt(albums: [ResolveAlbumArtQuery]) async throws -> ResolveArtResponse {
+        try await post("/api/resolve-album-art", body: ResolveAlbumArtRequest(albums: albums))
+    }
+
+    func resolveTrackDurations(tracks: [ResolveTrackDurationQuery]) async throws -> ResolveDurationsResponse {
+        try await post("/api/resolve-track-durations", body: ResolveTrackDurationsRequest(tracks: tracks))
+    }
+
     private func post<T: Decodable, Body: Encodable>(
         _ path: String,
         body: Body,

@@ -325,7 +325,7 @@ struct DashboardView: View {
         VStack(spacing: 12) {
             Text("No data yet")
                 .font(SoundfolioTheme.pageTitleFont)
-            Text("Import history on the web, sync Last.fm, then pull to refresh.")
+            Text("Import history on the web, then tap Sync to pull Last.fm. Pull to refresh reloads from your library.")
                 .font(SoundfolioTheme.captionFont)
                 .foregroundStyle(SoundfolioTheme.mutedForeground)
                 .multilineTextAlignment(.center)
@@ -370,10 +370,10 @@ struct DashboardView: View {
     private func refresh() async {
         loading = false
         do {
-            _ = try await appState.syncLastFm()
+            try await appState.refreshFromDatabase()
             await load()
         } catch {
-            loading = false
+            if AppState.isCancellation(error) { return }
             self.error = appState.handleError(error)
         }
     }

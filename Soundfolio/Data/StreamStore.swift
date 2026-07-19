@@ -1,6 +1,17 @@
 import Foundation
 import FirebaseFirestore
 
+enum StreamStoreError: LocalizedError {
+    case notStarted
+
+    var errorDescription: String? {
+        switch self {
+        case .notStarted:
+            "Library is not loaded yet."
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class StreamStore {
@@ -57,6 +68,25 @@ final class StreamStore {
             }
     }
 
+    /// One-shot fetch from Firestore. Pull-to-refresh uses this — not Last.fm.
+    func reloadFromServer() async throws {
+        guard let uid = activeUID else {
+            throw StreamStoreError.notStarted
+        }
+        errorMessage = nil
+        let snapshot = try await Firestore.firestore()
+            .collection("users")
+            .document(uid)
+            .collection("streams")
+            .order(by: "playedAt", descending: true)
+            .getDocuments()
+        let remote = snapshot.documents.compactMap { Self.record(from: $0) }
+        streams = remote
+        revision &+= 1
+        schedulePersist(uid: uid)
+        isLoading = false
+    }
+
     func stop() {
         listener?.remove()
         listener = nil
@@ -83,6 +113,74 @@ final class StreamStore {
 
     var latestPlayAt: Date? {
         streams.first?.playedAt
+    }
+
+    func patchArtistArt(uid: String, updates: [(id: String, artistArt: String)]) async throws -> Int {
+        try await patchFields(uid: uid, updates: updates.map { ($0.id, ["artistArt": $0.artistArt]) }) { record, value in
+            guard let art = value["artistArt"] as? String else { return record }
+            return record.replacing(artistArt: art)
+        }
+    }
+
+    func patchAlbumArt(uid: String, updates: [(id: String, albumArt: String)]) async throws -> Int {
+        try await patchFields(uid: uid, updates: updates.map { ($0.id, ["albumArt": $0.albumArt]) }) { record, value in
+            guard let art = value["albumArt"] as? String else { return record }
+            return record.replacing(albumArt: art)
+        }
+    }
+
+    func patchDurations(uid: String, updates: [(id: String, durationMs: Int)]) async throws -> Int {
+        try await patchFields(uid: uid, updates: updates.map { ($0.id, ["durationMs": $0.durationMs]) }) { record, value in
+            guard let durationMs = value["durationMs"] as? Int else { return record }
+            return record.replacing(durationMs: durationMs)
+        }
+    }
+
+    private func patchFields(
+        uid: String,
+        updates: [(id: String, fields: [String: Any])],
+        applyLocal: (StreamRecord, [String: Any]) -> StreamRecord
+    ) async throws -> Int {
+        guard !updates.isEmpty else { return 0 }
+
+        let db = Firestore.firestore()
+        var written = 0
+        var batch = db.batch()
+        var batchCount = 0
+        let localByID = Dictionary(uniqueKeysWithValues: updates.map { ($0.id, $0.fields) })
+
+        for update in updates {
+            let ref = db.collection("users").document(uid).collection("streams").document(update.id)
+            var data = update.fields
+            data["updatedAt"] = Timestamp(date: Date())
+            batch.setData(data, forDocument: ref, merge: true)
+            batchCount += 1
+            written += 1
+
+            if batchCount >= 450 {
+                try await batch.commit()
+                batch = db.batch()
+                batchCount = 0
+            }
+        }
+
+        if batchCount > 0 {
+            try await batch.commit()
+        }
+
+        var changed = false
+        streams = streams.map { record in
+            guard let fields = localByID[record.id] else { return record }
+            let next = applyLocal(record, fields)
+            if next != record { changed = true }
+            return next
+        }
+        if changed {
+            revision &+= 1
+            schedulePersist(uid: uid)
+        }
+
+        return written
     }
 
     func writeStreams(uid: String, payloads: [SyncStreamPayload], skipExisting: Bool = true) async throws -> Int {

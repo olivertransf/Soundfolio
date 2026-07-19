@@ -61,6 +61,16 @@ final class AppState {
         client.updateConfiguration(baseURLString: StatsPreferences.defaultBaseURL)
     }
 
+    /// Pull latest plays from Firestore only (no Last.fm network sync).
+    func refreshFromDatabase() async throws {
+        guard let streamStore else {
+            throw APIClientError.unauthorized
+        }
+        try await streamStore.reloadFromServer()
+        refreshFreshness(from: streamStore)
+    }
+
+    /// Refresh library from Firestore, then pull new scrobbles from Last.fm.
     func syncLastFm() async throws -> LastFmSyncResponse {
         guard let authManager, let streamStore, let uid = authManager.user?.uid else {
             throw APIClientError.unauthorized
@@ -72,7 +82,7 @@ final class AppState {
         isSyncing = true
         syncSavedCount = 0
         syncPendingCount = 0
-        applySyncProgress("Connecting to Last.fm…")
+        applySyncProgress("Refreshing library…")
         lastSyncResult = nil
         SyncBackgroundSession.begin()
         defer {
@@ -84,6 +94,13 @@ final class AppState {
             SyncBackgroundSession.end()
         }
         reloadClient()
+
+        do {
+            try await streamStore.reloadFromServer()
+            refreshFreshness(from: streamStore)
+        } catch {
+            if !Self.isCancellation(error) { throw error }
+        }
 
         var totalWritten = 0
         var lastResult: LastFmSyncResponse?
@@ -187,6 +204,14 @@ final class AppState {
             return api.localizedDescription
         }
         return error.localizedDescription
+    }
+
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return true }
+        let message = ns.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return message == "cancelled" || message == "canceled"
     }
 
     func setSyncBackgrounded(_ backgrounded: Bool) {

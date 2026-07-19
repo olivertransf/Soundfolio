@@ -203,6 +203,42 @@ struct APIErrorResponse: Codable {
     let detail: String?
 }
 
+struct ResolveArtistArtRequest: Encodable {
+    let artists: [String]
+}
+
+struct ResolveAlbumArtQuery: Encodable {
+    let key: String
+    let artist: String
+    let album: String
+    let track: String
+}
+
+struct ResolveAlbumArtRequest: Encodable {
+    let albums: [ResolveAlbumArtQuery]
+}
+
+struct ResolveTrackDurationQuery: Encodable {
+    let artist: String
+    let track: String
+}
+
+struct ResolveTrackDurationsRequest: Encodable {
+    let tracks: [ResolveTrackDurationQuery]
+}
+
+struct ResolveArtResponse: Codable {
+    let arts: [String: String?]?
+    let error: String?
+    let detail: String?
+}
+
+struct ResolveDurationsResponse: Codable {
+    let durations: [String: Int]?
+    let error: String?
+    let detail: String?
+}
+
 enum TopSortMode: String, CaseIterable, Identifiable {
     case minutes
     case streams

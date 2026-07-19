@@ -160,9 +160,10 @@ struct PatternsView: View {
 
     private func refresh() async {
         do {
-            _ = try await appState.syncLastFm()
+            try await appState.refreshFromDatabase()
             await load()
         } catch {
+            if AppState.isCancellation(error) { return }
             self.error = appState.handleError(error)
         }
     }

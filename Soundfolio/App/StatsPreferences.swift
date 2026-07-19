@@ -87,6 +87,10 @@ final class StatsPreferences {
         }
     }
 
+    var websiteURL: URL? {
+        serverOriginComponents?.url
+    }
+
     var importURL: URL? {
         guard var components = serverOriginComponents else { return nil }
         components.path = "/history/import"

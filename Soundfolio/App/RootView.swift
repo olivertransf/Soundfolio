@@ -14,7 +14,15 @@ struct RootView: View {
     var body: some View {
         Group {
             if auth.isLoading {
-                ProgressView("Loading account...")
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .tint(SoundfolioTheme.accent(from: preferences))
+                    Text("Loading account…")
+                        .font(SoundfolioTheme.captionFont)
+                        .foregroundStyle(SoundfolioTheme.mutedForeground)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(SoundfolioTheme.pageBackground.ignoresSafeArea())
             } else if !auth.isSignedIn {
                 NavigationStack {
                     AuthView()

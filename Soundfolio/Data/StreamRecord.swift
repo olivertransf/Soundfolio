@@ -15,6 +15,51 @@ struct StreamRecord: Identifiable, Hashable {
     static func documentId(uid: String, trackId: String, playedAt: Date) -> String {
         "\(uid)__\(trackId)__\(Int(playedAt.timeIntervalSince1970 * 1000))"
     }
+
+    func replacing(artistArt: String) -> StreamRecord {
+        StreamRecord(
+            id: id,
+            trackId: trackId,
+            trackName: trackName,
+            artistName: artistName,
+            artistArt: artistArt,
+            albumName: albumName,
+            albumArt: albumArt,
+            durationMs: durationMs,
+            playedAt: playedAt,
+            isDemo: isDemo
+        )
+    }
+
+    func replacing(albumArt: String) -> StreamRecord {
+        StreamRecord(
+            id: id,
+            trackId: trackId,
+            trackName: trackName,
+            artistName: artistName,
+            artistArt: artistArt,
+            albumName: albumName,
+            albumArt: albumArt,
+            durationMs: durationMs,
+            playedAt: playedAt,
+            isDemo: isDemo
+        )
+    }
+
+    func replacing(durationMs: Int) -> StreamRecord {
+        StreamRecord(
+            id: id,
+            trackId: trackId,
+            trackName: trackName,
+            artistName: artistName,
+            artistArt: artistArt,
+            albumName: albumName,
+            albumArt: albumArt,
+            durationMs: durationMs,
+            playedAt: playedAt,
+            isDemo: isDemo
+        )
+    }
 }
 
 struct SyncStreamPayload: Codable {

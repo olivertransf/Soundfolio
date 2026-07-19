@@ -172,6 +172,7 @@ struct SyncToolbarButton: View {
         do {
             _ = try await appState.syncLastFm()
         } catch {
+            if AppState.isCancellation(error) { return }
             syncError = appState.handleError(error)
             showRecentResult = true
         }
@@ -224,7 +225,7 @@ struct SyncStatusPanel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("Pulls new scrobbles from Last.fm into your library.")
+                Text("Refreshes your library, then pulls new scrobbles from Last.fm.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
