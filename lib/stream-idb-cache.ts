@@ -6,7 +6,8 @@ const DB_NAME = "soundfolio-stream-cache";
 const DB_VERSION = 1;
 const STREAM_STORE = "streams";
 const META_STORE = "meta";
-const CACHE_VERSION = 1;
+/** Bump to invalidate browsers stuck on partial/stale stream snapshots. */
+const CACHE_VERSION = 2;
 
 type CachedStream = Omit<Stream, "playedAt" | "createdAt" | "updatedAt"> & {
   playedAt: string;
@@ -123,8 +124,10 @@ async function migrateLegacyCache(uid: string) {
   const legacy = readLegacyStreamCache(uid);
   if (!legacy?.streams.length) return;
 
+  // Legacy localStorage capped at 4k and often marked complete incorrectly.
+  // Always continue paging from the network after migrate.
   await writeStreamCache(uid, legacy.streams, {
-    hasMore: legacy.hasMore ?? true,
+    hasMore: true,
     lastDocId: legacy.lastDocId,
   });
   clearLegacyStreamCache(uid);
@@ -140,6 +143,11 @@ export async function readStreamCache(uid: string): Promise<StreamCacheSnapshot 
     db.getAllFromIndex(STREAM_STORE, "by-uid", uid),
     db.get(META_STORE, uid),
   ]);
+
+  if (meta && meta.v !== CACHE_VERSION) {
+    await clearStreamCache(uid);
+    return null;
+  }
 
   if (rows.length === 0) return null;
   const streams = rows.map(revive).sort((a, b) => b.playedAt.getTime() - a.playedAt.getTime());
@@ -157,12 +165,16 @@ export async function upsertStreamCache(
   pagination?: StreamCachePagination
 ): Promise<StreamCacheMeta | null> {
   const dbPromise = getDb();
-  if (!dbPromise || streams.length === 0) return null;
+  if (!dbPromise) return null;
+  // Empty page still updates pagination (e.g. exact multiple of page size).
+  if (streams.length === 0 && !pagination) return null;
 
   const db = await dbPromise;
   const tx = db.transaction([STREAM_STORE, META_STORE], "readwrite");
   const previous = await tx.objectStore(META_STORE).get(uid);
-  await Promise.all(streams.map((stream) => tx.objectStore(STREAM_STORE).put(serialize(uid, stream))));
+  if (streams.length > 0) {
+    await Promise.all(streams.map((stream) => tx.objectStore(STREAM_STORE).put(serialize(uid, stream))));
+  }
 
   const allRows = await tx.objectStore(STREAM_STORE).index("by-uid").getAll(uid);
   const allStreams = allRows.map(revive);

@@ -40,7 +40,7 @@ const RECENT_PREVIEW = 40;
 
 export function OverviewContent() {
   const searchParams = useSearchParams();
-  const { streams, loading, loadingMore, refreshing } = useStreams();
+  const { streams, loading, loadingMore, refreshing, fullyLoaded } = useStreams();
   const deferredStreams = useDeferredValue(streams);
   const [previewKind, setPreviewKind] = useState<EntityKind>("tracks");
 
@@ -173,7 +173,12 @@ export function OverviewContent() {
             />
           </div>
 
-          {(refreshing || loadingMore) ? (
+          {!fullyLoaded || loadingMore ? (
+            <p className="text-xs text-muted-foreground">
+              Loading full history… totals can rise as older plays arrive (
+              {streams.length.toLocaleString()} loaded)
+            </p>
+          ) : refreshing ? (
             <p className="text-xs text-muted-foreground">Updating history…</p>
           ) : null}
 

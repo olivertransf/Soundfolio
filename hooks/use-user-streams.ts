@@ -29,6 +29,20 @@ function paginationFromPage(page: { hasMore: boolean; lastDoc?: QueryDocumentSna
   };
 }
 
+/** Stale IndexedDB often keeps Last.fm rows at durationMs 0; those are excluded from stats. */
+function cacheNeedsDurationRefresh(streams: Stream[]): boolean {
+  let lastfm = 0;
+  let missing = 0;
+  for (const stream of streams) {
+    if (!stream.trackId.startsWith("lfm-")) continue;
+    lastfm += 1;
+    if (stream.durationMs <= 0) missing += 1;
+  }
+  if (missing === 0) return false;
+  if (missing >= 10) return true;
+  return lastfm > 0 && missing / lastfm >= 0.05;
+}
+
 export function useUserStreams() {
   const { user, loading: authLoading } = useAuth();
   const [streams, setStreams] = useState<Stream[]>([]);
@@ -88,8 +102,8 @@ export function useUserStreams() {
     } catch (err) {
       if (token !== loadTokenRef.current) return;
       setError(firestoreErrorMessage(err, "Could not load listening history."));
+      // Do not mark fullyLoaded on quota errors — that freezes a partial library.
       if (isFirestoreQuotaError(err)) {
-        setFullyLoaded(true);
         setHasMore(false);
       }
     } finally {
@@ -135,7 +149,6 @@ export function useUserStreams() {
         if (token !== loadTokenRef.current) return;
         setError(firestoreErrorMessage(err, "Could not load listening history."));
         if (isFirestoreQuotaError(err)) {
-          setFullyLoaded(true);
           setHasMore(false);
         }
         setLoading(false);
@@ -171,11 +184,19 @@ export function useUserStreams() {
 
       const cached = await applyCache(user.uid, token);
       const cachedMeta = cached?.meta ?? null;
+      const needsDurationRefresh = Boolean(cached?.streams && cacheNeedsDurationRefresh(cached.streams));
 
-      if (cached && isStreamCacheFresh(cachedMeta?.savedAt ?? null) && !options?.forceNetwork) {
+      if (
+        cached &&
+        isStreamCacheFresh(cachedMeta?.savedAt ?? null) &&
+        !options?.forceNetwork &&
+        !needsDurationRefresh
+      ) {
         if (cachedMeta?.fullyLoaded) {
           setHasMore(false);
           setFullyLoaded(true);
+          // Pull newest page so new scrobbles / recent patches apply without a full re-page.
+          void refreshFromNetwork(user.uid, token, { fullRefresh: false, cachedMeta });
           return;
         }
 
@@ -192,8 +213,12 @@ export function useUserStreams() {
       }
 
       await refreshFromNetwork(user.uid, token, {
-        fullRefresh: options?.fullRefresh ?? !cachedMeta?.fullyLoaded,
-        cachedMeta,
+        fullRefresh:
+          options?.fullRefresh ?? (needsDurationRefresh || !cachedMeta?.fullyLoaded),
+        cachedMeta:
+          needsDurationRefresh && cachedMeta
+            ? { ...cachedMeta, fullyLoaded: false }
+            : cachedMeta,
       });
     },
     [user, applyCache, restoreCursor, loadAllRemaining, refreshFromNetwork]
