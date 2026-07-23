@@ -25,9 +25,11 @@ import {
   pickBetterDisplayName,
   trackGroupKey,
 } from "@/lib/entity-normalize";
+import { hoursFromMs, minutesFromMs } from "@/lib/listening-minutes";
 
 export type { TopSortBy } from "@/lib/top-sort";
 export { parseTopSortBy, TOP_SORT_PARAM, topSortLabel } from "@/lib/top-sort";
+export { hoursFromMs, minutesFromMs } from "@/lib/listening-minutes";
 
 const ART_PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
 
@@ -109,8 +111,8 @@ export function computeTotalStats(streams: Stream[], filter?: TimeRangeFilter) {
   const totalMs = rows.reduce((sum, row) => sum + row.durationMs, 0);
   return {
     totalStreams: rows.length,
-    totalMinutes: Math.round(totalMs / 60000),
-    totalHours: Math.round(totalMs / 3600000),
+    totalMinutes: minutesFromMs(totalMs),
+    totalHours: hoursFromMs(totalMs),
   };
 }
 
@@ -166,7 +168,7 @@ export function computeTopTracks(
       albumName: group.albumName,
       albumArt: group.albumArt,
       streams: group.streams,
-      minutesListened: Math.round(group.durationMs / 60000),
+      minutesListened: minutesFromMs(group.durationMs),
     }))
     .sort(topListSort(sortBy))
     .slice(0, limit);
@@ -210,7 +212,7 @@ export function computeTopArtists(
       artistName: group.artistName,
       artistArt: artistArtByKey.get(key) ?? null,
       streams: group.streams,
-      minutesListened: Math.round(group.durationMs / 60000),
+      minutesListened: minutesFromMs(group.durationMs),
     }))
     .sort(topListSort(sortBy))
     .slice(0, limit);
@@ -251,7 +253,7 @@ export function computeTopAlbums(
       albumArt: group.albumArt,
       artistName: group.artistName,
       streams: group.streams,
-      minutesListened: Math.round(group.durationMs / 60000),
+      minutesListened: minutesFromMs(group.durationMs),
     }))
     .sort(topListSort(sortBy))
     .slice(0, limit);
@@ -317,19 +319,23 @@ export function computeStreamsByWeek(
   const defaultSince = subWeeks(new Date(), weeksBack);
   const since = filter?.since ?? defaultSince;
   const rows = filterForStats(streams).filter((row) => row.playedAt >= since);
-  const byWeek: Record<string, { streams: number; minutes: number }> = {};
+  const byWeek: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {
     const localDate = formatCalendarDateInZone(row.playedAt, tz);
     const localWeekday = getDayOfWeekInTimeZone(row.playedAt, tz);
     const offsetFromMonday = (localWeekday + 6) % 7;
     const weekStart = addCalendarDaysInZone(localDate, -offsetFromMonday, tz);
-    if (!byWeek[weekStart]) byWeek[weekStart] = { streams: 0, minutes: 0 };
+    if (!byWeek[weekStart]) byWeek[weekStart] = { streams: 0, durationMs: 0 };
     byWeek[weekStart].streams += 1;
-    byWeek[weekStart].minutes += Math.round(row.durationMs / 60000);
+    byWeek[weekStart].durationMs += row.durationMs;
   }
 
-  return Object.entries(byWeek).map(([week, data]) => ({ week, ...data }));
+  return Object.entries(byWeek).map(([week, data]) => ({
+    week,
+    streams: data.streams,
+    minutes: minutesFromMs(data.durationMs),
+  }));
 }
 
 export function computeStreamsByMonth(
@@ -342,16 +348,20 @@ export function computeStreamsByMonth(
   const defaultSince = subMonths(new Date(), monthsBack);
   const since = filter?.since ?? defaultSince;
   const rows = filterForStats(streams).filter((row) => row.playedAt >= since);
-  const byMonth: Record<string, { streams: number; minutes: number }> = {};
+  const byMonth: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {
     const monthKey = formatCalendarDateInZone(row.playedAt, tz).slice(0, 7);
-    if (!byMonth[monthKey]) byMonth[monthKey] = { streams: 0, minutes: 0 };
+    if (!byMonth[monthKey]) byMonth[monthKey] = { streams: 0, durationMs: 0 };
     byMonth[monthKey].streams += 1;
-    byMonth[monthKey].minutes += Math.round(row.durationMs / 60000);
+    byMonth[monthKey].durationMs += row.durationMs;
   }
 
-  return Object.entries(byMonth).map(([month, data]) => ({ month, ...data }));
+  return Object.entries(byMonth).map(([month, data]) => ({
+    month,
+    streams: data.streams,
+    minutes: minutesFromMs(data.durationMs),
+  }));
 }
 
 export function computeStreamsByDay(
@@ -363,18 +373,22 @@ export function computeStreamsByDay(
   const defaultSince = subDays(new Date(), 90);
   const since = filter?.since ?? defaultSince;
   const rows = filterForStats(streams).filter((row) => row.playedAt >= since && inFilter(row, filter));
-  const byDay: Record<string, { streams: number; minutes: number }> = {};
+  const byDay: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {
     const day = formatCalendarDateInZone(row.playedAt, tz);
-    if (!byDay[day]) byDay[day] = { streams: 0, minutes: 0 };
+    if (!byDay[day]) byDay[day] = { streams: 0, durationMs: 0 };
     byDay[day].streams += 1;
-    byDay[day].minutes += Math.round(row.durationMs / 60000);
+    byDay[day].durationMs += row.durationMs;
   }
 
   return Object.entries(byDay)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([label, data]) => ({ label, ...data }));
+    .map(([label, data]) => ({
+      label,
+      streams: data.streams,
+      minutes: minutesFromMs(data.durationMs),
+    }));
 }
 
 export function computeStreamsByHour(
@@ -384,20 +398,21 @@ export function computeStreamsByHour(
 ) {
   const tz = resolveStatsTimeZone(timeZone);
   const rows = filterForStats(streams, filter);
-  const byHour: Record<number, { streams: number; minutes: number }> = {};
-  for (let h = 0; h < 24; h++) byHour[h] = { streams: 0, minutes: 0 };
+  const byHour: Record<number, { streams: number; durationMs: number }> = {};
+  for (let h = 0; h < 24; h++) byHour[h] = { streams: 0, durationMs: 0 };
 
   for (const row of rows) {
     const instant = getListenBucketInstant(row.playedAt, row.durationMs, row.trackId, tz);
     const h = getHourInTimeZone(instant, tz);
     byHour[h].streams += 1;
-    byHour[h].minutes += Math.round(row.durationMs / 60000);
+    byHour[h].durationMs += row.durationMs;
   }
 
   return Object.entries(byHour).map(([hour, data]) => ({
     hour: parseInt(hour, 10),
     label: `${hour.toString().padStart(2, "0")}:00`,
-    ...data,
+    streams: data.streams,
+    minutes: minutesFromMs(data.durationMs),
   }));
 }
 
@@ -409,20 +424,21 @@ export function computeStreamsByDayOfWeek(
   const tz = resolveStatsTimeZone(timeZone);
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const rows = filterForStats(streams, filter);
-  const byDay: Record<number, { streams: number; minutes: number }> = {};
-  for (let d = 0; d < 7; d++) byDay[d] = { streams: 0, minutes: 0 };
+  const byDay: Record<number, { streams: number; durationMs: number }> = {};
+  for (let d = 0; d < 7; d++) byDay[d] = { streams: 0, durationMs: 0 };
 
   for (const row of rows) {
     const instant = getListenBucketInstant(row.playedAt, row.durationMs, row.trackId, tz);
     const d = getDayOfWeekInTimeZone(instant, tz);
     byDay[d].streams += 1;
-    byDay[d].minutes += Math.round(row.durationMs / 60000);
+    byDay[d].durationMs += row.durationMs;
   }
 
   return [1, 2, 3, 4, 5, 6, 0].map((d) => ({
     day: d,
     label: dayNames[d],
-    ...byDay[d],
+    streams: byDay[d].streams,
+    minutes: minutesFromMs(byDay[d].durationMs),
   }));
 }
 
@@ -516,7 +532,7 @@ export function computeTrackDetail(
     albumName: rows[0]?.albumName ?? "",
     albumArt: rows.find((row) => row.albumArt)?.albumArt ?? null,
     streams: rows.length,
-    minutesListened: Math.round(totalMs / 60000),
+    minutesListened: minutesFromMs(totalMs),
     firstPlayedAt: dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null,
     lastPlayedAt: dates.length ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null,
     recentPlays: [...rows]
@@ -545,7 +561,7 @@ export function computeArtistDetail(
           matchesEntity(row.artistName, artistName) && isUsableArtUrl(row.artistArt)
       )?.artistArt ?? null,
     streams: rows.length,
-    minutesListened: Math.round(totalMs / 60000),
+    minutesListened: minutesFromMs(totalMs),
     topTracks: computeTopTracks(rows, 10, filter, sortBy),
     topAlbums: computeTopAlbums(rows, 10, filter, sortBy),
   };
@@ -583,12 +599,12 @@ export function computeAlbumDetail(
     artistName: artistNameResolved,
     albumArt: rows.find((row) => row.albumArt)?.albumArt ?? null,
     streams: rows.length,
-    minutesListened: Math.round(totalMs / 60000),
+    minutesListened: minutesFromMs(totalMs),
     tracks: [...trackGroups.values()]
       .map((group) => ({
         trackName: group.trackName,
         streams: group.streams,
-        minutes: Math.round(group.durationMs / 60000),
+        minutes: minutesFromMs(group.durationMs),
       }))
       .sort((a, b) => b.streams - a.streams),
   };

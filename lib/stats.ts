@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { subMonths, subWeeks, subDays } from "date-fns";
 import { DEFAULT_TIME_RANGE } from "@/lib/time-range";
 import type { TopSortBy } from "@/lib/top-sort";
+import { hoursFromMs, minutesFromMs } from "@/lib/listening-minutes";
 import {
   resolveStatsTimeZone,
   getHourInTimeZone,
@@ -151,8 +152,8 @@ export async function getTotalStats(
   const totalMs = result._sum.durationMs ?? 0;
   return {
     totalStreams: result._count.id,
-    totalMinutes: Math.round(totalMs / 60000),
-    totalHours: Math.round(totalMs / 3600000),
+    totalMinutes: minutesFromMs(totalMs),
+    totalHours: hoursFromMs(totalMs),
   };
 }
 
@@ -208,7 +209,7 @@ export async function getTopTracks(
       albumName: album?.albumName ?? "",
       albumArt: album?.albumArt ?? null,
       streams: t._count.id,
-      minutesListened: Math.round((t._sum.durationMs ?? 0) / 60000),
+      minutesListened: minutesFromMs(t._sum.durationMs ?? 0),
     };
   });
 }
@@ -255,7 +256,7 @@ export async function getTopArtists(
     artistName: a.artistName,
     artistArt: artMap.get(a.artistName) ?? null,
     streams: a._count.id,
-    minutesListened: Math.round((a._sum.durationMs ?? 0) / 60000),
+    minutesListened: minutesFromMs(a._sum.durationMs ?? 0),
   }));
 }
 
@@ -319,7 +320,7 @@ export async function getTopAlbums(
       albumArt: albumArt.get(key) ?? null,
       artistName: a.artistName,
       streams: a._count.id,
-      minutesListened: Math.round((a._sum.durationMs ?? 0) / 60000),
+      minutesListened: minutesFromMs(a._sum.durationMs ?? 0),
     };
   });
 }
@@ -337,20 +338,21 @@ export async function getStreamsByHour(
     select: { playedAt: true, durationMs: true, trackId: true },
   });
 
-  const byHour: Record<number, { streams: number; minutes: number }> = {};
-  for (let h = 0; h < 24; h++) byHour[h] = { streams: 0, minutes: 0 };
+  const byHour: Record<number, { streams: number; durationMs: number }> = {};
+  for (let h = 0; h < 24; h++) byHour[h] = { streams: 0, durationMs: 0 };
 
   for (const s of streams) {
     const instant = getListenBucketInstant(s.playedAt, s.durationMs, s.trackId, tz);
     const h = getHourInTimeZone(instant, tz);
     byHour[h].streams++;
-    byHour[h].minutes += Math.round(s.durationMs / 60000);
+    byHour[h].durationMs += s.durationMs;
   }
 
   return Object.entries(byHour).map(([hour, data]) => ({
     hour: parseInt(hour, 10),
     label: `${hour.toString().padStart(2, "0")}:00`,
-    ...data,
+    streams: data.streams,
+    minutes: minutesFromMs(data.durationMs),
   }));
 }
 
@@ -368,20 +370,21 @@ export async function getStreamsByDayOfWeek(
   });
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const byDay: Record<number, { streams: number; minutes: number }> = {};
-  for (let d = 0; d < 7; d++) byDay[d] = { streams: 0, minutes: 0 };
+  const byDay: Record<number, { streams: number; durationMs: number }> = {};
+  for (let d = 0; d < 7; d++) byDay[d] = { streams: 0, durationMs: 0 };
 
   for (const s of streams) {
     const instant = getListenBucketInstant(s.playedAt, s.durationMs, s.trackId, tz);
     const d = getDayOfWeekInTimeZone(instant, tz);
     byDay[d].streams++;
-    byDay[d].minutes += Math.round(s.durationMs / 60000);
+    byDay[d].durationMs += s.durationMs;
   }
 
   return [1, 2, 3, 4, 5, 6, 0].map((d) => ({
     day: d,
     label: dayNames[d],
-    ...byDay[d],
+    streams: byDay[d].streams,
+    minutes: minutesFromMs(byDay[d].durationMs),
   }));
 }
 
@@ -440,19 +443,23 @@ export async function getStreamsByWeek(
     orderBy: { playedAt: "asc" },
   });
 
-  const byWeek: Record<string, { streams: number; minutes: number }> = {};
+  const byWeek: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const s of streams) {
     const localDate = formatCalendarDateInZone(s.playedAt, tz);
     const localWeekday = getDayOfWeekInTimeZone(s.playedAt, tz);
     const offsetFromMonday = (localWeekday + 6) % 7;
     const weekStart = addCalendarDaysInZone(localDate, -offsetFromMonday, tz);
-    if (!byWeek[weekStart]) byWeek[weekStart] = { streams: 0, minutes: 0 };
+    if (!byWeek[weekStart]) byWeek[weekStart] = { streams: 0, durationMs: 0 };
     byWeek[weekStart].streams++;
-    byWeek[weekStart].minutes += Math.round(s.durationMs / 60000);
+    byWeek[weekStart].durationMs += s.durationMs;
   }
 
-  return Object.entries(byWeek).map(([week, data]) => ({ week, ...data }));
+  return Object.entries(byWeek).map(([week, data]) => ({
+    week,
+    streams: data.streams,
+    minutes: minutesFromMs(data.durationMs),
+  }));
 }
 
 export async function getStreamsByMonth(
@@ -471,16 +478,20 @@ export async function getStreamsByMonth(
     orderBy: { playedAt: "asc" },
   });
 
-  const byMonth: Record<string, { streams: number; minutes: number }> = {};
+  const byMonth: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const s of streams) {
     const monthKey = formatCalendarDateInZone(s.playedAt, tz).slice(0, 7);
-    if (!byMonth[monthKey]) byMonth[monthKey] = { streams: 0, minutes: 0 };
+    if (!byMonth[monthKey]) byMonth[monthKey] = { streams: 0, durationMs: 0 };
     byMonth[monthKey].streams++;
-    byMonth[monthKey].minutes += Math.round(s.durationMs / 60000);
+    byMonth[monthKey].durationMs += s.durationMs;
   }
 
-  return Object.entries(byMonth).map(([month, data]) => ({ month, ...data }));
+  return Object.entries(byMonth).map(([month, data]) => ({
+    month,
+    streams: data.streams,
+    minutes: minutesFromMs(data.durationMs),
+  }));
 }
 
 export async function getStreamsByDay(
@@ -498,17 +509,21 @@ export async function getStreamsByDay(
     orderBy: { playedAt: "asc" },
   });
 
-  const byDay: Record<string, { streams: number; minutes: number }> = {};
+  const byDay: Record<string, { streams: number; durationMs: number }> = {};
   for (const s of streams) {
     const day = formatCalendarDateInZone(s.playedAt, tz);
-    if (!byDay[day]) byDay[day] = { streams: 0, minutes: 0 };
+    if (!byDay[day]) byDay[day] = { streams: 0, durationMs: 0 };
     byDay[day].streams++;
-    byDay[day].minutes += Math.round(s.durationMs / 60000);
+    byDay[day].durationMs += s.durationMs;
   }
 
   return Object.entries(byDay)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([label, data]) => ({ label, ...data }));
+    .map(([label, data]) => ({
+      label,
+      streams: data.streams,
+      minutes: minutesFromMs(data.durationMs),
+    }));
 }
 
 export async function getListeningSpan(

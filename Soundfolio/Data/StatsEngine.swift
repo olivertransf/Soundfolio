@@ -64,8 +64,8 @@ enum StatsEngine {
         let totalMs = rows.reduce(0) { $0 + $1.durationMs }
         let totals = OverviewTotals(
             totalStreams: rows.count,
-            totalMinutes: Int(totalMs / 60_000),
-            totalHours: Int(totalMs / 3_600_000)
+            totalMinutes: ListeningMinutes.minutes(fromMs: totalMs),
+            totalHours: ListeningMinutes.hours(fromMs: totalMs)
         )
         let diversity = OverviewDiversity(
             uniqueTracks: Set(rows.map(trackKey)).count,
@@ -127,7 +127,7 @@ enum StatsEngine {
             groups[key] = group
         }
         return groups.values
-            .sorted { sort == .streams ? $0.streams > $1.streams : ($0.durationMs / 60_000) > ($1.durationMs / 60_000) }
+            .sorted { sort == .streams ? $0.streams > $1.streams : ListeningMinutes.minutes(fromMs: $0.durationMs) > ListeningMinutes.minutes(fromMs: $1.durationMs) }
             .prefix(limit)
             .map {
                 TopTrackItem(
@@ -137,7 +137,7 @@ enum StatsEngine {
                     albumName: $0.albumName,
                     albumArt: $0.albumArt,
                     streams: $0.streams,
-                    minutesListened: $0.durationMs / 60_000
+                    minutesListened: ListeningMinutes.minutes(fromMs: $0.durationMs)
                 )
             }
     }
@@ -155,14 +155,14 @@ enum StatsEngine {
             groups[key] = group
         }
         return groups.values
-            .sorted { sort == .streams ? $0.streams > $1.streams : ($0.durationMs / 60_000) > ($1.durationMs / 60_000) }
+            .sorted { sort == .streams ? $0.streams > $1.streams : ListeningMinutes.minutes(fromMs: $0.durationMs) > ListeningMinutes.minutes(fromMs: $1.durationMs) }
             .prefix(limit)
             .map {
                 TopArtistItem(
                     artistName: $0.artistName,
                     artistArt: $0.artistArt,
                     streams: $0.streams,
-                    minutesListened: $0.durationMs / 60_000
+                    minutesListened: ListeningMinutes.minutes(fromMs: $0.durationMs)
                 )
             }
     }
@@ -181,7 +181,7 @@ enum StatsEngine {
             groups[key] = group
         }
         return groups.values
-            .sorted { sort == .streams ? $0.streams > $1.streams : ($0.durationMs / 60_000) > ($1.durationMs / 60_000) }
+            .sorted { sort == .streams ? $0.streams > $1.streams : ListeningMinutes.minutes(fromMs: $0.durationMs) > ListeningMinutes.minutes(fromMs: $1.durationMs) }
             .prefix(limit)
             .map {
                 TopAlbumItem(
@@ -189,7 +189,7 @@ enum StatsEngine {
                     artistName: $0.artistName,
                     albumArt: $0.albumArt,
                     streams: $0.streams,
-                    minutesListened: $0.durationMs / 60_000
+                    minutesListened: ListeningMinutes.minutes(fromMs: $0.durationMs)
                 )
             }
     }
@@ -224,13 +224,13 @@ enum StatsEngine {
         let filter = parseTimeRange(preferences: preferences)
         let rows = filtered(streams, range: filter)
         let calendar = Calendar.current
-        var buckets: [String: (minutes: Int, streams: Int)] = [:]
+        var buckets: [String: (durationMs: Int, streams: Int)] = [:]
 
         for row in rows {
             let key = weekKey(for: row.playedAt, calendar: calendar)
             var bucket = buckets[key] ?? (0, 0)
             bucket.streams += 1
-            bucket.minutes += row.durationMs / 60_000
+            bucket.durationMs += row.durationMs
             buckets[key] = bucket
         }
 
@@ -238,7 +238,11 @@ enum StatsEngine {
 
         return buckets.keys.sorted().suffix(cap).map { label in
             let bucket = buckets[label] ?? (0, 0)
-            return HistoryPoint(label: label, minutes: bucket.minutes, streams: bucket.streams)
+            return HistoryPoint(
+                label: label,
+                minutes: ListeningMinutes.minutes(fromMs: bucket.durationMs),
+                streams: bucket.streams
+            )
         }
     }
 
@@ -246,17 +250,17 @@ enum StatsEngine {
         let filter = parseTimeRange(preferences: preferences)
         let rows = filtered(streams, range: filter)
         let calendar = Calendar.current
-        var byHour = Array(repeating: (minutes: 0, streams: 0), count: 24)
-        var byDay = Array(repeating: (minutes: 0, streams: 0), count: 7)
+        var byHour = Array(repeating: (durationMs: 0, streams: 0), count: 24)
+        var byDay = Array(repeating: (durationMs: 0, streams: 0), count: 7)
         var heatCounts = Array(repeating: 0, count: 7 * 24)
 
         for row in rows {
             let hour = calendar.component(.hour, from: row.playedAt)
             let weekday = calendar.component(.weekday, from: row.playedAt) - 1
             byHour[hour].streams += 1
-            byHour[hour].minutes += row.durationMs / 60_000
+            byHour[hour].durationMs += row.durationMs
             byDay[weekday].streams += 1
-            byDay[weekday].minutes += row.durationMs / 60_000
+            byDay[weekday].durationMs += row.durationMs
             heatCounts[weekday * 24 + hour] += 1
         }
 
@@ -264,13 +268,17 @@ enum StatsEngine {
         let hourRows = (0 ..< 24).map {
             PatternsHourDay(
                 label: String(format: "%02d:00", $0),
-                minutes: byHour[$0].minutes,
+                minutes: ListeningMinutes.minutes(fromMs: byHour[$0].durationMs),
                 streams: byHour[$0].streams
             )
         }
         let weekdayOrder = [1, 2, 3, 4, 5, 6, 0]
         let dayRows = weekdayOrder.map { day in
-            PatternsHourDay(label: dayNames[day], minutes: byDay[day].minutes, streams: byDay[day].streams)
+            PatternsHourDay(
+                label: dayNames[day],
+                minutes: ListeningMinutes.minutes(fromMs: byDay[day].durationMs),
+                streams: byDay[day].streams
+            )
         }
         var grid: [HeatmapCell] = []
         for day in 0 ..< 7 {
@@ -315,7 +323,7 @@ enum StatsEngine {
             albumName: albumName,
             albumArt: albumArt,
             streams: rows.count,
-            minutesListened: totalMs / 60_000,
+            minutesListened: ListeningMinutes.minutes(fromMs: totalMs),
             firstPlayedAt: dates.min(),
             lastPlayedAt: dates.max(),
             recentPlays: recentStreams(from: rows, limit: 20)
@@ -331,7 +339,7 @@ enum StatsEngine {
             artistName: artistName,
             artistArt: artistArt,
             streams: rows.count,
-            minutesListened: totalMs / 60_000,
+            minutesListened: ListeningMinutes.minutes(fromMs: totalMs),
             topTracks: topTracks(from: rows, sort: sort, limit: 10),
             topAlbums: topAlbums(from: rows, sort: sort, limit: 10)
         )
@@ -352,7 +360,7 @@ enum StatsEngine {
             trackGroups[key] = group
         }
         let tracks = trackGroups.map { _, group in
-            AlbumTrackRow(trackName: group.name, streams: group.streams, minutes: group.durationMs / 60_000)
+            AlbumTrackRow(trackName: group.name, streams: group.streams, minutes: ListeningMinutes.minutes(fromMs: group.durationMs))
         }
         .sorted { $0.streams > $1.streams }
 
@@ -363,7 +371,7 @@ enum StatsEngine {
             artistName: artistName,
             albumArt: rows.compactMap(\.albumArt).first,
             streams: rows.count,
-            minutesListened: totalMs / 60_000,
+            minutesListened: ListeningMinutes.minutes(fromMs: totalMs),
             tracks: tracks
         )
     }

@@ -57,8 +57,8 @@ final class StreamStore {
                     }
                     let remote = documents.compactMap { Self.record(from: $0) }
                     let next = Self.mergeStreams(local: self.streams, remote: remote)
-                    let changed = next.count != self.streams.count
-                        || next.first?.id != self.streams.first?.id
+                    // Include duration/art field updates — count/first-id alone misses backfills.
+                    let changed = next != self.streams
                     self.streams = next
                     if changed {
                         self.revision &+= 1
@@ -247,7 +247,7 @@ final class StreamStore {
             byID[record.id] = record
         }
         let next = byID.values.sorted { $0.playedAt > $1.playedAt }
-        let changed = next.count != streams.count || next.first?.id != streams.first?.id
+        let changed = next != streams
         streams = next
         if changed {
             revision &+= 1
