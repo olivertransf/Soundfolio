@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { useDevLibrary } from "@/hooks/use-dev-library";
 import { useUserStreams } from "@/hooks/use-user-streams";
 import { useDemoStreams } from "@/hooks/use-demo-streams";
 import type { StreamCacheMeta } from "@/lib/stream-idb-cache";
@@ -31,33 +32,48 @@ type StreamsContextValue = {
 const StreamsContext = createContext<StreamsContextValue | null>(null);
 
 export function StreamsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const { streams, loading, loadingMore, refreshing, fullyLoaded, hasMore, cacheMeta, error, reload, refreshHead, loadMore, setStreams, clearCache } =
-    useUserStreams();
+  const { user, loading: authLoading } = useAuth();
+  const signedIn = useUserStreams();
+  const devEnabled = process.env.NODE_ENV === "development" && !authLoading && !user;
+  const devLibrary = useDevLibrary(devEnabled);
+  const active = user ? signedIn : devEnabled ? devLibrary : null;
 
   const value = useMemo(
     () => ({
-      streams: user ? streams : [],
-      loading: user ? loading : false,
-      loadingMore: user ? loadingMore : false,
-      refreshing: user ? refreshing : false,
-      fullyLoaded: user ? fullyLoaded : true,
-      hasMore: user ? hasMore : false,
-      cacheMeta: user ? cacheMeta : null,
-      error: user ? error : null,
-      reload,
-      refreshHead,
-      loadMore,
-      setStreams,
-      clearCache,
+      streams: active?.streams ?? [],
+      loading: authLoading || (active ? active.loading : false),
+      loadingMore: active?.loadingMore ?? false,
+      refreshing: active?.refreshing ?? false,
+      fullyLoaded: active?.fullyLoaded ?? !authLoading,
+      hasMore: active?.hasMore ?? false,
+      cacheMeta: active?.cacheMeta ?? null,
+      error: active?.error ?? null,
+      reload: active?.reload ?? (async () => {}),
+      refreshHead: active?.refreshHead ?? (async () => {}),
+      loadMore: active?.loadMore ?? (async () => {}),
+      setStreams: active?.setStreams ?? (() => {}),
+      clearCache: active?.clearCache ?? (async () => {}),
     }),
-    [user, streams, loading, loadingMore, refreshing, fullyLoaded, hasMore, cacheMeta, error, reload, refreshHead, loadMore, setStreams, clearCache]
+    [active, authLoading]
   );
 
   return <StreamsContext.Provider value={value}>{children}</StreamsContext.Provider>;
 }
 
+function DevLibraryProvider({ children }: { children: ReactNode }) {
+  const data = useDevLibrary(true);
+  return <StreamsContext.Provider value={data}>{children}</StreamsContext.Provider>;
+}
+
 export function DemoStreamsProvider({ children }: { children: ReactNode }) {
+  if (process.env.NODE_ENV === "development") {
+    return <DevLibraryProvider>{children}</DevLibraryProvider>;
+  }
+
+  return <SyntheticDemoStreamsProvider>{children}</SyntheticDemoStreamsProvider>;
+}
+
+function SyntheticDemoStreamsProvider({ children }: { children: ReactNode }) {
   const { streams, loading, error, reload, setStreams } = useDemoStreams();
 
   const value = useMemo(

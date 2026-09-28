@@ -18,6 +18,12 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     if (authLoading) return;
 
     if (!user) {
+      if (process.env.NODE_ENV === "development") {
+        setAllowed(true);
+        setProfileLoading(false);
+        setError(null);
+        return;
+      }
       const next = encodeURIComponent(pathname || "/me");
       router.replace(`/auth?next=${next}`);
       return;
