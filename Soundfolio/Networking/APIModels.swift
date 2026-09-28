@@ -123,6 +123,8 @@ struct TrackDetail: Codable {
     let albumArt: String?
     let streams: Int
     let minutesListened: Int
+    let rank: Int?
+    let share: Int
     let firstPlayedAt: Date?
     let lastPlayedAt: Date?
     let recentPlays: [RecentStream]
@@ -133,6 +135,9 @@ struct ArtistDetail: Codable {
     let artistArt: String?
     let streams: Int
     let minutesListened: Int
+    let uniqueTracks: Int
+    let uniqueAlbums: Int
+    let share: Int
     let topTracks: [TopTrackItem]
     let topAlbums: [TopAlbumItem]
 }
@@ -150,6 +155,7 @@ struct AlbumDetail: Codable {
     let albumArt: String?
     let streams: Int
     let minutesListened: Int
+    let share: Int
     let tracks: [AlbumTrackRow]
 }
 

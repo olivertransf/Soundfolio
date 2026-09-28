@@ -2,7 +2,15 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { BarSeriesChart } from "@/components/bar-series-chart";
+import {
+  BarSeriesChart,
+  ChartPanel,
+  chartCaption,
+  historyChartTitle,
+  type ChartMetric,
+  type HistoryMode,
+} from "@/components/bar-series-chart";
+import { StatRow } from "@/components/entity/entity-hero";
 import { FilterToolbar } from "@/components/filter-toolbar";
 import { useStreams } from "@/components/streams-provider";
 import {
@@ -19,9 +27,6 @@ import {
   detectViewerTimeZone,
   readViewerTimeZoneCookie,
 } from "@/lib/viewer-timezone-client";
-
-type HistoryMode = "days" | "weeks" | "months";
-type ChartMetric = "minutes" | "streams";
 
 function defaultMode(days: number): HistoryMode {
   if (days > 400) return "months";
@@ -72,21 +77,22 @@ function InsightsSectionInner() {
   return (
     <div className="space-y-3">
       <FilterToolbar context="insights" />
-      <div className="grid gap-2 sm:grid-cols-3">
-        <SummaryCell label="Albums" value={summary.uniqueAlbums.toLocaleString()} />
-        <SummaryCell
-          label="Most active day"
-          value={summary.mostActiveDay ?? "—"}
-          hint={summary.mostActiveDay ? `${summary.mostActiveMinutes.toLocaleString()} min` : undefined}
-        />
-        <SummaryCell label="Top 10 tracks" value={`${summary.topTenShare}%`} hint="of minutes" />
-      </div>
+      <StatRow
+        items={[
+          { label: "Albums", value: summary.uniqueAlbums.toLocaleString() },
+          {
+            label: "Most active day",
+            value: summary.mostActiveDay ?? "—",
+            hint: summary.mostActiveDay ? `${summary.mostActiveMinutes.toLocaleString()} min` : undefined,
+          },
+          { label: "Top 10 tracks", value: `${summary.topTenShare}%`, hint: "of minutes" },
+        ]}
+      />
 
-      <section className="space-y-2 border border-border bg-card p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Listening over time
-          </h2>
+      <ChartPanel
+        title={historyChartTitle(mode, metric)}
+        caption={chartCaption(filter.label, metric)}
+        actions={
           <div className="flex flex-wrap gap-2">
             <Segment
               value={mode}
@@ -106,34 +112,36 @@ function InsightsSectionInner() {
               onChange={setMetric}
             />
           </div>
-        </div>
-        <BarSeriesChart points={history} metric={metric} label={`Listening by ${mode}`} />
-      </section>
+        }
+      >
+        <BarSeriesChart points={history} metric={metric} label={historyChartTitle(mode, metric)} />
+      </ChartPanel>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <section className="space-y-2 border border-border bg-card p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Time of day
-          </h2>
+        <ChartPanel
+          title={metric === "minutes" ? "Minutes by hour" : "Plays by hour"}
+          caption={chartCaption(filter.label, metric)}
+        >
           <BarSeriesChart points={hours} metric={metric} label="Listening by hour" />
-        </section>
-        <section className="space-y-2 border border-border bg-card p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Day of week
-          </h2>
+        </ChartPanel>
+        <ChartPanel
+          title={metric === "minutes" ? "Minutes by weekday" : "Plays by weekday"}
+          caption={chartCaption(filter.label, metric)}
+        >
           <BarSeriesChart points={weekdays} metric={metric} label="Listening by weekday" />
-        </section>
+        </ChartPanel>
       </div>
-    </div>
-  );
-}
 
-function SummaryCell({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="border border-border bg-card px-3 py-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="truncate text-lg font-semibold tabular-nums">{value}</p>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      <ChartPanel title="Top 10 share" caption="Share of minutes in this period">
+        <BarSeriesChart
+          points={[
+            { label: "Top 10", minutes: summary.topTenMinutes, streams: 0 },
+            { label: "Rest", minutes: summary.restMinutes, streams: 0 },
+          ]}
+          metric="minutes"
+          label="Top 10 share of minutes"
+        />
+      </ChartPanel>
     </div>
   );
 }

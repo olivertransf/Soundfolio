@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
@@ -135,24 +134,13 @@ struct DashboardView: View {
     private func listeningChart(_ overview: OverviewResponse) -> some View {
         let grain: HistoryGrain = overview.calendarDays > 400 ? .months : overview.calendarDays > 120 ? .weeks : .days
         let points = StatsEngine.historySeries(from: streamStore.streams, preferences: preferences, grain: grain)
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("LISTENING OVER TIME")
-                .font(SoundfolioTheme.labelFont)
-                .tracking(0.8)
-                .foregroundStyle(SoundfolioTheme.mutedForeground)
-            Chart(points) { point in
-                BarMark(
-                    x: .value("When", point.label),
-                    y: .value("Minutes", point.minutes)
-                )
-                .foregroundStyle(accent)
-            }
-            .frame(height: 140)
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4))
-            }
+        let rangeLabel = StatsEngine.parseTimeRange(preferences: preferences).label
+        return ChartPanel(
+            title: ChartCopy.historyTitle(grain: grain, metric: "Minutes"),
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
         }
-        .soundfolioPanel(preferences: preferences)
     }
 
     @ViewBuilder

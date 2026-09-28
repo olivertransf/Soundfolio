@@ -6,17 +6,38 @@ struct TrackDetailView: View {
     @Bindable var preferences: StatsPreferences
     @Environment(StreamStore.self) private var streamStore
     @Environment(StatsCache.self) private var statsCache
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var detail: TrackDetail?
 
     private var accent: Color { SoundfolioTheme.accent(from: preferences) }
+    private var rangeLabel: String { StatsEngine.parseTimeRange(preferences: preferences).label }
+
+    private var scoped: [StreamRecord] {
+        streamStore.streams.filter {
+            EntityNormalize.matches($0.trackName, trackName) && EntityNormalize.matches($0.artistName, artistName)
+        }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SoundfolioTheme.sectionSpacing) {
+                FilterToolbar(preferences: preferences, context: .patterns)
                 if let detail {
                     hero(detail)
-                    statsRow(detail)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        StatCard(label: "Plays", value: detail.streams.formatted(), accent: accent)
+                        StatCard(label: "Minutes", value: detail.minutesListened.formatted(), accent: accent)
+                        StatCard(label: "First play", value: shortDate(detail.firstPlayedAt), accent: accent)
+                        StatCard(label: "Last play", value: shortDate(detail.lastPlayedAt), accent: accent)
+                        StatCard(
+                            label: "Rank",
+                            value: detail.rank.map { "#\($0)" } ?? "—",
+                            hint: "among tracks",
+                            accent: accent
+                        )
+                        StatCard(label: "Share", value: "\(detail.share)%", hint: "of minutes", accent: accent)
+                    }
+                    playsOverTime
+                    playsByHour
                     if !detail.recentPlays.isEmpty {
                         RankColumn(title: "Recent plays") {
                             VStack(spacing: 0) {
@@ -52,7 +73,30 @@ struct TrackDetailView: View {
     }
 
     private var reloadID: String {
-        "\(trackName)-\(artistName)-\(preferences.period.rawValue)-\(streamStore.revision)"
+        "\(trackName)-\(artistName)-\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(streamStore.revision)"
+    }
+
+    private var playsOverTime: some View {
+        let grain = historyGrain(preferences)
+        let points = StatsEngine.historySeries(from: scoped, preferences: preferences, grain: grain)
+        return ChartPanel(
+            title: ChartCopy.historyTitle(grain: grain, metric: "Plays"),
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Plays")
+        ) {
+            SeriesChart(points: points, metricLabel: "Plays", useMinutes: false, accent: accent)
+        }
+    }
+
+    private var playsByHour: some View {
+        let points = StatsEngine.patterns(from: scoped, preferences: preferences).byHour.map {
+            HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
+        }
+        return ChartPanel(
+            title: "Plays by hour",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Plays")
+        ) {
+            SeriesChart(points: points, metricLabel: "Plays", useMinutes: false, accent: accent)
+        }
     }
 
     private func hero(_ detail: TrackDetail) -> some View {
@@ -76,13 +120,6 @@ struct TrackDetailView: View {
         .soundfolioPanel(preferences: preferences)
     }
 
-    private func statsRow(_ detail: TrackDetail) -> some View {
-        HStack(spacing: 8) {
-            StatCard(label: "Plays", value: detail.streams.formatted(), accent: accent)
-            StatCard(label: "Minutes", value: detail.minutesListened.formatted(), accent: accent)
-        }
-    }
-
     private func load() {
         detail = statsCache.trackDetail(
             name: trackName,
@@ -103,10 +140,16 @@ struct ArtistDetailView: View {
     @State private var detail: ArtistDetail?
 
     private var accent: Color { SoundfolioTheme.accent(from: preferences) }
+    private var rangeLabel: String { StatsEngine.parseTimeRange(preferences: preferences).label }
+
+    private var scoped: [StreamRecord] {
+        streamStore.streams.filter { EntityNormalize.matches($0.artistName, artistName) }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SoundfolioTheme.sectionSpacing) {
+                FilterToolbar(preferences: preferences, context: .patterns)
                 if let detail {
                     HStack(spacing: 16) {
                         ArtworkView(urlString: detail.artistArt, size: 112, isCircle: true, letterFallback: String(detail.artistName.prefix(1)).uppercased())
@@ -117,23 +160,21 @@ struct ArtistDetailView: View {
                                 .foregroundStyle(SoundfolioTheme.mutedForeground)
                             Text(detail.artistName)
                                 .font(SoundfolioFont.semibold(22))
-                            Text(
-                                RankValueFormatter.primary(
-                                    minutes: detail.minutesListened,
-                                    streams: detail.streams,
-                                    sort: preferences.sort
-                                )
-                            )
-                            .font(SoundfolioTheme.captionFont)
-                            .foregroundStyle(SoundfolioTheme.mutedForeground)
                         }
                     }
                     .soundfolioPanel(preferences: preferences)
 
-                    HStack(spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         StatCard(label: "Plays", value: detail.streams.formatted(), accent: accent)
                         StatCard(label: "Minutes", value: detail.minutesListened.formatted(), accent: accent)
+                        StatCard(label: "Tracks", value: detail.uniqueTracks.formatted(), accent: accent)
+                        StatCard(label: "Albums", value: detail.uniqueAlbums.formatted(), accent: accent)
+                        StatCard(label: "Share", value: "\(detail.share)%", hint: "of minutes", accent: accent)
                     }
+
+                    listeningOverTime
+                    weekdayChart
+                    topTrackChart(detail)
 
                     if horizontalSizeClass == .regular {
                         HStack(alignment: .top, spacing: 12) {
@@ -157,7 +198,42 @@ struct ArtistDetailView: View {
     }
 
     private var reloadID: String {
-        "\(artistName)-\(preferences.period.rawValue)-\(streamStore.revision)"
+        "\(artistName)-\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(streamStore.revision)"
+    }
+
+    private var listeningOverTime: some View {
+        let grain = historyGrain(preferences)
+        let points = StatsEngine.historySeries(from: scoped, preferences: preferences, grain: grain)
+        return ChartPanel(
+            title: ChartCopy.historyTitle(grain: grain, metric: "Minutes"),
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
+    }
+
+    private var weekdayChart: some View {
+        let points = StatsEngine.patterns(from: scoped, preferences: preferences).byDay.map {
+            HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
+        }
+        return ChartPanel(
+            title: "Minutes by weekday",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
+    }
+
+    private func topTrackChart(_ detail: ArtistDetail) -> some View {
+        let points = detail.topTracks.map {
+            HistoryPoint(label: $0.trackName, minutes: $0.minutesListened, streams: $0.streams)
+        }
+        return ChartPanel(
+            title: "Minutes by track",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
     }
 
     @ViewBuilder
@@ -235,10 +311,18 @@ struct AlbumDetailView: View {
     @State private var detail: AlbumDetail?
 
     private var accent: Color { SoundfolioTheme.accent(from: preferences) }
+    private var rangeLabel: String { StatsEngine.parseTimeRange(preferences: preferences).label }
+
+    private var scoped: [StreamRecord] {
+        streamStore.streams.filter {
+            EntityNormalize.matches($0.albumName, albumName) && EntityNormalize.matches($0.artistName, artistName)
+        }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SoundfolioTheme.sectionSpacing) {
+                FilterToolbar(preferences: preferences, context: .patterns)
                 if let detail {
                     HStack(spacing: 16) {
                         ArtworkView(urlString: detail.albumArt, size: 112, cornerRadius: 12)
@@ -256,10 +340,15 @@ struct AlbumDetailView: View {
                     }
                     .soundfolioPanel(preferences: preferences)
 
-                    HStack(spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         StatCard(label: "Plays", value: detail.streams.formatted(), accent: accent)
                         StatCard(label: "Minutes", value: detail.minutesListened.formatted(), accent: accent)
+                        StatCard(label: "Tracks heard", value: detail.tracks.count.formatted(), accent: accent)
+                        StatCard(label: "Share", value: "\(detail.share)%", hint: "of minutes", accent: accent)
                     }
+
+                    minutesPerTrack(detail)
+                    listeningOverTime
 
                     RankColumn(title: "Tracks") {
                         VStack(spacing: 0) {
@@ -296,7 +385,30 @@ struct AlbumDetailView: View {
     }
 
     private var reloadID: String {
-        "\(albumName)-\(artistName)-\(preferences.period.rawValue)-\(streamStore.revision)"
+        "\(albumName)-\(artistName)-\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(streamStore.revision)"
+    }
+
+    private func minutesPerTrack(_ detail: AlbumDetail) -> some View {
+        let points = detail.tracks
+            .sorted { $0.minutes > $1.minutes }
+            .map { HistoryPoint(label: $0.trackName, minutes: $0.minutes, streams: $0.streams) }
+        return ChartPanel(
+            title: "Minutes by track",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
+    }
+
+    private var listeningOverTime: some View {
+        let grain = historyGrain(preferences)
+        let points = StatsEngine.historySeries(from: scoped, preferences: preferences, grain: grain)
+        return ChartPanel(
+            title: ChartCopy.historyTitle(grain: grain, metric: "Minutes"),
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
     }
 
     private func load() {
@@ -308,4 +420,18 @@ struct AlbumDetailView: View {
             revision: streamStore.revision
         )
     }
+}
+
+private func historyGrain(_ preferences: StatsPreferences) -> HistoryGrain {
+    let range = StatsEngine.parseTimeRange(preferences: preferences)
+    guard let since = range.since, let until = range.until else { return .months }
+    let days = Calendar.current.dateComponents([.day], from: since, to: until).day ?? 0
+    if days > 400 { return .months }
+    if days > 120 { return .weeks }
+    return .days
+}
+
+private func shortDate(_ date: Date?) -> String {
+    guard let date else { return "—" }
+    return date.formatted(date: .abbreviated, time: .omitted)
 }

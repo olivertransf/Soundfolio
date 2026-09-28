@@ -331,6 +331,8 @@ export function computeInsightSummary(streams: Stream[], filter?: TimeRangeFilte
     mostActiveDay: mostActive?.label ?? null,
     mostActiveMinutes: mostActive?.minutes ?? 0,
     topTenShare: totalMinutes > 0 ? Math.round((topMinutes / totalMinutes) * 100) : 0,
+    topTenMinutes: topMinutes,
+    restMinutes: Math.max(0, totalMinutes - topMinutes),
   };
 }
 
@@ -564,6 +566,12 @@ export function formatHourLabel(label: string) {
   return date.toLocaleTimeString(undefined, { hour: "numeric" });
 }
 
+function shareOfPeriod(entityMinutes: number, streams: Stream[], filter?: TimeRangeFilter) {
+  const total = computeTotalStats(streams, filter).totalMinutes;
+  if (total <= 0) return 0;
+  return Math.round((entityMinutes / total) * 100);
+}
+
 export function computeTrackDetail(
   streams: Stream[],
   trackName: string,
@@ -574,6 +582,11 @@ export function computeTrackDetail(
     (row) => matchesEntity(row.trackName, trackName) && matchesEntity(row.artistName, artistName)
   );
   const totalMs = rows.reduce((sum, row) => sum + row.durationMs, 0);
+  const minutesListened = minutesFromMs(totalMs);
+  const ranked = computeTopTracks(streams, 10_000, filter, "minutes");
+  const rankIndex = ranked.findIndex(
+    (track) => matchesEntity(track.trackName, trackName) && matchesEntity(track.artistName, artistName)
+  );
   const dates = rows.map((row) => row.playedAt);
   const trackNameResolved = rows.reduce(
     (current, row) => pickBetterDisplayName(current, row.trackName),
@@ -589,7 +602,9 @@ export function computeTrackDetail(
     albumName: rows[0]?.albumName ?? "",
     albumArt: rows.find((row) => row.albumArt)?.albumArt ?? null,
     streams: rows.length,
-    minutesListened: minutesFromMs(totalMs),
+    minutesListened,
+    rank: rankIndex < 0 ? null : rankIndex + 1,
+    share: shareOfPeriod(minutesListened, streams, filter),
     firstPlayedAt: dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null,
     lastPlayedAt: dates.length ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null,
     recentPlays: [...rows]
@@ -606,6 +621,7 @@ export function computeArtistDetail(
 ) {
   const rows = filterForStats(streams, filter).filter((row) => matchesEntity(row.artistName, artistName));
   const totalMs = rows.reduce((sum, row) => sum + row.durationMs, 0);
+  const minutesListened = minutesFromMs(totalMs);
   const artistNameResolved = rows.reduce(
     (current, row) => pickBetterDisplayName(current, row.artistName),
     artistName
@@ -618,7 +634,14 @@ export function computeArtistDetail(
           matchesEntity(row.artistName, artistName) && isUsableArtUrl(row.artistArt)
       )?.artistArt ?? null,
     streams: rows.length,
-    minutesListened: minutesFromMs(totalMs),
+    minutesListened,
+    uniqueTracks: new Set(rows.map((row) => trackGroupKey(row.trackId, row.trackName, row.artistName))).size,
+    uniqueAlbums: new Set(
+      rows
+        .filter((row) => normalizeEntityKey(row.albumName).length > 0)
+        .map((row) => albumGroupKey(row.albumName, row.artistName))
+    ).size,
+    share: shareOfPeriod(minutesListened, streams, filter),
     topTracks: computeTopTracks(rows, 10, filter, sortBy),
     topAlbums: computeTopAlbums(rows, 10, filter, sortBy),
   };
@@ -634,6 +657,7 @@ export function computeAlbumDetail(
     (row) => matchesEntity(row.albumName, albumName) && matchesEntity(row.artistName, artistName)
   );
   const totalMs = rows.reduce((sum, row) => sum + row.durationMs, 0);
+  const minutesListened = minutesFromMs(totalMs);
   const trackGroups = new Map<string, { trackName: string; streams: number; durationMs: number }>();
   for (const row of rows) {
     const key = normalizeEntityKey(row.trackName);
@@ -656,7 +680,8 @@ export function computeAlbumDetail(
     artistName: artistNameResolved,
     albumArt: rows.find((row) => row.albumArt)?.albumArt ?? null,
     streams: rows.length,
-    minutesListened: minutesFromMs(totalMs),
+    minutesListened,
+    share: shareOfPeriod(minutesListened, streams, filter),
     tracks: [...trackGroups.values()]
       .map((group) => ({
         trackName: group.trackName,

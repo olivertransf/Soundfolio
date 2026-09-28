@@ -18,7 +18,12 @@ import { RankColumn, ResponsiveColumns } from "@/components/responsive-columns";
 import { RecentPlaysPanel, RecentPlaysSeeAllLink } from "@/components/recent-plays-panel";
 import { FilterToolbar } from "@/components/filter-toolbar";
 import { librarySectionHref } from "@/components/library/library-content";
-import { BarSeriesChart } from "@/components/bar-series-chart";
+import {
+  BarSeriesChart,
+  ChartPanel,
+  chartCaption,
+  historyChartTitle,
+} from "@/components/bar-series-chart";
 import { historyChartData } from "@/lib/stats-chart-data";
 import {
   calendarDaysInFilter,
@@ -189,16 +194,16 @@ export function OverviewContent() {
             <p className="text-xs text-muted-foreground">Updating history…</p>
           ) : null}
 
-          <section className="border border-border bg-card p-3">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Listening over time
-            </h2>
+          <ChartPanel
+            title={historyChartTitle(historyMode, "minutes")}
+            caption={chartCaption(filter.label, "minutes")}
+          >
             <BarSeriesChart
               points={history}
               metric="minutes"
-              label="Listening over time in minutes"
+              label={historyChartTitle(historyMode, "minutes")}
             />
-          </section>
+          </ChartPanel>
 
           <section className="space-y-2">
             <div className="flex items-baseline justify-between gap-3">

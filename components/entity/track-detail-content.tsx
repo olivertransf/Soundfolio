@@ -4,14 +4,26 @@ import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { AlbumArt } from "@/components/album-art";
-import { EntityHero, EntityStatPill } from "@/components/entity/entity-hero";
+import {
+  BarSeriesChart,
+  ChartPanel,
+  chartCaption,
+  historyChartTitle,
+} from "@/components/bar-series-chart";
+import { EntityHero } from "@/components/entity/entity-hero";
+import { FilterToolbar } from "@/components/filter-toolbar";
 import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
 import { LocalDateTime } from "@/components/local-datetime";
 import { useStreams } from "@/components/streams-provider";
 import {
+  calendarDaysInFilter,
+  computeListeningSpan,
+  computeStreamsByHour,
   computeTrackDetail,
   parseTimeRange,
 } from "@/lib/stats-compute";
+import { historyChartData } from "@/lib/stats-chart-data";
+import { matchesEntity } from "@/lib/entity-normalize";
 import { albumPath } from "@/lib/entity-paths";
 import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
 import {
@@ -22,7 +34,7 @@ import {
 function TrackDetailInner() {
   const params = useParams<{ artist: string; name: string }>();
   const searchParams = useSearchParams();
-  const { streams, loading, refreshing } = useStreams();
+  const { streams, loading } = useStreams();
 
   const artistName = decodeURIComponent(params.artist);
   const trackName = decodeURIComponent(params.name);
@@ -41,6 +53,24 @@ function TrackDetailInner() {
     () => computeTrackDetail(streams, trackName, artistName, filter),
     [streams, trackName, artistName, filter]
   );
+  const scoped = useMemo(
+    () =>
+      streams.filter(
+        (row) => matchesEntity(row.trackName, trackName) && matchesEntity(row.artistName, artistName)
+      ),
+    [streams, trackName, artistName]
+  );
+  const span = useMemo(() => computeListeningSpan(scoped, filter), [scoped, filter]);
+  const days = calendarDaysInFilter(filter, span, viewerTimeZone ?? undefined);
+  const mode = days > 400 ? "months" : days > 120 ? "weeks" : "days";
+  const history = useMemo(
+    () => historyChartData(scoped, mode, filter, viewerTimeZone ?? "UTC"),
+    [scoped, mode, filter, viewerTimeZone]
+  );
+  const hours = useMemo(
+    () => computeStreamsByHour(scoped, filter, viewerTimeZone ?? undefined),
+    [scoped, filter, viewerTimeZone]
+  );
 
   if (loading) {
     return <p className="py-16 text-center text-sm text-muted-foreground">Loading track…</p>;
@@ -48,6 +78,7 @@ function TrackDetailInner() {
 
   return (
     <PageShell width="default">
+      <FilterToolbar context="entity" />
       <EntityHero
         eyebrow="Track"
         title={detail.trackName}
@@ -73,20 +104,36 @@ function TrackDetailInner() {
             className="size-full object-cover"
           />
         }
-        stats={
-          <>
-            <EntityStatPill label="Plays" value={detail.streams.toLocaleString()} />
-            <EntityStatPill label="Minutes" value={detail.minutesListened.toLocaleString()} />
-            {detail.firstPlayedAt ? (
-              <EntityStatPill label="First" value={<LocalDateTime date={detail.firstPlayedAt.toISOString()} pattern="MMM d, yyyy" />} />
-            ) : null}
-            {detail.lastPlayedAt ? (
-              <EntityStatPill label="Last" value={<LocalDateTime date={detail.lastPlayedAt.toISOString()} pattern="MMM d, yyyy" />} />
-            ) : null}
-            {refreshing ? <EntityStatPill label="Cache" value="updating" /> : null}
-          </>
-        }
+        figures={[
+          { label: "Plays", value: detail.streams.toLocaleString() },
+          { label: "Minutes", value: detail.minutesListened.toLocaleString() },
+          {
+            label: "First play",
+            value: detail.firstPlayedAt ? (
+              <LocalDateTime date={detail.firstPlayedAt.toISOString()} pattern="MMM d, yyyy" />
+            ) : (
+              "—"
+            ),
+          },
+          {
+            label: "Last play",
+            value: detail.lastPlayedAt ? (
+              <LocalDateTime date={detail.lastPlayedAt.toISOString()} pattern="MMM d, yyyy" />
+            ) : (
+              "—"
+            ),
+          },
+          { label: "Rank", value: detail.rank ? `#${detail.rank}` : "—", hint: "among tracks" },
+          { label: "Share", value: `${detail.share}%`, hint: "of minutes" },
+        ]}
       />
+
+      <ChartPanel title={historyChartTitle(mode, "streams")} caption={chartCaption(filter.label, "streams")}>
+        <BarSeriesChart points={history} metric="streams" label={historyChartTitle(mode, "streams")} />
+      </ChartPanel>
+      <ChartPanel title="Plays by hour" caption={chartCaption(filter.label, "streams")}>
+        <BarSeriesChart points={hours} metric="streams" label="Plays by hour" />
+      </ChartPanel>
 
       {detail.recentPlays.length > 0 ? (
         <SectionBlock title="Recent plays in period">

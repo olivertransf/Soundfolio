@@ -1,8 +1,48 @@
-type ChartPoint = {
+import type { ReactNode } from "react";
+
+export type ChartPoint = {
   label: string;
   minutes: number;
   streams: number;
 };
+
+export type ChartMetric = "minutes" | "streams";
+export type HistoryMode = "days" | "weeks" | "months";
+
+export function historyChartTitle(mode: HistoryMode, metric: ChartMetric) {
+  const measure = metric === "minutes" ? "Minutes" : "Plays";
+  const grain = mode === "days" ? "day" : mode === "weeks" ? "week" : "month";
+  return `${measure} by ${grain}`;
+}
+
+export function chartCaption(rangeLabel: string, metric: ChartMetric) {
+  return `${rangeLabel} · ${metric === "minutes" ? "Minutes" : "Plays"}`;
+}
+
+export function ChartPanel({
+  title,
+  caption,
+  actions,
+  children,
+}: {
+  title: string;
+  caption: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-2 border border-border bg-card p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+          <p className="text-xs text-muted-foreground">{caption}</p>
+        </div>
+        {actions}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export function BarSeriesChart({
   points,

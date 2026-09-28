@@ -17,6 +17,8 @@ struct InsightSummary {
     let mostActiveDay: String?
     let mostActiveMinutes: Int
     let topTenShare: Int
+    let topTenMinutes: Int
+    let restMinutes: Int
 }
 
 enum StatsEngine {
@@ -332,7 +334,9 @@ enum StatsEngine {
             uniqueAlbums: albums.count,
             mostActiveDay: best?.key,
             mostActiveMinutes: ListeningMinutes.minutes(fromMs: best?.value.durationMs ?? 0),
-            topTenShare: share
+            topTenShare: share,
+            topTenMinutes: topMinutes,
+            restMinutes: max(0, totalMinutes - topMinutes)
         )
     }
 
@@ -408,18 +412,25 @@ enum StatsEngine {
             EntityNormalize.matches($0.trackName, name) && EntityNormalize.matches($0.artistName, artist)
         }
         let totalMs = rows.reduce(0) { $0 + $1.durationMs }
+        let minutes = ListeningMinutes.minutes(fromMs: totalMs)
         let dates = rows.map(\.playedAt)
         let albumArt = rows.compactMap(\.albumArt).first
         let albumName = rows.first?.albumName ?? ""
         let trackName = rows.reduce(name) { EntityNormalize.betterDisplay($0, $1.trackName) }
         let artistName = rows.reduce(artist) { EntityNormalize.betterDisplay($0, $1.artistName) }
+        let ranked = topTracks(from: streams, sort: .minutes, limit: 10_000, range: range)
+        let rank = ranked.firstIndex {
+            EntityNormalize.matches($0.trackName, name) && EntityNormalize.matches($0.artistName, artist)
+        }.map { $0 + 1 }
         return TrackDetail(
             trackName: trackName,
             artistName: artistName,
             albumName: albumName,
             albumArt: albumArt,
             streams: rows.count,
-            minutesListened: ListeningMinutes.minutes(fromMs: totalMs),
+            minutesListened: minutes,
+            rank: rank,
+            share: periodShare(minutes: minutes, streams: streams, range: range),
             firstPlayedAt: dates.min(),
             lastPlayedAt: dates.max(),
             recentPlays: recentStreams(from: rows, limit: 20)
@@ -429,13 +440,23 @@ enum StatsEngine {
     static func artistDetail(name: String, streams: [StreamRecord], range: StatsTimeRange, sort: TopSortMode) -> ArtistDetail {
         let rows = filtered(streams, range: range).filter { EntityNormalize.matches($0.artistName, name) }
         let totalMs = rows.reduce(0) { $0 + $1.durationMs }
+        let minutes = ListeningMinutes.minutes(fromMs: totalMs)
         let artistArt = rows.compactMap(\.artistArt).first
         let artistName = rows.reduce(name) { EntityNormalize.betterDisplay($0, $1.artistName) }
+        let uniqueTracks = Set(rows.map {
+            EntityNormalize.trackGroupKey(trackId: $0.trackId, trackName: $0.trackName, artistName: $0.artistName)
+        }).count
+        let uniqueAlbums = Set(rows.filter { !EntityNormalize.key($0.albumName).isEmpty }.map {
+            EntityNormalize.albumGroupKey(albumName: $0.albumName, artistName: $0.artistName)
+        }).count
         return ArtistDetail(
             artistName: artistName,
             artistArt: artistArt,
             streams: rows.count,
-            minutesListened: ListeningMinutes.minutes(fromMs: totalMs),
+            minutesListened: minutes,
+            uniqueTracks: uniqueTracks,
+            uniqueAlbums: uniqueAlbums,
+            share: periodShare(minutes: minutes, streams: streams, range: range),
             topTracks: topTracks(from: rows, sort: sort, limit: 10),
             topAlbums: topAlbums(from: rows, sort: sort, limit: 10)
         )
@@ -446,6 +467,7 @@ enum StatsEngine {
             EntityNormalize.matches($0.albumName, name) && EntityNormalize.matches($0.artistName, artist)
         }
         let totalMs = rows.reduce(0) { $0 + $1.durationMs }
+        let minutes = ListeningMinutes.minutes(fromMs: totalMs)
         var trackGroups: [String: (name: String, streams: Int, durationMs: Int)] = [:]
         for row in rows {
             let key = EntityNormalize.key(row.trackName)
@@ -467,9 +489,17 @@ enum StatsEngine {
             artistName: artistName,
             albumArt: rows.compactMap(\.albumArt).first,
             streams: rows.count,
-            minutesListened: ListeningMinutes.minutes(fromMs: totalMs),
+            minutesListened: minutes,
+            share: periodShare(minutes: minutes, streams: streams, range: range),
             tracks: tracks
         )
+    }
+
+    private static func periodShare(minutes: Int, streams: [StreamRecord], range: StatsTimeRange) -> Int {
+        let totalMs = filtered(streams, range: range).reduce(0) { $0 + $1.durationMs }
+        let total = ListeningMinutes.minutes(fromMs: totalMs)
+        guard total > 0 else { return 0 }
+        return Int((Double(minutes) / Double(total) * 100).rounded())
     }
 
     private static func daysInRange(_ range: StatsTimeRange, spanDates: [Date]) -> Int {

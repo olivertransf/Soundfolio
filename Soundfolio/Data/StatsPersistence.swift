@@ -13,7 +13,7 @@ enum StatsPersistence {
     }
 
     struct Snapshot: Codable {
-        static let currentGroupingVersion = 2
+        static let currentGroupingVersion = 3
 
         let groupingVersion: Int
         let revision: Int

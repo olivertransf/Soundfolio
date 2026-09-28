@@ -1,4 +1,3 @@
-import Charts
 import SwiftUI
 
 struct InsightsView: View {
@@ -16,6 +15,12 @@ struct InsightsView: View {
         var label: String { self == .minutes ? "Minutes" : "Plays" }
     }
 
+    private var accent: Color { SoundfolioTheme.accent(from: preferences) }
+
+    private var rangeLabel: String {
+        StatsEngine.parseTimeRange(preferences: preferences).label
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SoundfolioTheme.sectionSpacing) {
@@ -23,16 +28,20 @@ struct InsightsView: View {
 
                 let summary = StatsEngine.insightSummary(from: streamStore.streams, preferences: preferences)
                 HStack(spacing: 8) {
-                    summaryCell("Albums", value: summary.uniqueAlbums.formatted(), hint: nil)
-                    summaryCell(
-                        "Most active day",
+                    StatCard(label: "Albums", value: summary.uniqueAlbums.formatted(), accent: accent)
+                    StatCard(
+                        label: "Most active day",
                         value: summary.mostActiveDay ?? "—",
-                        hint: summary.mostActiveDay == nil ? nil : "\(summary.mostActiveMinutes.formatted()) min"
+                        hint: summary.mostActiveDay == nil ? nil : "\(summary.mostActiveMinutes.formatted()) min",
+                        accent: accent
                     )
-                    summaryCell("Top 10 tracks", value: "\(summary.topTenShare)%", hint: "of minutes")
+                    StatCard(label: "Top 10 tracks", value: "\(summary.topTenShare)%", hint: "of minutes", accent: accent)
                 }
 
-                chartPanel(title: "Listening over time") {
+                ChartPanel(
+                    title: ChartCopy.historyTitle(grain: grain, metric: metric.label),
+                    caption: ChartCopy.caption(range: rangeLabel, metric: metric.label)
+                ) {
                     Picker("Group", selection: $grain) {
                         Text("Days").tag(HistoryGrain.days)
                         Text("Weeks").tag(HistoryGrain.weeks)
@@ -48,12 +57,30 @@ struct InsightsView: View {
                     historyChart
                 }
 
-                chartPanel(title: "Time of day") {
+                ChartPanel(
+                    title: metric == .minutes ? "Minutes by hour" : "Plays by hour",
+                    caption: ChartCopy.caption(range: rangeLabel, metric: metric.label)
+                ) {
                     hourChart
                 }
 
-                chartPanel(title: "Day of week") {
+                ChartPanel(
+                    title: metric == .minutes ? "Minutes by weekday" : "Plays by weekday",
+                    caption: ChartCopy.caption(range: rangeLabel, metric: metric.label)
+                ) {
                     weekdayChart
+                }
+
+                ChartPanel(title: "Top 10 share", caption: "Share of minutes in this period") {
+                    SeriesChart(
+                        points: [
+                            HistoryPoint(label: "Top 10", minutes: summary.topTenMinutes, streams: 0),
+                            HistoryPoint(label: "Rest", minutes: summary.restMinutes, streams: 0),
+                        ],
+                        metricLabel: "Minutes",
+                        useMinutes: true,
+                        accent: accent
+                    )
                 }
             }
             .soundfolioPage()
@@ -68,64 +95,29 @@ struct InsightsView: View {
             preferences: preferences,
             grain: grain
         )
-        return chart(points)
+        return series(points)
     }
 
     private var hourChart: some View {
         let points = StatsEngine.patterns(from: streamStore.streams, preferences: preferences).byHour.map {
             HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
         }
-        return chart(points)
+        return series(points)
     }
 
     private var weekdayChart: some View {
         let points = StatsEngine.patterns(from: streamStore.streams, preferences: preferences).byDay.map {
             HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
         }
-        return chart(points)
+        return series(points)
     }
 
-    private func chart(_ points: [HistoryPoint]) -> some View {
-        Chart(points) { point in
-            BarMark(
-                x: .value("When", point.label),
-                y: .value(metric.label, metric == .minutes ? point.minutes : point.streams)
-            )
-            .foregroundStyle(SoundfolioTheme.accent(from: preferences))
-        }
-        .frame(height: 160)
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 4))
-        }
-    }
-
-    private func chartPanel<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(SoundfolioTheme.labelFont)
-                .tracking(0.8)
-                .foregroundStyle(SoundfolioTheme.mutedForeground)
-            content()
-        }
-        .soundfolioPanel(preferences: preferences)
-    }
-
-    private func summaryCell(_ title: String, value: String, hint: String?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased())
-                .font(SoundfolioFont.semibold(10))
-                .tracking(0.6)
-                .foregroundStyle(SoundfolioTheme.mutedForeground)
-            Text(value)
-                .font(SoundfolioTheme.rowTitleFont)
-                .lineLimit(1)
-            if let hint {
-                Text(hint)
-                    .font(SoundfolioTheme.captionFont)
-                    .foregroundStyle(SoundfolioTheme.mutedForeground)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .soundfolioPanel(preferences: preferences)
+    private func series(_ points: [HistoryPoint]) -> some View {
+        SeriesChart(
+            points: points,
+            metricLabel: metric.label,
+            useMinutes: metric == .minutes,
+            accent: accent
+        )
     }
 }
