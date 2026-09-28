@@ -93,29 +93,34 @@ export async function getRecentTracks(
   limit = 50,
   fromTimestamp?: number
 ): Promise<{ artist: string; name: string; album: string; playedAt: Date; image: string | null }[]> {
-  if (fromTimestamp == null) {
-    const { tracks } = await fetchRecentTracksPage(username, 1);
-    return tracks.slice(0, limit);
-  }
-
   const cap = Math.min(LASTFM_MAX_PAGES, Math.ceil(limit / LASTFM_PAGE_SIZE) || LASTFM_MAX_PAGES);
+  const watermarkMs = fromTimestamp != null ? fromTimestamp * 1000 : undefined;
   const merged: ReturnType<typeof mapTrack>[] = [];
   let totalPages = 1;
 
   for (let page = 1; page <= cap; page++) {
     const batch = await fetchRecentTracksPage(username, page, fromTimestamp);
     totalPages = batch.totalPages;
+    if (
+      watermarkMs != null &&
+      batch.tracks.length > 0 &&
+      batch.tracks.every((track) => track.playedAt.getTime() < watermarkMs)
+    ) {
+      break;
+    }
     merged.push(...batch.tracks);
     if (page >= totalPages || batch.tracks.length === 0) break;
   }
 
   const seen = new Set<number>();
-  return merged.filter((t) => {
-    const key = t.playedAt.getTime();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return merged
+    .filter((track) => {
+      const key = track.playedAt.getTime();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit);
 }
 
 export type LastFmImage = { size?: string; "#text"?: string };

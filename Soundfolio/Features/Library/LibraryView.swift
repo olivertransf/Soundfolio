@@ -66,6 +66,8 @@ struct LibraryView: View {
             RankingsTabView(preferences: preferences)
         case .patterns:
             PatternsView(preferences: preferences, embedInLibrary: true)
+        case .insights:
+            InsightsView(preferences: preferences, embedInLibrary: true)
         }
     }
 
@@ -104,6 +106,7 @@ struct RankingsTabView: View {
     @State private var artists: [TopArtistItem] = []
     @State private var albums: [TopAlbumItem] = []
     @State private var loading = true
+    @State private var shown = 50
 
     var body: some View {
         ScrollView {
@@ -115,7 +118,7 @@ struct RankingsTabView: View {
                 } else if horizontalSizeClass == .regular {
                     HStack(alignment: .top, spacing: 12) {
                         column(title: "Tracks") {
-                            ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                            ForEach(Array(tracks.prefix(shown).enumerated()), id: \.element.id) { index, track in
                                 RankedRow(
                                     rank: index + 1,
                                     title: track.trackName,
@@ -135,7 +138,7 @@ struct RankingsTabView: View {
                             }
                         }
                         column(title: "Artists") {
-                            ForEach(Array(artists.enumerated()), id: \.element.id) { index, artist in
+                            ForEach(Array(artists.prefix(shown).enumerated()), id: \.element.id) { index, artist in
                                 RankedRow(
                                     rank: index + 1,
                                     title: artist.artistName,
@@ -155,7 +158,7 @@ struct RankingsTabView: View {
                             }
                         }
                         column(title: "Albums") {
-                            ForEach(Array(albums.enumerated()), id: \.element.id) { index, album in
+                            ForEach(Array(albums.prefix(shown).enumerated()), id: \.element.id) { index, album in
                                 RankedRow(
                                     rank: index + 1,
                                     title: album.albumName,
@@ -184,7 +187,7 @@ struct RankingsTabView: View {
                     switch kind {
                     case .tracks:
                         column(title: "Tracks") {
-                            ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                            ForEach(Array(tracks.prefix(shown).enumerated()), id: \.element.id) { index, track in
                                 RankedRow(
                                     rank: index + 1,
                                     title: track.trackName,
@@ -205,7 +208,7 @@ struct RankingsTabView: View {
                         }
                     case .artists:
                         column(title: "Artists") {
-                            ForEach(Array(artists.enumerated()), id: \.element.id) { index, artist in
+                            ForEach(Array(artists.prefix(shown).enumerated()), id: \.element.id) { index, artist in
                                 RankedRow(
                                     rank: index + 1,
                                     title: artist.artistName,
@@ -226,7 +229,7 @@ struct RankingsTabView: View {
                         }
                     case .albums:
                         column(title: "Albums") {
-                            ForEach(Array(albums.enumerated()), id: \.element.id) { index, album in
+                            ForEach(Array(albums.prefix(shown).enumerated()), id: \.element.id) { index, album in
                                 RankedRow(
                                     rank: index + 1,
                                     title: album.albumName,
@@ -247,6 +250,13 @@ struct RankingsTabView: View {
                         }
                     }
                 }
+                if !loading && shown < max(tracks.count, artists.count, albums.count) {
+                    Button("Show more (\(min(shown, max(tracks.count, artists.count, albums.count))) of \(max(tracks.count, artists.count, albums.count)))") {
+                        shown = min(preferences.listDepth.rankings, shown + 50)
+                    }
+                    .font(SoundfolioTheme.rowSubtitleFont)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
             }
             .soundfolioPage()
         }
@@ -254,7 +264,7 @@ struct RankingsTabView: View {
     }
 
     private var reloadID: String {
-        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(streamStore.revision)"
+        "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(preferences.listDepth.rawValue)-\(streamStore.revision)"
     }
 
     private func column<Content: View>(title: String, @ViewBuilder content: @escaping () -> Content) -> some View {
@@ -269,19 +279,19 @@ struct RankingsTabView: View {
             streams: streamStore.streams,
             preferences: preferences,
             revision: revision,
-            limit: 50
+            limit: preferences.listDepth.rankings
         )
         artists = statsCache.topArtists(
             streams: streamStore.streams,
             preferences: preferences,
             revision: revision,
-            limit: 50
+            limit: preferences.listDepth.rankings
         )
         albums = statsCache.topAlbums(
             streams: streamStore.streams,
             preferences: preferences,
             revision: revision,
-            limit: 50
+            limit: preferences.listDepth.rankings
         )
     }
 }

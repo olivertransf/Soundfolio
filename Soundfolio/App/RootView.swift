@@ -74,6 +74,7 @@ struct RootView: View {
             streamStore.start(uid: uid)
             statsCache.hydrate(uid: uid, revision: streamStore.revision)
             appState.refreshFreshness(from: streamStore)
+            await appState.syncLastFmIfStale()
         }
         .onChange(of: streamStore.latestPlayAt) { _, newValue in
             appState.latestPlayAt = newValue
@@ -99,6 +100,7 @@ struct RootView: View {
                 appState.setSyncBackgrounded(true)
             case .active:
                 appState.setSyncBackgrounded(false)
+                Task { await appState.syncLastFmIfStale() }
             default:
                 break
             }

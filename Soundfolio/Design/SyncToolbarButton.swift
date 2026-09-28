@@ -33,7 +33,14 @@ struct SyncToolbarButton: View {
             .animation(.easeInOut(duration: 0.2), value: appState.isSyncing)
             .animation(.easeInOut(duration: 0.2), value: appState.syncSavedCount)
             .animation(.easeInOut(duration: 0.2), value: appState.syncPendingCount)
-            .animation(.easeInOut(duration: 0.2), value: showRecentResult)
+            .overlay(alignment: .bottom) {
+                if appState.isSyncing {
+                    ProgressView(value: toolbarProgress)
+                        .tint(.white)
+                        .padding(.horizontal, 8)
+                        .offset(y: 6)
+                }
+            }
         }
         .buttonStyle(.plain)
         .disabled(appState.isSyncing)
@@ -49,6 +56,11 @@ struct SyncToolbarButton: View {
         .onChange(of: appState.lastSyncResult?.date) { _, _ in
             flashRecentResult()
         }
+    }
+
+    private var toolbarProgress: Double {
+        guard appState.syncTotalNovel > 0 else { return 0 }
+        return min(1, Double(appState.syncSavedCount) / Double(appState.syncTotalNovel))
     }
 
     @ViewBuilder
@@ -184,6 +196,7 @@ struct SyncStatusPanel: View {
     let progressMessage: String?
     let savedCount: Int
     let pendingCount: Int
+    let totalNovel: Int
     let lastResult: AppState.SyncResult?
     let lastSyncedAt: Date?
     let accent: Color
@@ -201,21 +214,25 @@ struct SyncStatusPanel: View {
             .disabled(isSyncing)
 
             if isSyncing {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    VStack(alignment: .leading, spacing: 2) {
-                        if savedCount > 0 {
-                            Text(
-                                pendingCount > 0
-                                    ? "Saved \(savedCount) · \(pendingCount) remaining"
-                                    : "Saved \(savedCount) scrobbles"
-                            )
-                            .font(.caption.weight(.medium))
-                            .contentTransition(.numericText())
+                VStack(alignment: .leading, spacing: 8) {
+                    ProgressView(value: progressValue)
+                        .tint(accent)
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        VStack(alignment: .leading, spacing: 2) {
+                            if savedCount > 0 {
+                                Text(
+                                    pendingCount > 0
+                                        ? "Saved \(savedCount) · \(pendingCount) remaining"
+                                        : "Saved \(savedCount) scrobbles"
+                                )
+                                .font(.caption.weight(.medium))
+                                .contentTransition(.numericText())
+                            }
+                            Text(progressMessage ?? "Syncing with Last.fm…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        Text(progressMessage ?? "Syncing with Last.fm…")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
             } else if let lastResult {
@@ -230,6 +247,11 @@ struct SyncStatusPanel: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var progressValue: Double {
+        guard totalNovel > 0 else { return 0 }
+        return min(1, Double(savedCount) / Double(totalNovel))
     }
 
     private var buttonTitle: String {

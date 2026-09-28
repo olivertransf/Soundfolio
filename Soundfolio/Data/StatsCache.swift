@@ -211,7 +211,7 @@ final class StatsCache {
     }
 
     private func baseKey(preferences: StatsPreferences, revision: Int, suffix: String) -> String {
-        "\(revision)|\(preferences.period.rawValue)|\(preferences.customFrom)|\(preferences.customTo)|\(preferences.sort.rawValue)|\(suffix)"
+        "\(revision)|\(preferences.period.rawValue)|\(preferences.customFrom)|\(preferences.customTo)|\(preferences.sort.rawValue)|\(preferences.listDepth.rawValue)|\(suffix)"
     }
 
     private func store<T>(_ bucket: inout [String: T], key: String, value: T, revision: Int) {

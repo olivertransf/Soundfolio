@@ -10,8 +10,14 @@ import { SettingsSection } from "@/components/settings-section";
 import { useStreams } from "@/components/streams-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { getUserProfile, setLastfmUsername } from "@/lib/firestore/user-profile";
 import { useLastFmSync } from "@/hooks/use-lastfm-sync";
+import {
+  AUTO_SYNC_EVENT,
+  loadAutoSyncEnabled,
+  saveAutoSyncEnabled,
+} from "@/lib/auto-lastfm-sync";
 import { backfillAlbumArtwork } from "@/lib/sync/backfill-album-artwork";
 import { backfillArtistArtwork } from "@/lib/sync/backfill-artist-artwork";
 import { backfillLastFmCatalogDurations } from "@/lib/sync/backfill-lastfm-durations";
@@ -20,7 +26,7 @@ import { isUsableArtUrl } from "@/lib/stats-compute";
 
 export function SettingsContent() {
   const { user, signOutUser } = useAuth();
-  const { loading: syncing, label, outcome, runningMessage, sync, canSync } = useLastFmSync();
+  const { loading: syncing, label, outcome, runningMessage, progress, sync, canSync } = useLastFmSync();
   const { streams, cacheMeta, refreshing, clearCache, reload, setStreams, fullyLoaded } = useStreams();
   const router = useRouter();
   const [lastfmUsername, setLastfmUsernameInput] = useState("");
@@ -35,6 +41,14 @@ export function SettingsContent() {
   const [fixingAlbumArt, setFixingAlbumArt] = useState(false);
   const [albumArtMessage, setAlbumArtMessage] = useState<string | null>(null);
   const [albumArtError, setAlbumArtError] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
+
+  useEffect(() => {
+    setAutoSync(loadAutoSyncEnabled());
+    const onChange = () => setAutoSync(loadAutoSyncEnabled());
+    window.addEventListener(AUTO_SYNC_EVENT, onChange);
+    return () => window.removeEventListener(AUTO_SYNC_EVENT, onChange);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -199,6 +213,21 @@ export function SettingsContent() {
           >
             {syncing ? "Syncing…" : "Sync Last.fm"}
           </Button>
+          <label className="flex min-h-11 items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={autoSync}
+              onChange={(event) => {
+                setAutoSync(event.target.checked);
+                saveAutoSyncEnabled(event.target.checked);
+              }}
+            />
+            Sync automatically when this site opens
+          </label>
+          {syncing ? (
+            <Progress value={progress ?? 0} aria-label="Last.fm sync progress" className="max-w-sm" />
+          ) : null}
           {syncing && syncMessage ? (
             <p className="text-sm text-muted-foreground">{label}</p>
           ) : null}

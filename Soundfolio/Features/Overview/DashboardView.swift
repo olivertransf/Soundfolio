@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
@@ -75,9 +76,10 @@ struct DashboardView: View {
             emptyView
         } else if let overview {
             statsGrid(overview)
+            listeningChart(overview)
             rankingsSection(overview)
             if horizontalSizeClass != .regular {
-                recentListPanel(limit: 12)
+                recentListPanel(limit: 20)
             }
         }
     }
@@ -85,7 +87,7 @@ struct DashboardView: View {
     private var recentColumn: some View {
         RankColumn(title: "Recent") {
             ScrollView {
-                recentRows(limit: 40)
+                recentRows(limit: preferences.listDepth.dashboardTops)
             }
         }
     }
@@ -130,6 +132,29 @@ struct DashboardView: View {
         }
     }
 
+    private func listeningChart(_ overview: OverviewResponse) -> some View {
+        let grain: HistoryGrain = overview.calendarDays > 400 ? .months : overview.calendarDays > 120 ? .weeks : .days
+        let points = StatsEngine.historySeries(from: streamStore.streams, preferences: preferences, grain: grain)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("LISTENING OVER TIME")
+                .font(SoundfolioTheme.labelFont)
+                .tracking(0.8)
+                .foregroundStyle(SoundfolioTheme.mutedForeground)
+            Chart(points) { point in
+                BarMark(
+                    x: .value("When", point.label),
+                    y: .value("Minutes", point.minutes)
+                )
+                .foregroundStyle(accent)
+            }
+            .frame(height: 140)
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4))
+            }
+        }
+        .soundfolioPanel(preferences: preferences)
+    }
+
     @ViewBuilder
     private func rankingsSection(_ overview: OverviewResponse) -> some View {
         if horizontalSizeClass == .regular {
@@ -164,7 +189,7 @@ struct DashboardView: View {
 
     private func trackRows(_ items: [TopTrackItem]) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(items.prefix(20).enumerated()), id: \.element.id) { index, track in
+            ForEach(Array(items.prefix(preferences.listDepth.dashboardTops).enumerated()), id: \.element.id) { index, track in
                 RankedRow(
                     rank: index + 1,
                     title: track.trackName,
@@ -187,7 +212,7 @@ struct DashboardView: View {
 
     private func artistRows(_ items: [TopArtistItem]) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(items.prefix(20).enumerated()), id: \.element.id) { index, artist in
+            ForEach(Array(items.prefix(preferences.listDepth.dashboardTops).enumerated()), id: \.element.id) { index, artist in
                 RankedRow(
                     rank: index + 1,
                     title: artist.artistName,
@@ -207,7 +232,7 @@ struct DashboardView: View {
 
     private func albumRows(_ items: [TopAlbumItem]) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(items.prefix(20).enumerated()), id: \.element.id) { index, album in
+            ForEach(Array(items.prefix(preferences.listDepth.dashboardTops).enumerated()), id: \.element.id) { index, album in
                 RankedRow(
                     rank: index + 1,
                     title: album.albumName,
@@ -318,7 +343,7 @@ struct DashboardView: View {
 
     private var reloadID: String {
         let revisionKey = appState.isSyncing ? "syncing" : "\(streamStore.revision)"
-        return "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(revisionKey)"
+        return "\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.sort.rawValue)-\(preferences.listDepth.rawValue)-\(revisionKey)"
     }
 
     private var emptyView: some View {
@@ -360,8 +385,8 @@ struct DashboardView: View {
         overview = statsCache.overview(streams: streamStore.streams, preferences: preferences, revision: revision)
         recentPreview = statsCache.recentStreams(
             from: streamStore.streams,
-            limit: horizontalSizeClass == .regular ? 40 : 20,
-            preferences: nil,
+            limit: horizontalSizeClass == .regular ? preferences.listDepth.dashboardTops : 20,
+            preferences: preferences,
             revision: revision
         )
         appState.refreshFreshness(from: streamStore)

@@ -6,6 +6,7 @@ export type Theme = "dark" | "light" | "system";
 export type Radius = "sharp" | "soft" | "round";
 export type ArtworkPref = "show" | "hide";
 export type TimeDisplay = "absolute" | "relative";
+export type ListDepth = "standard" | "deep";
 
 export type DisplayPreferences = {
   accent: Accent;
@@ -14,7 +15,13 @@ export type DisplayPreferences = {
   radius: Radius;
   artwork: ArtworkPref;
   timeDisplay: TimeDisplay;
+  listDepth: ListDepth;
 };
+
+export const listDepthLimits = {
+  standard: { dashboard: 40, dashboardRecent: 40, rankings: 100, recent: 200, page: 50 },
+  deep: { dashboard: 80, dashboardRecent: 80, rankings: 250, recent: 500, page: 50 },
+} as const;
 
 export const DISPLAY_PREFS_STORAGE_KEY = "soundfolio:display-preferences";
 
@@ -25,6 +32,7 @@ export const defaultDisplayPreferences: DisplayPreferences = {
   radius: "soft",
   artwork: "show",
   timeDisplay: "absolute",
+  listDepth: "standard",
 };
 
 export const accentOptions: Array<{ id: Accent; label: string; swatchClass: string }> = [
@@ -82,6 +90,7 @@ export function parseDisplayPreferences(
         : defaultDisplayPreferences.radius,
     artwork: raw?.artwork === "hide" ? "hide" : "show",
     timeDisplay: raw?.timeDisplay === "relative" ? "relative" : "absolute",
+    listDepth: raw?.listDepth === "deep" ? "deep" : "standard",
   };
 }
 

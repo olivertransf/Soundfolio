@@ -10,12 +10,16 @@ import { AlbumArt } from "@/components/album-art";
 import { PageShell } from "@/components/page-shell";
 import { LiveSyncStatus } from "@/components/live-sync-status";
 import { useStreams } from "@/components/streams-provider";
+import { ShowMoreButton } from "@/components/show-more-button";
+import { useListDepth } from "@/components/use-list-depth";
 import { EntityKindTabs, type EntityKind } from "@/components/entity-kind-tabs";
 import { RankedEntityList } from "@/components/ranked-entity-list";
 import { RankColumn, ResponsiveColumns } from "@/components/responsive-columns";
 import { RecentPlaysPanel, RecentPlaysSeeAllLink } from "@/components/recent-plays-panel";
 import { FilterToolbar } from "@/components/filter-toolbar";
 import { librarySectionHref } from "@/components/library/library-content";
+import { BarSeriesChart } from "@/components/bar-series-chart";
+import { historyChartData } from "@/lib/stats-chart-data";
 import {
   calendarDaysInFilter,
   computeListeningDiversity,
@@ -35,12 +39,10 @@ import {
   readViewerTimeZoneCookie,
 } from "@/lib/viewer-timezone-client";
 
-const TOP_PREVIEW = 20;
-const RECENT_PREVIEW = 40;
-
 export function OverviewContent() {
   const searchParams = useSearchParams();
   const { streams, loading, loadingMore, refreshing, fullyLoaded } = useStreams();
+  const limits = useListDepth();
   const deferredStreams = useDeferredValue(streams);
   const [previewKind, setPreviewKind] = useState<EntityKind>("tracks");
 
@@ -60,16 +62,16 @@ export function OverviewContent() {
 
   const stats = useMemo(() => computeTotalStats(deferredStreams, filter), [deferredStreams, filter]);
   const topTracks = useMemo(
-    () => computeTopTracks(deferredStreams, TOP_PREVIEW, filter, sortBy),
-    [deferredStreams, filter, sortBy]
+    () => computeTopTracks(deferredStreams, limits.dashboard, filter, sortBy),
+    [deferredStreams, filter, sortBy, limits.dashboard]
   );
   const topArtists = useMemo(
-    () => computeTopArtists(deferredStreams, TOP_PREVIEW, filter, sortBy),
-    [deferredStreams, filter, sortBy]
+    () => computeTopArtists(deferredStreams, limits.dashboard, filter, sortBy),
+    [deferredStreams, filter, sortBy, limits.dashboard]
   );
   const topAlbums = useMemo(
-    () => computeTopAlbums(deferredStreams, TOP_PREVIEW, filter, sortBy),
-    [deferredStreams, filter, sortBy]
+    () => computeTopAlbums(deferredStreams, limits.dashboard, filter, sortBy),
+    [deferredStreams, filter, sortBy, limits.dashboard]
   );
   const diversity = useMemo(
     () => computeListeningDiversity(deferredStreams, filter),
@@ -80,11 +82,16 @@ export function OverviewContent() {
     [deferredStreams, filter]
   );
   const recentStreams = useMemo(
-    () => computeRecentStreams(deferredStreams, RECENT_PREVIEW),
-    [deferredStreams]
+    () => computeRecentStreams(deferredStreams, limits.dashboardRecent, filter),
+    [deferredStreams, filter, limits.dashboardRecent]
   );
 
   const days = calendarDaysInFilter(filter, span, viewerTimeZone ?? undefined);
+  const historyMode = days > 400 ? "months" : days > 120 ? "weeks" : "days";
+  const history = useMemo(
+    () => historyChartData(deferredStreams, historyMode, filter, viewerTimeZone ?? "UTC"),
+    [deferredStreams, historyMode, filter, viewerTimeZone]
+  );
   const avgMinPerDay = Math.round(stats.totalMinutes / days);
   const avgStreamsPerDay = Math.round(stats.totalStreams / days);
   const hasData = stats.totalStreams > 0;
@@ -181,6 +188,17 @@ export function OverviewContent() {
           ) : refreshing ? (
             <p className="text-xs text-muted-foreground">Updating history…</p>
           ) : null}
+
+          <section className="border border-border bg-card p-3">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Listening over time
+            </h2>
+            <BarSeriesChart
+              points={history}
+              metric="minutes"
+              label="Listening over time in minutes"
+            />
+          </section>
 
           <section className="space-y-2">
             <div className="flex items-baseline justify-between gap-3">

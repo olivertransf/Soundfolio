@@ -16,9 +16,9 @@ import {
 
 export const maxDuration = 60;
 
-const SYNC_BATCH_SIZE = 40;
-/** Re-fetch this window so middle gaps still import after a partial sync. */
-const SYNC_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
+const SYNC_BATCH_SIZE = 200;
+/** Overlap so a play that landed during the previous sync is not missed. */
+const SYNC_LOOKBACK_MS = 2 * 60 * 60 * 1000;
 const MAX_ARTIST_ART_RESOLVES = 8;
 
 type SyncRequestBody = {
@@ -28,8 +28,10 @@ type SyncRequestBody = {
     artistName: string;
     trackName: string;
     playedAt: string;
+    trackId?: string;
     artistArt?: string | null;
   }>;
+  knownDurations?: Record<string, number>;
 };
 
 function bearerToken(request: NextRequest) {
@@ -100,6 +102,7 @@ export async function POST(req: NextRequest) {
       artistName: row.artistName,
       trackName: row.trackName,
       playedAt: new Date(row.playedAt),
+      trackId: row.trackId,
     }));
     const novel = filterNovelScrobbles(readyTracks, existing);
     if (novel.length === 0) {
@@ -146,17 +149,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const durationCache = new Map<string, number>();
+    for (const [key, value] of Object.entries(body.knownDurations ?? {})) {
+      if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+        durationCache.set(key, value);
+      }
+    }
+
     const streams = await prepareLastFmScrobbleStreams(batch, timeZone, {
       artistArtByKey,
+      durationCache,
     });
     const hasMore = novel.length > batch.length;
+    const durations: Record<string, number> = {};
+    for (const [key, value] of durationCache) durations[key] = value;
 
     return NextResponse.json({
       uid,
       synced: streams.length,
       fetched: tracks.length,
       pending: novel.length - batch.length,
+      totalNovel: novel.length,
       hasMore,
+      durations,
       streams,
     });
   } catch (err) {

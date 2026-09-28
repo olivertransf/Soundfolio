@@ -178,6 +178,23 @@ export function DisplayPreferencesForm({
             ))}
           </div>
         </div>
+
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            List depth
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["standard", "deep"] as const).map((listDepth) => (
+              <PrefButton
+                key={listDepth}
+                active={prefs.listDepth === listDepth}
+                onClick={() => setPrefs((prev) => ({ ...prev, listDepth }))}
+              >
+                {listDepth === "standard" ? "Standard" : "Deep"}
+              </PrefButton>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -7,11 +7,13 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { LibraryRecentSection } from "@/components/library/recent-section";
 import { LibraryRankingsSection } from "@/components/library/rankings-section";
 import { LibraryPatternsSection } from "@/components/library/patterns-section";
+import { LibraryInsightsSection } from "@/components/library/insights-section";
 
 const sections = [
   { id: "recent", label: "Recent" },
   { id: "rankings", label: "Rankings" },
   { id: "patterns", label: "Patterns" },
+  { id: "insights", label: "Insights" },
 ] as const;
 
 type LibrarySection = (typeof sections)[number]["id"];
@@ -62,6 +64,7 @@ function LibraryContentInner() {
         {section === "recent" ? <LibraryRecentSection /> : null}
         {section === "rankings" ? <LibraryRankingsSection /> : null}
         {section === "patterns" ? <LibraryPatternsSection /> : null}
+        {section === "insights" ? <LibraryInsightsSection /> : null}
       </div>
     </PageShell>
   );

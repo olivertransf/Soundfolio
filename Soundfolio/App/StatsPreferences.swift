@@ -16,6 +16,8 @@ final class StatsPreferences {
         static let radius = "soundfolioRadius"
         static let artwork = "soundfolioArtwork"
         static let timeDisplay = "soundfolioTimeDisplay"
+        static let listDepth = "soundfolioListDepth"
+        static let autoSync = "soundfolioAutoSyncLastFm"
     }
 
     var period: StatsPeriod {
@@ -64,6 +66,14 @@ final class StatsPreferences {
         didSet { UserDefaults.standard.set(timeDisplay.rawValue, forKey: Keys.timeDisplay) }
     }
 
+    var listDepth: ListDepth {
+        didSet { UserDefaults.standard.set(listDepth.rawValue, forKey: Keys.listDepth) }
+    }
+
+    var autoSyncLastFm: Bool {
+        didSet { UserDefaults.standard.set(autoSyncLastFm, forKey: Keys.autoSync) }
+    }
+
     var usesCustomRange: Bool {
         !customFrom.isEmpty && !customTo.isEmpty
     }
@@ -79,6 +89,12 @@ final class StatsPreferences {
         radius = DisplayRadius(rawValue: defaults.string(forKey: Keys.radius) ?? "") ?? .soft
         artwork = ArtworkPref(rawValue: defaults.string(forKey: Keys.artwork) ?? "") ?? .show
         timeDisplay = TimeDisplayPref(rawValue: defaults.string(forKey: Keys.timeDisplay) ?? "") ?? .absolute
+        listDepth = ListDepth(rawValue: defaults.string(forKey: Keys.listDepth) ?? "") ?? .standard
+        if defaults.object(forKey: Keys.autoSync) == nil {
+            autoSyncLastFm = true
+        } else {
+            autoSyncLastFm = defaults.bool(forKey: Keys.autoSync)
+        }
         switch defaults.string(forKey: Keys.colorScheme) {
         case "dark": preferredColorScheme = .dark
         case "light": preferredColorScheme = .light

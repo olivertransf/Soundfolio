@@ -141,7 +141,7 @@ export function RecentPlaysList({
               );
 
               return (
-                <li key={stream.id}>
+                <li key={stream.id} className="[content-visibility:auto] [contain-intrinsic-size:auto_3rem]">
                   {linkable ? (
                     <Link
                       href={trackPath(stream.artistName, stream.trackName)}

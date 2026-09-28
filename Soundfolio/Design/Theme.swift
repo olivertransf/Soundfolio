@@ -84,6 +84,24 @@ enum TimeDisplayPref: String, CaseIterable, Identifiable {
     }
 }
 
+enum ListDepth: String, CaseIterable, Identifiable {
+    case standard
+    case deep
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .standard: "Standard"
+        case .deep: "Deep"
+        }
+    }
+
+    var dashboardTops: Int { self == .deep ? 80 : 40 }
+    var rankings: Int { self == .deep ? 250 : 100 }
+    var recent: Int { self == .deep ? 500 : 200 }
+}
+
 enum SoundfolioTheme {
     static let pageBackground = Color(red: 9 / 255, green: 9 / 255, blue: 11 / 255)
     static let panelBackground = Color(red: 18 / 255, green: 18 / 255, blue: 20 / 255)

@@ -180,9 +180,11 @@ struct LastFmSyncResponse: Codable {
     let skipped: Bool?
     let hasMore: Bool?
     let pending: Int?
+    let totalNovel: Int?
     let message: String?
     let detail: String?
     let error: String?
+    let durations: [String: Int]?
     let streams: [SyncStreamPayload]?
 }
 
@@ -190,12 +192,14 @@ struct LastFmSyncRequest: Encodable {
     let lastfmUsername: String
     let latestPlayedAt: String?
     let existing: [ExistingScrobblePayload]
+    let knownDurations: [String: Int]
 }
 
 struct ExistingScrobblePayload: Encodable {
     let artistName: String
     let trackName: String
     let playedAt: String
+    let trackId: String
 }
 
 struct APIErrorResponse: Codable {

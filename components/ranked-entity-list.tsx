@@ -42,18 +42,19 @@ export function RankedEntityList({
       )}
     >
       {items.map((item, i) => (
-        <RankedStreamRow
-          key={item.key}
-          rank={i + 1}
-          href={item.href}
-          leading={item.leading}
-          title={item.title}
-          subtitle={item.subtitle}
-          streams={item.streams}
-          minutes={item.minutes}
-          sortBy={sortBy}
-          padding="compact"
-        />
+        <div key={item.key} className="[content-visibility:auto] [contain-intrinsic-size:auto_2.75rem]">
+          <RankedStreamRow
+            rank={i + 1}
+            href={item.href}
+            leading={item.leading}
+            title={item.title}
+            subtitle={item.subtitle}
+            streams={item.streams}
+            minutes={item.minutes}
+            sortBy={sortBy}
+            padding="compact"
+          />
+        </div>
       ))}
     </div>
   );

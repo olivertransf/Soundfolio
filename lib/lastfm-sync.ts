@@ -4,6 +4,11 @@ import {
   resolveLastFmCatalogDurationMs,
 } from "@/lib/lastfm";
 import { cleanEntityLabel, normalizeEntityKey } from "@/lib/entity-normalize";
+import {
+  CROSS_SOURCE_WINDOW_MS,
+  isLastFmScrobbleId,
+  songIdentityKey,
+} from "@/lib/listen-dedupe";
 import { lastFmScrobbleStreamId, scrobbleIdentityKey } from "@/lib/stream-ids";
 import { correctLastFmPlayedAt, resolveStatsTimeZone } from "@/lib/stats-timezone";
 import type { StreamInput } from "@/lib/types/stream";
@@ -92,12 +97,26 @@ export async function prepareLastFmScrobbleStreams(
 
 export function filterNovelScrobbles(
   tracks: IncomingScrobble[],
-  existing: { artistName: string; trackName: string; playedAt: Date }[]
+  existing: { artistName: string; trackName: string; playedAt: Date; trackId?: string }[]
 ) {
   const seen = new Set(
     existing.map((row) => scrobbleIdentityKey(row.artistName, row.trackName, row.playedAt))
   );
-  return tracks.filter((t) => !seen.has(scrobbleIdentityKey(t.artist, t.name, t.playedAt)));
+  const otherSourceTimes = new Map<string, number[]>();
+  for (const row of existing) {
+    if (!row.trackId || isLastFmScrobbleId(row.trackId)) continue;
+    const key = songIdentityKey(row.artistName, row.trackName);
+    const times = otherSourceTimes.get(key);
+    if (times) times.push(row.playedAt.getTime());
+    else otherSourceTimes.set(key, [row.playedAt.getTime()]);
+  }
+  return tracks.filter((track) => {
+    if (seen.has(scrobbleIdentityKey(track.artist, track.name, track.playedAt))) return false;
+    const times = otherSourceTimes.get(songIdentityKey(track.artist, track.name));
+    if (!times) return true;
+    const at = track.playedAt.getTime();
+    return !times.some((time) => Math.abs(time - at) <= CROSS_SOURCE_WINDOW_MS);
+  });
 }
 
 export function filterNovelAgainstExisting(

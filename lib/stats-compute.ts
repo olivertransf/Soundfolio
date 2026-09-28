@@ -26,6 +26,7 @@ import {
   trackGroupKey,
 } from "@/lib/entity-normalize";
 import { hoursFromMs, minutesFromMs } from "@/lib/listening-minutes";
+import { dedupeListens } from "@/lib/listen-dedupe";
 
 export type { TopSortBy } from "@/lib/top-sort";
 export { parseTopSortBy, TOP_SORT_PARAM, topSortLabel } from "@/lib/top-sort";
@@ -93,8 +94,19 @@ function inFilter(stream: Stream, filter?: TimeRangeFilter) {
   return true;
 }
 
+const dedupedCache = new WeakMap<Stream[], Stream[]>();
+
+/** One deduped copy per stream-array identity so rankings, recents, and charts share it. */
+export function dedupedStreams(streams: Stream[]): Stream[] {
+  const cached = dedupedCache.get(streams);
+  if (cached) return cached;
+  const next = dedupeListens(streams);
+  dedupedCache.set(streams, next);
+  return next;
+}
+
 export function filterForStats(streams: Stream[], filter?: TimeRangeFilter) {
-  return streams.filter(
+  return dedupedStreams(streams).filter(
     (stream) => !stream.isDemo && stream.durationMs > 0 && inFilter(stream, filter)
   );
 }
@@ -259,9 +271,9 @@ export function computeTopAlbums(
     .slice(0, limit);
 }
 
-export function computeRecentStreams(streams: Stream[], limit = 50) {
-  return [...streams]
-    .filter((stream) => stream.playedAt <= new Date())
+export function computeRecentStreams(streams: Stream[], limit = 50, filter?: TimeRangeFilter) {
+  return dedupedStreams(streams)
+    .filter((stream) => stream.playedAt <= new Date() && inFilter(stream, filter))
     .sort((a, b) => b.playedAt.getTime() - a.playedAt.getTime())
     .slice(0, limit);
 }
@@ -283,6 +295,42 @@ export function computeListeningDiversity(streams: Stream[], filter?: TimeRangeF
   return {
     uniqueTracks: new Set(rows.map((row) => trackGroupKey(row.trackId, row.trackName, row.artistName))).size,
     uniqueArtists: new Set(rows.map((row) => artistGroupKey(row.artistName))).size,
+    uniqueAlbums: new Set(
+      rows
+        .filter((row) => normalizeEntityKey(row.albumName).length > 0)
+        .map((row) => albumGroupKey(row.albumName, row.artistName))
+    ).size,
+  };
+}
+
+export function computeInsightSummary(streams: Stream[], filter?: TimeRangeFilter, timeZone?: string) {
+  const rows = filterForStats(streams, filter);
+  const diversity = computeListeningDiversity(streams, filter);
+  const totalMs = rows.reduce((sum, row) => sum + row.durationMs, 0);
+  const topTracks = computeTopTracks(streams, 10, filter, "minutes");
+  const topMinutes = topTracks.reduce((sum, row) => sum + row.minutesListened, 0);
+  const totalMinutes = minutesFromMs(totalMs);
+  const days = computeStreamsByDay(
+    streams,
+    {
+      since: filter?.since ?? new Date(0),
+      until: filter?.until,
+      label: filter?.label ?? "",
+    },
+    timeZone
+  );
+  const mostActive = days.reduce<(typeof days)[number] | null>((best, row) => {
+    if (!best) return row;
+    if (row.minutes > best.minutes) return row;
+    if (row.minutes === best.minutes && row.streams > best.streams) return row;
+    return best;
+  }, null);
+
+  return {
+    uniqueAlbums: diversity.uniqueAlbums,
+    mostActiveDay: mostActive?.label ?? null,
+    mostActiveMinutes: mostActive?.minutes ?? 0,
+    topTenShare: totalMinutes > 0 ? Math.round((topMinutes / totalMinutes) * 100) : 0,
   };
 }
 
@@ -317,8 +365,11 @@ export function computeStreamsByWeek(
 ) {
   const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subWeeks(new Date(), weeksBack);
-  const since = filter?.since ?? defaultSince;
-  const rows = filterForStats(streams).filter((row) => row.playedAt >= since);
+  const rows = filterForStats(streams, {
+    since: filter?.since ?? defaultSince,
+    until: filter?.until,
+    label: filter?.label ?? "",
+  });
   const byWeek: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {
@@ -346,8 +397,11 @@ export function computeStreamsByMonth(
 ) {
   const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subMonths(new Date(), monthsBack);
-  const since = filter?.since ?? defaultSince;
-  const rows = filterForStats(streams).filter((row) => row.playedAt >= since);
+  const rows = filterForStats(streams, {
+    since: filter?.since ?? defaultSince,
+    until: filter?.until,
+    label: filter?.label ?? "",
+  });
   const byMonth: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {
@@ -371,8 +425,11 @@ export function computeStreamsByDay(
 ) {
   const tz = resolveStatsTimeZone(timeZone);
   const defaultSince = subDays(new Date(), 90);
-  const since = filter?.since ?? defaultSince;
-  const rows = filterForStats(streams).filter((row) => row.playedAt >= since && inFilter(row, filter));
+  const rows = filterForStats(streams, {
+    since: filter?.since ?? defaultSince,
+    until: filter?.until,
+    label: filter?.label ?? "",
+  });
   const byDay: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {

@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -14,10 +15,17 @@ import { useAuth } from "@/components/auth-provider";
 import { useOptionalStreams } from "@/components/streams-provider";
 import { runLastFmSync, type SyncOutcome } from "@/lib/sync/run-lastfm-sync";
 import { computeLatestPlayAt } from "@/lib/stats-compute";
+import {
+  AUTO_SYNC_EVENT,
+  AUTO_SYNC_STALE_MS,
+  loadAutoSyncEnabled,
+  readLastSyncAt,
+  writeLastSyncAt,
+} from "@/lib/auto-lastfm-sync";
 
 type SyncUIState =
   | { phase: "idle" }
-  | { phase: "running"; message: string; saved: number; pending: number }
+  | { phase: "running"; message: string; saved: number; pending: number; total: number }
   | { phase: "done"; outcome: SyncOutcome; at: number };
 
 type LastFmSyncContextValue = {
@@ -25,6 +33,7 @@ type LastFmSyncContextValue = {
   label: string;
   outcome: SyncOutcome | null;
   runningMessage: string;
+  progress: number | null;
   sync: () => Promise<void>;
   canSync: boolean;
 };
@@ -35,6 +44,8 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const streamsCtx = useOptionalStreams();
   const [uiState, setUiState] = useState<SyncUIState>({ phase: "idle" });
+  const autoStarted = useRef(false);
+  const syncingRef = useRef(false);
 
   const latestPlayAt = useMemo(
     () => (streamsCtx ? computeLatestPlayAt(streamsCtx.streams) : null),
@@ -42,6 +53,10 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
   );
 
   const loading = uiState.phase === "running";
+  const progress =
+    uiState.phase === "running" && uiState.total > 0
+      ? Math.min(100, Math.round((uiState.saved / uiState.total) * 100))
+      : null;
 
   useEffect(() => {
     if (uiState.phase !== "done") return;
@@ -66,21 +81,26 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
   }, [latestPlayAt, uiState]);
 
   const sync = useCallback(async () => {
-    if (!user || !streamsCtx || loading) return;
-    setUiState({ phase: "running", message: "Connecting to Last.fm…", saved: 0, pending: 0 });
+    if (!user || !streamsCtx || syncingRef.current) return;
+    syncingRef.current = true;
+    setUiState({ phase: "running", message: "Connecting to Last.fm…", saved: 0, pending: 0, total: 0 });
     try {
       const working = [...streamsCtx.streams];
-      const outcome = await runLastFmSync(user.uid, working, (progress) => {
+      const outcome = await runLastFmSync(user.uid, working, (update) => {
         setUiState({
           phase: "running",
-          message: progress.message,
-          saved: progress.importedCount,
-          pending: progress.pendingCount ?? 0,
+          message: update.message,
+          saved: update.importedCount,
+          pending: update.pendingCount ?? 0,
+          total: update.totalNovel ?? 0,
         });
       });
       if (outcome.written > 0) {
         streamsCtx.setStreams(working);
         await streamsCtx.refreshHead();
+      }
+      if (outcome.kind === "added" || outcome.kind === "upToDate") {
+        writeLastSyncAt();
       }
       setUiState({ phase: "done", outcome, at: Date.now() });
     } catch (error) {
@@ -90,8 +110,28 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
         outcome: { written: 0, message, kind: "failed" },
         at: Date.now(),
       });
+    } finally {
+      syncingRef.current = false;
     }
-  }, [user, streamsCtx, loading]);
+  }, [user, streamsCtx]);
+
+  useEffect(() => {
+    if (autoStarted.current) return;
+    if (!user || !streamsCtx?.fullyLoaded) return;
+    if (!loadAutoSyncEnabled()) return;
+    const last = readLastSyncAt();
+    if (last > 0 && Date.now() - last < AUTO_SYNC_STALE_MS) return;
+    autoStarted.current = true;
+    void sync();
+  }, [user, streamsCtx?.fullyLoaded, sync]);
+
+  useEffect(() => {
+    const onChange = () => {
+      if (!loadAutoSyncEnabled()) autoStarted.current = true;
+    };
+    window.addEventListener(AUTO_SYNC_EVENT, onChange);
+    return () => window.removeEventListener(AUTO_SYNC_EVENT, onChange);
+  }, []);
 
   const value = useMemo<LastFmSyncContextValue>(
     () => ({
@@ -99,10 +139,11 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
       label,
       outcome: uiState.phase === "done" ? uiState.outcome : null,
       runningMessage: uiState.phase === "running" ? uiState.message : "",
+      progress,
       sync,
       canSync: Boolean(user && streamsCtx && !loading),
     }),
-    [loading, label, uiState, sync, user, streamsCtx]
+    [loading, label, uiState, progress, sync, user, streamsCtx]
   );
 
   return <LastFmSyncContext.Provider value={value}>{children}</LastFmSyncContext.Provider>;

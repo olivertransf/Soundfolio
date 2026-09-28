@@ -110,11 +110,14 @@ struct SettingsView: View {
                         progressMessage: appState.syncProgressMessage,
                         savedCount: appState.syncSavedCount,
                         pendingCount: appState.syncPendingCount,
+                        totalNovel: appState.syncTotalNovel,
                         lastResult: appState.lastSyncResult,
                         lastSyncedAt: appState.lastSyncedAt,
                         accent: accent,
                         onSync: { Task { await syncNow() } }
                     )
+                    Toggle("Sync automatically", isOn: $preferences.autoSyncLastFm)
+                        .font(SoundfolioFont.medium(13))
                     if let url = preferences.importURL {
                         Link("Import Spotify history on web", destination: url)
                             .font(SoundfolioFont.medium(13))
@@ -199,6 +202,12 @@ struct SettingsView: View {
                         title: "Time",
                         options: TimeDisplayPref.allCases.map { ($0, $0.label) },
                         selection: $preferences.timeDisplay
+                    )
+
+                    prefPicker(
+                        title: "Lists",
+                        options: ListDepth.allCases.map { ($0, $0.label) },
+                        selection: $preferences.listDepth
                     )
                 }
             }

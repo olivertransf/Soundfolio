@@ -10,7 +10,7 @@ export function albumPath(artistName: string, albumName: string) {
   return `/album/${encodeURIComponent(artistName)}/${encodeURIComponent(albumName)}`;
 }
 
-export function libraryPath(section: "recent" | "rankings" | "patterns" = "recent", statsQuery = "") {
+export function libraryPath(section: "recent" | "rankings" | "patterns" | "insights" = "recent", statsQuery = "") {
   const params = new URLSearchParams(statsQuery.replace(/^\?/, ""));
   params.set("section", section);
   const query = params.toString();

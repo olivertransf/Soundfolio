@@ -5,14 +5,17 @@ import { getUserProfile } from "@/lib/firestore/user-profile";
 import { writeUserStreams } from "@/lib/firestore/streams";
 import type { Stream } from "@/lib/types/stream";
 import { scrobbleIdentityKey } from "@/lib/stream-ids";
+import { CROSS_SOURCE_WINDOW_MS } from "@/lib/listen-dedupe";
 
 type SyncResponse = {
   synced?: number;
   hasMore?: boolean;
   pending?: number;
+  totalNovel?: number;
   skipped?: boolean;
   message?: string;
   detail?: string;
+  durations?: Record<string, number>;
   streams?: Array<{
     trackId: string;
     trackName: string;
@@ -26,19 +29,27 @@ type SyncResponse = {
   }>;
 };
 
+const SYNC_OVERLAP_MS = 2 * 60 * 60 * 1000 + CROSS_SOURCE_WINDOW_MS;
+
 function existingPayload(streams: Stream[]) {
-  return streams.map((stream) => ({
-    artistName: stream.artistName,
-    trackName: stream.trackName,
-    playedAt: stream.playedAt.toISOString(),
-    artistArt: stream.artistArt,
-  }));
+  const latest = streams.reduce((max, stream) => Math.max(max, stream.playedAt.getTime()), 0);
+  const windowStart = latest > 0 ? latest - SYNC_OVERLAP_MS : 0;
+  return streams
+    .filter((stream) => latest === 0 || stream.playedAt.getTime() >= windowStart)
+    .map((stream) => ({
+      artistName: stream.artistName,
+      trackName: stream.trackName,
+      playedAt: stream.playedAt.toISOString(),
+      trackId: stream.trackId,
+      artistArt: stream.artistArt,
+    }));
 }
 
 export type SyncProgress = {
   message: string;
   importedCount: number;
   pendingCount?: number;
+  totalNovel?: number;
 };
 
 export type SyncOutcome = {
@@ -64,11 +75,14 @@ export async function runLastFmSync(
     throw new Error("Add your Last.fm username in onboarding.");
   }
 
-  const latestPlayedAt = streams[0]?.playedAt?.toISOString() ?? null;
+  const latestMs = streams.reduce((max, stream) => Math.max(max, stream.playedAt.getTime()), 0);
+  const latestPlayedAt = latestMs > 0 ? new Date(latestMs).toISOString() : null;
   const token = await user.getIdToken(true);
   let totalWritten = 0;
+  let sessionTotal = 0;
+  const knownDurations: Record<string, number> = {};
 
-  onProgress?.({ message: "Connecting to Last.fm…", importedCount: 0 });
+  onProgress?.({ message: "Connecting to Last.fm…", importedCount: 0, totalNovel: 0 });
 
   for (let batch = 0; batch < 40; batch++) {
     onProgress?.({
@@ -77,6 +91,8 @@ export async function runLastFmSync(
           ? "Fetching scrobbles from Last.fm…"
           : `Importing scrobbles (${totalWritten} saved)…`,
       importedCount: totalWritten,
+      pendingCount: Math.max(0, sessionTotal - totalWritten),
+      totalNovel: sessionTotal,
     });
     const response = await fetch("/api/sync-lastfm", {
       method: "POST",
@@ -88,6 +104,7 @@ export async function runLastFmSync(
         lastfmUsername,
         latestPlayedAt,
         existing: existingPayload(streams),
+        knownDurations,
       }),
     });
 
@@ -100,6 +117,13 @@ export async function runLastFmSync(
       return { written: totalWritten, message, kind: "skipped" };
     }
 
+    if (data.durations) {
+      Object.assign(knownDurations, data.durations);
+    }
+    if (sessionTotal === 0 && typeof data.totalNovel === "number") {
+      sessionTotal = data.totalNovel + totalWritten;
+    }
+
     const incoming = (data.streams ?? []).map((stream) => ({
       ...stream,
       playedAt: new Date(stream.playedAt),
@@ -109,6 +133,8 @@ export async function runLastFmSync(
     onProgress?.({
       message: `Saving ${incoming.length} scrobbles…`,
       importedCount: totalWritten,
+      pendingCount: data.pending,
+      totalNovel: sessionTotal,
     });
 
     const written = await writeUserStreams(uid, incoming, true);
@@ -119,12 +145,14 @@ export async function runLastFmSync(
         message: `Saved ${totalWritten} · ${data.pending} remaining`,
         importedCount: totalWritten,
         pendingCount: data.pending,
+        totalNovel: sessionTotal,
       });
     } else if (written > 0) {
       onProgress?.({
         message: `Saved ${totalWritten} scrobbles`,
         importedCount: totalWritten,
         pendingCount: 0,
+        totalNovel: sessionTotal || totalWritten,
       });
     }
 

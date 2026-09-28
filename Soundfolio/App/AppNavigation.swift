@@ -26,6 +26,7 @@ enum LibrarySection: String, CaseIterable, Identifiable {
     case recent
     case rankings
     case patterns
+    case insights
 
     var id: String { rawValue }
 
@@ -34,6 +35,7 @@ enum LibrarySection: String, CaseIterable, Identifiable {
         case .recent: "Recent"
         case .rankings: "Rankings"
         case .patterns: "Patterns"
+        case .insights: "Insights"
         }
     }
 
@@ -42,6 +44,7 @@ enum LibrarySection: String, CaseIterable, Identifiable {
         case .recent: "clock.arrow.circlepath"
         case .rankings: "list.number"
         case .patterns: "chart.bar.xaxis"
+        case .insights: "chart.bar.fill"
         }
     }
 }

@@ -9,6 +9,8 @@ import { RankColumn, ResponsiveColumns } from "@/components/responsive-columns";
 import { ArtistArt } from "@/components/artist-art";
 import { AlbumArt } from "@/components/album-art";
 import { useStreams } from "@/components/streams-provider";
+import { ShowMoreButton } from "@/components/show-more-button";
+import { useListDepth } from "@/components/use-list-depth";
 import {
   computeTopAlbums,
   computeTopArtists,
@@ -26,7 +28,9 @@ import {
 function RankingsSectionInner() {
   const searchParams = useSearchParams();
   const { streams, loading } = useStreams();
+  const limits = useListDepth();
   const [kind, setKind] = useState<EntityKind>("tracks");
+  const [shown, setShown] = useState<number>(limits.page);
 
   const range = searchParams.get("range") ?? undefined;
   const from = searchParams.get("from") ?? undefined;
@@ -42,16 +46,16 @@ function RankingsSectionInner() {
   );
 
   const tracks = useMemo(
-    () => computeTopTracks(streams, 50, filter, sortBy),
-    [streams, filter, sortBy]
+    () => computeTopTracks(streams, limits.rankings, filter, sortBy),
+    [streams, filter, sortBy, limits.rankings]
   );
   const artists = useMemo(
-    () => computeTopArtists(streams, 50, filter, sortBy),
-    [streams, filter, sortBy]
+    () => computeTopArtists(streams, limits.rankings, filter, sortBy),
+    [streams, filter, sortBy, limits.rankings]
   );
   const albums = useMemo(
-    () => computeTopAlbums(streams, 50, filter, sortBy),
-    [streams, filter, sortBy]
+    () => computeTopAlbums(streams, limits.rankings, filter, sortBy),
+    [streams, filter, sortBy, limits.rankings]
   );
 
   const trackItems: RankedEntityItem[] = tracks.map((track) => ({
@@ -113,6 +117,11 @@ function RankingsSectionInner() {
 
   const singleItems =
     kind === "tracks" ? trackItems : kind === "artists" ? artistItems : albumItems;
+  const visibleSingle = singleItems.slice(0, shown);
+  const visibleTracks = trackItems.slice(0, shown);
+  const visibleArtists = artistItems.slice(0, shown);
+  const visibleAlbums = albumItems.slice(0, shown);
+  const longest = Math.max(trackItems.length, artistItems.length, albumItems.length, singleItems.length);
 
   return (
     <div className="space-y-3">
@@ -121,21 +130,33 @@ function RankingsSectionInner() {
       <div className="xl:hidden">
         <EntityKindTabs value={kind} onValueChange={setKind} />
         <div className="mt-3 border border-border bg-card p-1.5 sm:p-2">
-          <RankedEntityList items={singleItems} sortBy={sortBy} columns="one" />
+          <RankedEntityList items={visibleSingle} sortBy={sortBy} columns="one" />
+          <ShowMoreButton
+            shown={Math.min(shown, singleItems.length)}
+            total={singleItems.length}
+            onShowMore={() => setShown((count) => Math.min(limits.rankings, count + limits.page))}
+          />
         </div>
       </div>
 
-      <ResponsiveColumns className="hidden xl:grid" cols={3}>
-        <RankColumn title="Tracks">
-          <RankedEntityList items={trackItems} sortBy={sortBy} columns="one" />
-        </RankColumn>
-        <RankColumn title="Artists">
-          <RankedEntityList items={artistItems} sortBy={sortBy} columns="one" />
-        </RankColumn>
-        <RankColumn title="Albums">
-          <RankedEntityList items={albumItems} sortBy={sortBy} columns="one" />
-        </RankColumn>
-      </ResponsiveColumns>
+      <div className="hidden xl:block">
+        <ResponsiveColumns className="grid" cols={3}>
+          <RankColumn title="Tracks">
+            <RankedEntityList items={visibleTracks} sortBy={sortBy} columns="one" />
+          </RankColumn>
+          <RankColumn title="Artists">
+            <RankedEntityList items={visibleArtists} sortBy={sortBy} columns="one" />
+          </RankColumn>
+          <RankColumn title="Albums">
+            <RankedEntityList items={visibleAlbums} sortBy={sortBy} columns="one" />
+          </RankColumn>
+        </ResponsiveColumns>
+        <ShowMoreButton
+          shown={Math.min(shown, longest)}
+          total={longest}
+          onShowMore={() => setShown((count) => Math.min(limits.rankings, count + limits.page))}
+        />
+      </div>
     </div>
   );
 }

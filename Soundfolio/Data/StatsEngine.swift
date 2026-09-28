@@ -6,6 +6,19 @@ struct StatsTimeRange {
     let label: String
 }
 
+enum HistoryGrain {
+    case days
+    case weeks
+    case months
+}
+
+struct InsightSummary {
+    let uniqueAlbums: Int
+    let mostActiveDay: String?
+    let mostActiveMinutes: Int
+    let topTenShare: Int
+}
+
 enum StatsEngine {
     static func parseTimeRange(preferences: StatsPreferences) -> StatsTimeRange {
         let calendar = Calendar.current
@@ -45,13 +58,18 @@ enum StatsEngine {
     }
 
     private static func filtered(_ streams: [StreamRecord], range: StatsTimeRange) -> [StreamRecord] {
-        streams.filter { stream in
+        let matched = streams.filter { stream in
             guard !stream.isDemo else { return false }
             guard stream.durationMs > 0 else { return false }
             if let since = range.since, stream.playedAt < since { return false }
             if let until = range.until, stream.playedAt > until { return false }
             return true
         }
+        return ListenDedupe.dedupe(matched)
+    }
+
+    private static func credited(_ streams: [StreamRecord]) -> [StreamRecord] {
+        ListenDedupe.dedupe(streams.filter { !$0.isDemo && $0.durationMs > 0 })
     }
 
     private static func trackKey(for row: StreamRecord) -> String {
@@ -103,14 +121,14 @@ enum StatsEngine {
                 OverviewMetric(label: "Min / day", value: "\(avgMin)", hint: "~\(calendarDays) d"),
                 OverviewMetric(label: "Plays / day", value: "\(avgStreams)", hint: nil),
             ],
-            topTracks: topTracks(from: streams, sort: preferences.sort, limit: 5, range: filter),
-            topArtists: topArtists(from: streams, sort: preferences.sort, limit: 5, range: filter),
-            topAlbums: topAlbums(from: streams, sort: preferences.sort, limit: 5, range: filter)
+            topTracks: topTracks(from: streams, sort: preferences.sort, limit: preferences.listDepth.dashboardTops, range: filter),
+            topArtists: topArtists(from: streams, sort: preferences.sort, limit: preferences.listDepth.dashboardTops, range: filter),
+            topAlbums: topAlbums(from: streams, sort: preferences.sort, limit: preferences.listDepth.dashboardTops, range: filter)
         )
     }
 
     static func topTracks(from streams: [StreamRecord], sort: TopSortMode, limit: Int, range: StatsTimeRange? = nil) -> [TopTrackItem] {
-        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { !$0.isDemo && $0.durationMs > 0 }
+        let rows = range.map { filtered(streams, range: $0) } ?? credited(streams)
         var groups: [String: (trackId: String, trackName: String, artistName: String, albumName: String, albumArt: String?, streams: Int, durationMs: Int)] = [:]
         for row in rows {
             let key = trackKey(for: row)
@@ -143,7 +161,7 @@ enum StatsEngine {
     }
 
     static func topArtists(from streams: [StreamRecord], sort: TopSortMode, limit: Int, range: StatsTimeRange? = nil) -> [TopArtistItem] {
-        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { !$0.isDemo && $0.durationMs > 0 }
+        let rows = range.map { filtered(streams, range: $0) } ?? credited(streams)
         var groups: [String: (artistName: String, artistArt: String?, streams: Int, durationMs: Int)] = [:]
         for row in rows {
             let key = EntityNormalize.artistGroupKey(artistName: row.artistName)
@@ -168,7 +186,7 @@ enum StatsEngine {
     }
 
     static func topAlbums(from streams: [StreamRecord], sort: TopSortMode, limit: Int, range: StatsTimeRange? = nil) -> [TopAlbumItem] {
-        let rows = range.map { filtered(streams, range: $0) } ?? streams.filter { !$0.isDemo && $0.durationMs > 0 }
+        let rows = range.map { filtered(streams, range: $0) } ?? credited(streams)
         var groups: [String: (albumName: String, artistName: String, albumArt: String?, streams: Int, durationMs: Int)] = [:]
         for row in rows {
             let key = EntityNormalize.albumGroupKey(albumName: row.albumName, artistName: row.artistName)
@@ -200,7 +218,7 @@ enum StatsEngine {
             let range = parseTimeRange(preferences: preferences)
             rows = filtered(streams, range: range)
         } else {
-            rows = streams.filter { !$0.isDemo }
+            rows = ListenDedupe.dedupe(streams.filter { !$0.isDemo })
         }
         return rows
             .filter { $0.playedAt <= Date() }
@@ -246,6 +264,78 @@ enum StatsEngine {
         }
     }
 
+    static func historySeries(
+        from streams: [StreamRecord],
+        preferences: StatsPreferences,
+        grain: HistoryGrain
+    ) -> [HistoryPoint] {
+        let filter = parseTimeRange(preferences: preferences)
+        let rows = filtered(streams, range: filter)
+        let calendar = Calendar.current
+        var buckets: [String: (durationMs: Int, streams: Int)] = [:]
+
+        for row in rows {
+            let key: String
+            switch grain {
+            case .days:
+                key = dayKey(for: row.playedAt, calendar: calendar)
+            case .weeks:
+                key = weekKey(for: row.playedAt, calendar: calendar)
+            case .months:
+                key = monthKey(for: row.playedAt, calendar: calendar)
+            }
+            var bucket = buckets[key] ?? (0, 0)
+            bucket.streams += 1
+            bucket.durationMs += row.durationMs
+            buckets[key] = bucket
+        }
+
+        return buckets.keys.sorted().suffix(160).map { label in
+            let bucket = buckets[label] ?? (0, 0)
+            return HistoryPoint(
+                label: label,
+                minutes: ListeningMinutes.minutes(fromMs: bucket.durationMs),
+                streams: bucket.streams
+            )
+        }
+    }
+
+    static func insightSummary(from streams: [StreamRecord], preferences: StatsPreferences) -> InsightSummary {
+        let filter = parseTimeRange(preferences: preferences)
+        let rows = filtered(streams, range: filter)
+        let totalMs = rows.reduce(0) { $0 + $1.durationMs }
+        let albums = Set(rows.filter { !EntityNormalize.key($0.albumName).isEmpty }.map {
+            EntityNormalize.albumGroupKey(albumName: $0.albumName, artistName: $0.artistName)
+        })
+        let tops = topTracks(from: streams, sort: .minutes, limit: 10, range: filter)
+        let topMinutes = tops.reduce(0) { $0 + $1.minutesListened }
+        let totalMinutes = ListeningMinutes.minutes(fromMs: totalMs)
+        let share = totalMinutes > 0 ? Int((Double(topMinutes) / Double(totalMinutes) * 100).rounded()) : 0
+
+        let calendar = Calendar.current
+        var byDay: [String: (durationMs: Int, streams: Int)] = [:]
+        for row in rows {
+            let key = dayKey(for: row.playedAt, calendar: calendar)
+            var bucket = byDay[key] ?? (0, 0)
+            bucket.streams += 1
+            bucket.durationMs += row.durationMs
+            byDay[key] = bucket
+        }
+        let best = byDay.max { lhs, rhs in
+            let leftMinutes = ListeningMinutes.minutes(fromMs: lhs.value.durationMs)
+            let rightMinutes = ListeningMinutes.minutes(fromMs: rhs.value.durationMs)
+            if leftMinutes == rightMinutes { return lhs.value.streams < rhs.value.streams }
+            return leftMinutes < rightMinutes
+        }
+
+        return InsightSummary(
+            uniqueAlbums: albums.count,
+            mostActiveDay: best?.key,
+            mostActiveMinutes: ListeningMinutes.minutes(fromMs: best?.value.durationMs ?? 0),
+            topTenShare: share
+        )
+    }
+
     static func patterns(from streams: [StreamRecord], preferences: StatsPreferences) -> PatternsResponse {
         let filter = parseTimeRange(preferences: preferences)
         let rows = filtered(streams, range: filter)
@@ -255,8 +345,14 @@ enum StatsEngine {
         var heatCounts = Array(repeating: 0, count: 7 * 24)
 
         for row in rows {
-            let hour = calendar.component(.hour, from: row.playedAt)
-            let weekday = calendar.component(.weekday, from: row.playedAt) - 1
+            let instant = ListenBucket.instant(
+                playedAt: row.playedAt,
+                durationMs: row.durationMs,
+                trackId: row.trackId,
+                timeZone: calendar.timeZone
+            )
+            let hour = calendar.component(.hour, from: instant)
+            let weekday = calendar.component(.weekday, from: instant) - 1
             byHour[hour].streams += 1
             byHour[hour].durationMs += row.durationMs
             byDay[weekday].streams += 1

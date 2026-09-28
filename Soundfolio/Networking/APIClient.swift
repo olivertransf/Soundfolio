@@ -40,7 +40,7 @@ final class APIClient {
         self.baseURLString = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static let syncExistingCap = 2_500
+    private static let syncOverlap: TimeInterval = 2 * 60 * 60 + 90
     private static let isoFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -50,20 +50,30 @@ final class APIClient {
     func syncLastFm(
         lastfmUsername: String,
         streams: [StreamRecord],
+        knownDurations: [String: Int] = [:],
         timeZone: String = TimeZone.current.identifier
     ) async throws -> LastFmSyncResponse {
-        let latestPlayedAt = streams.first.map { Self.isoFormatter.string(from: $0.playedAt) }
-        let existing = streams.prefix(Self.syncExistingCap).map {
-            ExistingScrobblePayload(
-                artistName: $0.artistName,
-                trackName: $0.trackName,
-                playedAt: Self.isoFormatter.string(from: $0.playedAt)
-            )
-        }
+        let latest = streams.map(\.playedAt).max()
+        let latestPlayedAt = latest.map { Self.isoFormatter.string(from: $0) }
+        let windowStart = latest?.addingTimeInterval(-Self.syncOverlap)
+        let existing = streams
+            .filter { stream in
+                guard let windowStart else { return true }
+                return stream.playedAt >= windowStart
+            }
+            .map {
+                ExistingScrobblePayload(
+                    artistName: $0.artistName,
+                    trackName: $0.trackName,
+                    playedAt: Self.isoFormatter.string(from: $0.playedAt),
+                    trackId: $0.trackId
+                )
+            }
         let body = LastFmSyncRequest(
             lastfmUsername: lastfmUsername,
             latestPlayedAt: latestPlayedAt,
-            existing: existing
+            existing: existing,
+            knownDurations: knownDurations
         )
         return try await post(
             "/api/sync-lastfm",

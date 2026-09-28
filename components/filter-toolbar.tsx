@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { TimeRangeTabs } from "@/components/time-range-tabs";
 import { TopSortTabs } from "@/components/top-sort-tabs";
 
-export type FilterToolbarContext = "dashboard" | "rankings" | "patterns" | "recent";
+export type FilterToolbarContext = "dashboard" | "rankings" | "patterns" | "recent" | "insights";
 
 export function FilterToolbar({ context }: { context: FilterToolbarContext }) {
   const showSort = context === "dashboard" || context === "rankings";

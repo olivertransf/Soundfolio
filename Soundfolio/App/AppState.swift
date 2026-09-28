@@ -12,11 +12,18 @@ final class AppState {
     private(set) var client: APIClient
 
     var lastSyncMessage: String?
-    var lastSyncedAt: Date?
+    var lastSyncedAt: Date? {
+        didSet {
+            if let lastSyncedAt {
+                UserDefaults.standard.set(lastSyncedAt.timeIntervalSince1970, forKey: Self.lastSyncedKey)
+            }
+        }
+    }
     var isSyncing = false
     var syncProgressMessage: String?
     var syncSavedCount = 0
     var syncPendingCount = 0
+    var syncTotalNovel = 0
     var lastSyncResult: SyncResult?
     var isSyncingInBackground = false
     var globalError: String?
@@ -40,10 +47,16 @@ final class AppState {
 
     private weak var streamStore: StreamStore?
     private weak var authManager: AuthManager?
+    private static let lastSyncedKey = "soundfolioLastSyncedAt"
+    private static let autoSyncStale: TimeInterval = 15 * 60
 
     init(preferences: StatsPreferences) {
         self.preferences = preferences
         client = APIClient(baseURLString: StatsPreferences.defaultBaseURL)
+        let stored = UserDefaults.standard.double(forKey: Self.lastSyncedKey)
+        if stored > 0 {
+            lastSyncedAt = Date(timeIntervalSince1970: stored)
+        }
     }
 
     func bindAuth(_ authManager: AuthManager) {
@@ -72,6 +85,7 @@ final class AppState {
 
     /// Refresh library from Firestore, then pull new scrobbles from Last.fm.
     func syncLastFm() async throws -> LastFmSyncResponse {
+        guard !isSyncing else { throw CancellationError() }
         guard let authManager, let streamStore, let uid = authManager.user?.uid else {
             throw APIClientError.unauthorized
         }
@@ -82,6 +96,7 @@ final class AppState {
         isSyncing = true
         syncSavedCount = 0
         syncPendingCount = 0
+        syncTotalNovel = 0
         applySyncProgress("Refreshing library…")
         lastSyncResult = nil
         SyncBackgroundSession.begin()
@@ -90,6 +105,7 @@ final class AppState {
             syncProgressMessage = nil
             syncSavedCount = 0
             syncPendingCount = 0
+            syncTotalNovel = 0
             isSyncingInBackground = false
             SyncBackgroundSession.end()
         }
@@ -105,6 +121,8 @@ final class AppState {
         var totalWritten = 0
         var lastResult: LastFmSyncResponse?
         var batch = 0
+        var sessionTotal = 0
+        var knownDurations: [String: Int] = [:]
 
         do {
         for _ in 0 ..< 40 {
@@ -117,10 +135,18 @@ final class AppState {
             let result = try await client.syncLastFm(
                 lastfmUsername: lastfmUsername,
                 streams: streamStore.streams,
+                knownDurations: knownDurations,
                 timeZone: TimeZone.current.identifier
             )
             lastResult = result
             batch += 1
+            if let durations = result.durations {
+                knownDurations.merge(durations) { _, new in new }
+            }
+            if sessionTotal == 0, let totalNovel = result.totalNovel {
+                sessionTotal = totalNovel + totalWritten
+                syncTotalNovel = sessionTotal
+            }
             if let error = result.error ?? result.detail, result.skipped != true {
                 let message = error
                 lastSyncMessage = message
@@ -189,6 +215,20 @@ final class AppState {
                 lastSyncResult = SyncResult(kind: .failed, message: message, addedCount: totalWritten, date: Date())
             }
             throw error
+        }
+    }
+
+    /// Catch up from Last.fm when the last successful sync is older than 15 minutes.
+    func syncLastFmIfStale() async {
+        guard preferences.autoSyncLastFm else { return }
+        guard !isSyncing else { return }
+        guard authManager?.lastfmUsername?.isEmpty == false else { return }
+        let last = lastSyncedAt ?? .distantPast
+        guard Date().timeIntervalSince(last) >= Self.autoSyncStale else { return }
+        do {
+            _ = try await syncLastFm()
+        } catch {
+            if Self.isCancellation(error) { return }
         }
     }
 

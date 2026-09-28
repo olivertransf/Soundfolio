@@ -10,7 +10,8 @@ struct RecentPlaysView: View {
     @State private var streams: [RecentStream] = []
     @State private var loading = true
     @State private var error: String?
-    @State private var usesPeriodFilter = false
+    @State private var usesPeriodFilter = true
+    @State private var shown = 50
 
     var body: some View {
         ScrollView {
@@ -59,11 +60,12 @@ struct RecentPlaysView: View {
     }
 
     private var reloadID: String {
-        "\(usesPeriodFilter)-\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(streamStore.revision)"
+        "\(usesPeriodFilter)-\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(preferences.listDepth.rawValue)-\(streamStore.revision)"
     }
 
     private var recentGroupedList: some View {
-        let grouped = Dictionary(grouping: streams) { stream -> String in
+        let visible = Array(streams.prefix(shown))
+        let grouped = Dictionary(grouping: visible) { stream -> String in
             guard let date = parseISO8601(stream.playedAt) else { return "Unknown" }
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
@@ -100,6 +102,13 @@ struct RecentPlaysView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+            if shown < streams.count {
+                Button("Show more (\(shown) of \(streams.count))") {
+                    shown = min(preferences.listDepth.recent, shown + 50)
+                }
+                .font(SoundfolioTheme.rowSubtitleFont)
+                .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
     }
@@ -138,7 +147,7 @@ struct RecentPlaysView: View {
         error = nil
         streams = statsCache.recentStreams(
             from: streamStore.streams,
-            limit: 200,
+            limit: preferences.listDepth.recent,
             preferences: usesPeriodFilter ? preferences : nil,
             revision: streamStore.revision
         )
