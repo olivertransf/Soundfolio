@@ -197,7 +197,7 @@ function Segment<T extends string>({
   onChange: (next: T) => void;
 }) {
   return (
-    <div className="flex border border-border">
+    <div className="flex rounded-lg border border-border bg-card p-0.5">
       {options.map(([id, label]) => (
         <button
           key={id}
@@ -205,8 +205,8 @@ function Segment<T extends string>({
           onClick={() => onChange(id)}
           className={
             value === id
-              ? "min-h-11 bg-primary/15 px-3 text-xs font-medium text-primary"
-              : "min-h-11 px-3 text-xs text-muted-foreground"
+              ? "min-h-11 rounded-md bg-primary/15 px-3 text-xs font-medium text-primary"
+              : "min-h-11 rounded-md px-3 text-xs text-muted-foreground"
           }
         >
           {label}

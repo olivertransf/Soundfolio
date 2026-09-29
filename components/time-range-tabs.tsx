@@ -133,7 +133,7 @@ export function TimeRangeTabs() {
                 setCustomOpen(false);
               }}
               className={cn(
-                "inline-flex min-h-11 items-center px-2.5 py-2 text-xs font-medium sm:px-3",
+                "inline-flex min-h-11 items-center rounded-md px-2.5 py-2 text-xs font-medium sm:px-3",
                 active
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -149,7 +149,7 @@ export function TimeRangeTabs() {
         <PopoverTrigger
           type="button"
           className={cn(
-            "inline-flex min-h-11 items-center border border-border px-3 py-2 text-xs font-medium",
+            "inline-flex min-h-11 items-center rounded-lg border border-border px-3 py-2 text-xs font-medium",
             isCustom
               ? "bg-primary/15 text-primary"
               : "bg-background text-muted-foreground hover:bg-secondary hover:text-foreground"

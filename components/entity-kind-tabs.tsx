@@ -35,7 +35,7 @@ export function EntityKindTabs({
           aria-selected={value === kind}
           onClick={() => onValueChange(kind)}
           className={cn(
-            "min-h-11 flex-1 px-3 py-2 text-xs font-medium transition-colors sm:flex-none sm:min-w-[5.5rem]",
+            "min-h-11 flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors sm:flex-none sm:min-w-[5.5rem]",
             value === kind
               ? "bg-primary/15 text-primary"
               : "text-muted-foreground hover:bg-secondary hover:text-foreground"

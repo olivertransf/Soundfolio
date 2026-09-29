@@ -34,6 +34,7 @@ struct SeriesChart: View {
                 y: .value(metricLabel, useMinutes ? point.minutes : point.streams)
             )
             .foregroundStyle(accent)
+            .cornerRadius(4)
         }
         .frame(height: 160)
         .chartXAxis {

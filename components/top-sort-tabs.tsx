@@ -65,7 +65,7 @@ export function TopSortTabs() {
             aria-selected={active}
             onClick={() => setStoredTopSort(o.value)}
             className={cn(
-              "inline-flex min-h-11 min-w-[4.5rem] flex-1 items-center justify-center px-3 py-2 text-xs font-medium sm:flex-none",
+              "inline-flex min-h-11 min-w-[4.5rem] flex-1 items-center justify-center rounded-md px-3 py-2 text-xs font-medium sm:flex-none",
               active
                 ? "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"

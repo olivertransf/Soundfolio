@@ -75,6 +75,14 @@ function compactNumber(value: number) {
   return value.toLocaleString();
 }
 
+function barPath(x: number, y: number, width: number, height: number) {
+  const radius = Math.min(8, width / 2, height / 2);
+  if (radius <= 0.5) {
+    return `M ${x} ${y} h ${width} v ${height} h ${-width} Z`;
+  }
+  return `M ${x} ${y + height} V ${y + radius} Q ${x} ${y} ${x + radius} ${y} H ${x + width - radius} Q ${x + width} ${y} ${x + width} ${y + radius} V ${y + height} Z`;
+}
+
 function tickIndexes(count: number) {
   if (count <= 8) return Array.from({ length: count }, (_, index) => index);
   const step = Math.ceil(count / 6);
@@ -128,7 +136,7 @@ export function BarSeriesChart({
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="h-44 w-full font-mono"
+      className="h-44 w-full"
       role="img"
       aria-label={label}
     >
@@ -160,11 +168,11 @@ export function BarSeriesChart({
         const point = points[index];
         return (
           <g key={`${point?.label ?? index}`}>
-            <rect x={x} y={y} width={barWidth} height={barHeight} className="fill-primary">
+            <path d={barPath(x, y, barWidth, barHeight)} className="fill-primary">
               <title>
                 {chartAxisLabel(point?.label ?? "")}: {value.toLocaleString()} {unit}
               </title>
-            </rect>
+            </path>
             {points.length <= 8 && value > 0 ? (
               <text
                 x={x + barWidth / 2}

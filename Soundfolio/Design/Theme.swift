@@ -2,19 +2,19 @@ import SwiftUI
 
 enum SoundfolioFont {
     static func regular(_ size: CGFloat) -> Font {
-        .custom("JetBrainsMono-Regular", size: size)
+        .system(size: size, weight: .regular)
     }
 
     static func medium(_ size: CGFloat) -> Font {
-        .custom("JetBrainsMono-Medium", size: size)
+        .system(size: size, weight: .medium)
     }
 
     static func semibold(_ size: CGFloat) -> Font {
-        .custom("JetBrainsMono-SemiBold", size: size)
+        .system(size: size, weight: .semibold)
     }
 
     static func bold(_ size: CGFloat) -> Font {
-        .custom("JetBrainsMono-Bold", size: size)
+        .system(size: size, weight: .bold)
     }
 }
 
@@ -50,8 +50,8 @@ enum DisplayRadius: String, CaseIterable, Identifiable {
     var value: CGFloat {
         switch self {
         case .sharp: 0
-        case .soft: 6
-        case .round: 12
+        case .soft: 12
+        case .round: 16
         }
     }
 }
