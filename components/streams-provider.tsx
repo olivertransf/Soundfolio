@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { useDevLibrary } from "@/hooks/use-dev-library";
+import { useDevLibrary, type LibraryTransfer } from "@/hooks/use-dev-library";
 import { useUserStreams } from "@/hooks/use-user-streams";
 import { useDemoStreams } from "@/hooks/use-demo-streams";
 import type { StreamCacheMeta } from "@/lib/stream-idb-cache";
@@ -17,11 +17,14 @@ type StreamsContextValue = {
   streams: Stream[];
   loading: boolean;
   loadingMore: boolean;
+  loadedCount: number;
+  totalCount: number | null;
   refreshing: boolean;
   fullyLoaded: boolean;
   hasMore: boolean;
   cacheMeta: StreamCacheMeta | null;
   error: string | null;
+  transfer: LibraryTransfer | null;
   reload: () => Promise<void>;
   refreshHead: () => Promise<void>;
   loadMore: () => Promise<void>;
@@ -43,11 +46,14 @@ export function StreamsProvider({ children }: { children: ReactNode }) {
       streams: active?.streams ?? [],
       loading: authLoading || (active ? active.loading : false),
       loadingMore: active?.loadingMore ?? false,
+      loadedCount: active?.loadedCount ?? active?.streams.length ?? 0,
+      totalCount: active?.totalCount ?? null,
       refreshing: active?.refreshing ?? false,
       fullyLoaded: active?.fullyLoaded ?? !authLoading,
       hasMore: active?.hasMore ?? false,
       cacheMeta: active?.cacheMeta ?? null,
       error: active?.error ?? null,
+      transfer: active && "transfer" in active ? active.transfer : null,
       reload: active?.reload ?? (async () => {}),
       refreshHead: active?.refreshHead ?? (async () => {}),
       loadMore: active?.loadMore ?? (async () => {}),
@@ -81,11 +87,14 @@ function SyntheticDemoStreamsProvider({ children }: { children: ReactNode }) {
       streams,
       loading,
       loadingMore: false,
+      loadedCount: streams.length,
+      totalCount: streams.length,
       refreshing: false,
       fullyLoaded: true,
       hasMore: false,
       cacheMeta: null,
       error,
+      transfer: null,
       reload,
       refreshHead: reload,
       loadMore: async () => {},

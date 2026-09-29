@@ -10,14 +10,21 @@ export async function GET(request: NextRequest) {
     const offset = Number(request.nextUrl.searchParams.get("offset") ?? "0");
     const start = Number.isFinite(offset) && offset > 0 ? offset : 0;
     const library = await readDevLibrarySlice(start);
-    return NextResponse.json({
+    const body = JSON.stringify({
       uid: library.user.uid,
       displayName: library.user.displayName,
       lastfmUsername: library.user.lastfmUsername,
       streams: library.streams,
       nextOffset: library.nextOffset,
+      loaded: library.loaded,
       total: library.total,
       partial: library.partial,
+    });
+    return new NextResponse(body, {
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": String(Buffer.byteLength(body)),
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not load the dev library.";

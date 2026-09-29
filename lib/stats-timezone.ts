@@ -136,10 +136,20 @@ export function getListenBucketInstant(
   return new Date(anchor.getTime() - Math.max(0, durationMs));
 }
 
+const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function dateTimeFormatter(timeZone: string, options: Intl.DateTimeFormatOptions) {
+  const key = `${timeZone}\0${JSON.stringify(options)}`;
+  const cached = dateTimeFormatters.get(key);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat("en-US", { timeZone, ...options });
+  dateTimeFormatters.set(key, formatter);
+  return formatter;
+}
+
 /** Hour 0–23 in `timeZone` (same instant as `date`). */
 export function getHourInTimeZone(date: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+  const parts = dateTimeFormatter(timeZone, {
     hour: "numeric",
     hourCycle: "h23",
   }).formatToParts(date);
@@ -149,10 +159,7 @@ export function getHourInTimeZone(date: Date, timeZone: string): number {
 
 /** 0 = Sunday … 6 = Saturday in `timeZone` (matches JS `Date#getDay`). */
 export function getDayOfWeekInTimeZone(date: Date, timeZone: string): number {
-  const wd = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    weekday: "short",
-  }).format(date);
+  const wd = dateTimeFormatter(timeZone, { weekday: "short" }).format(date);
   const map: Record<string, number> = {
     Sun: 0,
     Mon: 1,
@@ -167,8 +174,7 @@ export function getDayOfWeekInTimeZone(date: Date, timeZone: string): number {
 
 /** Calendar date `yyyy-MM-dd` in `timeZone` for bucketing daily charts. */
 export function formatCalendarDateInZone(date: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+  const parts = dateTimeFormatter(timeZone, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -180,8 +186,7 @@ export function formatCalendarDateInZone(date: Date, timeZone: string): string {
 }
 
 export function getOffsetMs(date: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+  const parts = dateTimeFormatter(timeZone, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -258,7 +263,7 @@ export function calendarDaysBetweenInZone(from: string, to: string, timeZone: st
 export type ChartDateLabelKind = "month" | "week" | "day" | "hour" | "weekday";
 
 function formatInstantInZone(instant: Date, timeZone: string, options: Intl.DateTimeFormatOptions) {
-  return new Intl.DateTimeFormat("en-US", { timeZone, ...options }).format(instant);
+  return dateTimeFormatter(timeZone, options).format(instant);
 }
 
 /** Format a bucket label for charts (labels are calendar buckets in `timeZone`). */

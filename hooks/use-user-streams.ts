@@ -274,6 +274,8 @@ export function useUserStreams() {
       streams,
       loading: authLoading || loading,
       loadingMore,
+      loadedCount: streams.length,
+      totalCount: null,
       refreshing,
       fullyLoaded,
       hasMore,

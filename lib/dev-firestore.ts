@@ -225,17 +225,44 @@ type LibraryCache = {
   streams: DevStreamRow[];
   nextPageToken?: string;
   complete: boolean;
+  expectedTotal?: number;
 };
 
 let memoryCache: LibraryCache | null = null;
 let appending: Promise<void> | null = null;
+let filling: Promise<void> | null = null;
+let counting: Promise<void> | null = null;
+let fillPausedUntil = 0;
+let headRefreshPausedUntil = 0;
+let refreshingHead: Promise<void> | null = null;
+
+const COMPLETE_CACHE_REFRESH_AFTER_MS = 15 * 60 * 1000;
+
+function refreshNewestPage(cache: LibraryCache) {
+  if (!cache.complete || refreshingHead || Date.now() < headRefreshPausedUntil) return;
+  if (Date.now() - cache.savedAt < COMPLETE_CACHE_REFRESH_AFTER_MS) return;
+  refreshingHead = (async () => {
+    try {
+      const page = await getDevStreamPage(cache.user.uid);
+      const seen = new Set(cache.streams.map((row) => row.id));
+      const fresh = page.streams.filter((row) => !seen.has(row.id));
+      if (fresh.length > 0) cache.streams.unshift(...fresh);
+      cache.savedAt = Date.now();
+      writeDiskCache(cache);
+    } catch {
+      headRefreshPausedUntil = Date.now() + 60_000;
+    }
+  })().finally(() => {
+    refreshingHead = null;
+  });
+}
+let pagesSinceWrite = 0;
 
 function readDiskCache() {
   try {
     const cache = JSON.parse(readFileSync(libraryCachePath, "utf8")) as LibraryCache;
     if (!cache.user?.uid || !Array.isArray(cache.streams) || cache.streams.length === 0) return null;
     if (cache.complete === undefined) cache.complete = true;
-    if (cache.complete && Date.now() - cache.savedAt > 15 * 60 * 1000) return null;
     return cache;
   } catch {
     return null;
@@ -259,71 +286,137 @@ function currentCache(user: DevLibraryUser) {
   return memoryCache;
 }
 
+function persistCache(cache: LibraryCache) {
+  pagesSinceWrite += 1;
+  if (!cache.complete && pagesSinceWrite < 4) return;
+  pagesSinceWrite = 0;
+  cache.savedAt = Date.now();
+  writeDiskCache(cache);
+}
+
+async function countDevStreams(uid: string) {
+  const token = await firebaseCliAccessToken();
+  const response = await firestoreFetch(
+    `https://firestore.googleapis.com/v1/projects/${projectId()}/databases/(default)/documents/users/${uid}:runAggregationQuery`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        structuredAggregationQuery: {
+          structuredQuery: { from: [{ collectionId: "streams" }] },
+          aggregations: [{ alias: "total", count: {} }],
+        },
+      }),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(`Firestore request failed (${response.status}).`);
+  }
+  const rows = (await response.json()) as Array<{
+    result?: { aggregateFields?: { total?: { integerValue?: string } } };
+  }>;
+  const raw = rows[0]?.result?.aggregateFields?.total?.integerValue;
+  const total = raw ? Number(raw) : 0;
+  return Number.isFinite(total) ? total : 0;
+}
+
+function scheduleCount(cache: LibraryCache, uid: string) {
+  if (cache.complete || cache.expectedTotal || counting) return;
+  counting = countDevStreams(uid)
+    .then((total) => {
+      cache.expectedTotal = total;
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      counting = null;
+    });
+}
+
 async function appendNextPage() {
   const user = await getDevUser();
   const cache = currentCache(user);
   if (cache.complete) return;
-  const page = await getDevStreamPage(user.uid, cache.nextPageToken);
-  const seen = new Set(cache.streams.map((row) => row.id));
-  cache.streams.push(...page.streams.filter((row) => !seen.has(row.id)));
-  cache.nextPageToken = page.nextPageToken;
-  cache.complete = !page.nextPageToken;
-  cache.savedAt = Date.now();
-  cache.user = user;
-  writeDiskCache(cache);
+  if (!appending) {
+    appending = (async () => {
+      const page = await getDevStreamPage(user.uid, cache.nextPageToken);
+      const seen = new Set(cache.streams.map((row) => row.id));
+      cache.streams.push(...page.streams.filter((row) => !seen.has(row.id)));
+      cache.nextPageToken = page.nextPageToken;
+      cache.complete = !page.nextPageToken;
+      cache.user = user;
+      persistCache(cache);
+    })().finally(() => {
+      appending = null;
+    });
+  }
+  await appending;
 }
 
-async function ensureStreams(count: number) {
+async function fillLibrary() {
   const user = await getDevUser();
   const cache = currentCache(user);
-  while (!cache.complete && cache.streams.length < count) {
-    if (!appending) {
-      appending = appendNextPage().finally(() => {
-        appending = null;
-      });
+  while (!cache.complete && Date.now() >= fillPausedUntil) {
+    const before = cache.streams.length;
+    try {
+      await appendNextPage();
+    } catch {
+      fillPausedUntil = Date.now() + 8_000;
+      break;
     }
-    await appending;
+    if (cache.streams.length === before) break;
   }
 }
 
-export async function readDevLibrarySlice(start: number, limit = 2000) {
+function scheduleFill() {
+  const cache = memoryCache;
+  if (!cache || cache.complete || filling || Date.now() < fillPausedUntil) return;
+  filling = fillLibrary().finally(() => {
+    filling = null;
+  });
+}
+
+export async function readDevLibrarySlice(start: number) {
   assertDevelopment();
   const user = await getDevUser();
   const cache = currentCache(user);
-  let partial = false;
-  if (!cache.complete && cache.streams.length < start + limit) {
+  if (cache.streams.length === 0 && !cache.complete) {
     try {
-      await ensureStreams(start + limit);
-    } catch {
-      partial = !cache.complete;
+      await appendNextPage();
+    } catch (error) {
       if (cache.streams.length === 0) {
-        throw new Error("Firestore request failed (429).");
+        throw error instanceof Error ? error : new Error("Firestore request failed (429).");
       }
     }
   }
-  const streams = cache.streams.slice(start, start + limit);
-  const stalled = partial && !cache.complete;
-  const nextOffset = cache.complete
-    ? start + streams.length < cache.streams.length
-      ? start + streams.length
-      : null
-    : stalled
-      ? cache.streams.length
-      : start + streams.length;
+  scheduleCount(cache, user.uid);
+  scheduleFill();
+  refreshNewestPage(cache);
+  const streams = cache.streams.slice(start);
+  const loaded = cache.streams.length;
+  const consumed = start + streams.length;
+  const caughtUp = consumed >= loaded;
+  const nextOffset = cache.complete ? (caughtUp ? null : consumed) : caughtUp ? loaded : consumed;
   return {
     user,
     streams,
     nextOffset,
-    total: cache.streams.length,
+    loaded,
+    total: cache.complete ? loaded : (cache.expectedTotal ?? null),
     complete: cache.complete,
-    partial: stalled,
+    partial: !cache.complete && caughtUp,
   };
 }
 
 export async function getDevLibrary() {
   const user = await getDevUser();
-  await ensureStreams(Number.MAX_SAFE_INTEGER);
-  return currentCache(user);
+  const cache = currentCache(user);
+  while (!cache.complete) {
+    await appendNextPage();
+  }
+  return cache;
 }
 
 function firestoreValue(value: string | number | boolean | Date | null) {

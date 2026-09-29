@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
+import { LibraryLoadProgress } from "@/components/library-load-progress";
 import { StreamsProvider } from "@/components/streams-provider";
 import { LastFmSyncProvider } from "@/components/lastfm-sync-provider";
 
@@ -34,7 +35,10 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const shell = (
     <div className="flex min-h-dvh min-h-screen min-w-0 flex-col bg-background">
       <AppHeader mobileOpen={mobileNavOpen} onMobileOpenChange={setMobileNavOpen} />
-      <main className="app-container flex-1 py-4 sm:py-5 lg:py-6">{children}</main>
+      <main className="app-container flex-1 py-4 sm:py-5 lg:py-6">
+        {isDemo ? null : <LibraryLoadProgress />}
+        {children}
+      </main>
     </div>
   );
 
