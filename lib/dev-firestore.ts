@@ -1,6 +1,8 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { DEV_LASTFM_USERNAME } from "@/lib/dev-lastfm-user";
+import { streamDocumentId, type StreamInput } from "@/lib/types/stream";
 
 const FIREBASE_TOOLS_CLIENT_ID =
   "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com";
@@ -125,7 +127,7 @@ export async function getSoleDevUser(): Promise<DevLibraryUser> {
   return {
     uid,
     displayName: nullableString(fields, "displayName"),
-    lastfmUsername: nullableString(fields, "lastfmUsername"),
+    lastfmUsername: nullableString(fields, "lastfmUsername")?.trim() || DEV_LASTFM_USERNAME,
   };
 }
 
@@ -268,4 +270,73 @@ export function getDevLibrary() {
     });
   }
   return loadingLibrary;
+}
+
+export function invalidateDevLibraryCache() {
+  memoryCache = null;
+  try {
+    unlinkSync(libraryCachePath);
+  } catch {
+    // cache file may not exist yet
+  }
+}
+
+function firestoreValue(value: string | number | boolean | Date | null) {
+  if (value === null) return { nullValue: null };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") return { integerValue: String(Math.round(value)) };
+  if (value instanceof Date) return { timestampValue: value.toISOString() };
+  return { stringValue: value };
+}
+
+export async function writeDevStreams(uid: string, streams: StreamInput[]) {
+  assertDevelopment();
+  if (streams.length === 0) return 0;
+  const token = await firebaseCliAccessToken();
+  const project = projectId();
+  let written = 0;
+
+  for (let index = 0; index < streams.length; index += 200) {
+    const batch = streams.slice(index, index + 200);
+    const writes = batch.map((stream) => {
+      const id = streamDocumentId({ ...stream, userId: uid });
+      const playedAt = stream.playedAt;
+      return {
+        update: {
+          name: `projects/${project}/databases/(default)/documents/users/${uid}/streams/${id}`,
+          fields: {
+            trackId: firestoreValue(stream.trackId),
+            trackName: firestoreValue(stream.trackName),
+            artistName: firestoreValue(stream.artistName),
+            artistArt: firestoreValue(stream.artistArt ?? null),
+            albumName: firestoreValue(stream.albumName),
+            albumArt: firestoreValue(stream.albumArt ?? null),
+            durationMs: firestoreValue(stream.durationMs),
+            playedAt: firestoreValue(playedAt),
+            isDemo: firestoreValue(stream.isDemo ?? false),
+            createdAt: firestoreValue(stream.createdAt ?? playedAt),
+            updatedAt: firestoreValue(stream.updatedAt ?? playedAt),
+          },
+        },
+      };
+    });
+    const response = await firestoreFetch(
+      `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents:commit`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ writes }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`Firestore request failed (${response.status}).`);
+    }
+    written += batch.length;
+  }
+
+  invalidateDevLibraryCache();
+  return written;
 }

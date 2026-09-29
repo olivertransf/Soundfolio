@@ -80,13 +80,15 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
     return `Synced ${formatDistanceToNow(latestPlayAt, { addSuffix: true })}`;
   }, [latestPlayAt, uiState]);
 
+  const devSync = process.env.NODE_ENV === "development";
+
   const sync = useCallback(async () => {
-    if (!user || !streamsCtx || syncingRef.current) return;
+    if ((!user && !devSync) || !streamsCtx || syncingRef.current) return;
     syncingRef.current = true;
     setUiState({ phase: "running", message: "Connecting to Last.fm…", saved: 0, pending: 0, total: 0 });
     try {
       const working = [...streamsCtx.streams];
-      const outcome = await runLastFmSync(user.uid, working, (update) => {
+      const outcome = await runLastFmSync(user?.uid ?? "dev", working, (update) => {
         setUiState({
           phase: "running",
           message: update.message,
@@ -113,17 +115,17 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
     } finally {
       syncingRef.current = false;
     }
-  }, [user, streamsCtx]);
+  }, [user, devSync, streamsCtx]);
 
   useEffect(() => {
     if (autoStarted.current) return;
-    if (!user || !streamsCtx?.fullyLoaded) return;
+    if ((!user && !devSync) || !streamsCtx?.fullyLoaded) return;
     if (!loadAutoSyncEnabled()) return;
     const last = readLastSyncAt();
     if (last > 0 && Date.now() - last < AUTO_SYNC_STALE_MS) return;
     autoStarted.current = true;
     void sync();
-  }, [user, streamsCtx?.fullyLoaded, sync]);
+  }, [user, devSync, streamsCtx?.fullyLoaded, sync]);
 
   useEffect(() => {
     const onChange = () => {
@@ -141,9 +143,9 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
       runningMessage: uiState.phase === "running" ? uiState.message : "",
       progress,
       sync,
-      canSync: Boolean(user && streamsCtx && !loading),
+      canSync: Boolean((user || devSync) && streamsCtx && !loading),
     }),
-    [loading, label, uiState, progress, sync, user, streamsCtx]
+    [loading, label, uiState, progress, sync, user, devSync, streamsCtx]
   );
 
   return <LastFmSyncContext.Provider value={value}>{children}</LastFmSyncContext.Provider>;

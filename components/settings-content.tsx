@@ -11,6 +11,7 @@ import { useStreams } from "@/components/streams-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { DEV_LASTFM_USERNAME } from "@/lib/dev-lastfm-user";
 import { getUserProfile, setLastfmUsername } from "@/lib/firestore/user-profile";
 import { useLastFmSync } from "@/hooks/use-lastfm-sync";
 import {
@@ -51,9 +52,14 @@ export function SettingsContent() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      if (process.env.NODE_ENV === "development") {
+        setLastfmUsernameInput(DEV_LASTFM_USERNAME);
+      }
+      return;
+    }
     void getUserProfile(user.uid).then((profile) => {
-      setLastfmUsernameInput(profile?.lastfmUsername ?? "");
+      setLastfmUsernameInput(profile?.lastfmUsername?.trim() || DEV_LASTFM_USERNAME);
     });
   }, [user]);
 
@@ -152,6 +158,7 @@ export function SettingsContent() {
       )
   ).size;
   const backfillBusy = fixingDurations || fixingArtistArt || fixingAlbumArt;
+  const devAccount = process.env.NODE_ENV === "development" && !user;
 
   return (
     <PageShell>
@@ -172,19 +179,25 @@ export function SettingsContent() {
               placeholder="yourname"
               autoCapitalize="none"
               autoCorrect="off"
+              readOnly={devAccount}
               className="h-11"
             />
+            {devAccount ? (
+              <p className="text-xs text-muted-foreground">Dev account</p>
+            ) : null}
             {usernameMessage ? (
               <p className="text-xs text-muted-foreground">{usernameMessage}</p>
             ) : null}
-            <Button
-              type="button"
-              className="h-11 w-full sm:w-auto"
-              onClick={() => void saveUsername()}
-              disabled={saving}
-            >
-              {saving ? "Saving…" : "Save username"}
-            </Button>
+            {devAccount ? null : (
+              <Button
+                type="button"
+                className="h-11 w-full sm:w-auto"
+                onClick={() => void saveUsername()}
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save username"}
+              </Button>
+            )}
           </div>
           <div className="mt-auto pt-2">
             <Button

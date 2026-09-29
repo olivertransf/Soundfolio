@@ -1,5 +1,6 @@
 "use client";
 
+import { DEV_LASTFM_USERNAME } from "@/lib/dev-lastfm-user";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { getUserProfile } from "@/lib/firestore/user-profile";
 import { writeUserStreams } from "@/lib/firestore/streams";
@@ -16,6 +17,8 @@ type SyncResponse = {
   message?: string;
   detail?: string;
   durations?: Record<string, number>;
+  persisted?: boolean;
+  uid?: string;
   streams?: Array<{
     trackId: string;
     trackName: string;
@@ -63,21 +66,24 @@ export async function runLastFmSync(
   streams: Stream[],
   onProgress?: (progress: SyncProgress) => void
 ): Promise<SyncOutcome> {
+  const devSync = process.env.NODE_ENV === "development";
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
-  if (!user || user.uid !== uid) {
+  if (!devSync && (!user || user.uid !== uid)) {
     throw new Error("Sign in to sync Last.fm.");
   }
 
-  const profile = await getUserProfile(uid);
-  const lastfmUsername = profile?.lastfmUsername?.trim();
+  const profile = user ? await getUserProfile(user.uid) : null;
+  const lastfmUsername = devSync
+    ? DEV_LASTFM_USERNAME
+    : profile?.lastfmUsername?.trim();
   if (!lastfmUsername) {
     throw new Error("Add your Last.fm username in onboarding.");
   }
 
   const latestMs = streams.reduce((max, stream) => Math.max(max, stream.playedAt.getTime()), 0);
   const latestPlayedAt = latestMs > 0 ? new Date(latestMs).toISOString() : null;
-  const token = await user.getIdToken(true);
+  const token = user ? await user.getIdToken(true) : null;
   let totalWritten = 0;
   let sessionTotal = 0;
   const knownDurations: Record<string, number> = {};
@@ -97,7 +103,7 @@ export async function runLastFmSync(
     const response = await fetch("/api/sync-lastfm", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -137,7 +143,8 @@ export async function runLastFmSync(
       totalNovel: sessionTotal,
     });
 
-    const written = await writeUserStreams(uid, incoming, true);
+    const ownerUid = data.uid ?? uid;
+    const written = data.persisted ? incoming.length : await writeUserStreams(ownerUid, incoming, true);
     totalWritten += written;
 
     if (data.pending && data.pending > 0 && data.hasMore) {
@@ -158,7 +165,7 @@ export async function runLastFmSync(
 
     for (const stream of incoming) {
       streams.unshift({
-        id: `${uid}__${stream.trackId}__${stream.playedAt.getTime()}`,
+        id: `${ownerUid}__${stream.trackId}__${stream.playedAt.getTime()}`,
         trackId: stream.trackId,
         trackName: stream.trackName,
         artistName: stream.artistName,

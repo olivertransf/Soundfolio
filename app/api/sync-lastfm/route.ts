@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyFirebaseIdToken } from "@/lib/auth/verify-id-token";
+import { DEV_LASTFM_USERNAME } from "@/lib/dev-lastfm-user";
+import { getDevLibrary, writeDevStreams } from "@/lib/dev-firestore";
 import { getRecentTracks, isLastFmConfigured } from "@/lib/lastfm";
 import {
   filterNovelScrobbles,
@@ -42,16 +44,21 @@ function bearerToken(request: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const token = bearerToken(req);
-  if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const devSync = process.env.NODE_ENV === "development" && !token;
 
   let uid: string;
-  try {
-    ({ uid } = await verifyFirebaseIdToken(token));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Invalid token";
-    return NextResponse.json({ error: message }, { status: 401 });
+  if (devSync) {
+    uid = (await getDevLibrary()).user.uid;
+  } else {
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    try {
+      ({ uid } = await verifyFirebaseIdToken(token));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Invalid token";
+      return NextResponse.json({ error: message }, { status: 401 });
+    }
   }
 
   const apiKey = process.env.LASTFM_API_KEY?.trim();
@@ -65,7 +72,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) as SyncRequestBody;
-  const username = body.lastfmUsername?.trim();
+  const username = devSync ? DEV_LASTFM_USERNAME : body.lastfmUsername?.trim();
   if (!username) {
     return NextResponse.json({
       synced: 0,
@@ -160,6 +167,9 @@ export async function POST(req: NextRequest) {
       artistArtByKey,
       durationCache,
     });
+    if (devSync) {
+      await writeDevStreams(uid, streams);
+    }
     const hasMore = novel.length > batch.length;
     const durations: Record<string, number> = {};
     for (const [key, value] of durationCache) durations[key] = value;
@@ -173,6 +183,7 @@ export async function POST(req: NextRequest) {
       hasMore,
       durations,
       streams,
+      persisted: devSync,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Sync failed";
