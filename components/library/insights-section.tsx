@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   BarSeriesChart,
   ChartPanel,
+  chartAxisLabel,
   chartCaption,
   historyChartTitle,
   type ChartMetric,
@@ -82,7 +83,7 @@ function InsightsSectionInner() {
           { label: "Albums", value: summary.uniqueAlbums.toLocaleString() },
           {
             label: "Most active day",
-            value: summary.mostActiveDay ?? "—",
+            value: summary.mostActiveDay ? chartAxisLabel(summary.mostActiveDay) : "—",
             hint: summary.mostActiveDay ? `${summary.mostActiveMinutes.toLocaleString()} min` : undefined,
           },
           { label: "Top 10 tracks", value: `${summary.topTenShare}%`, hint: "of minutes" },

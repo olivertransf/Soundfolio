@@ -366,12 +366,10 @@ export function computeStreamsByWeek(
   timeZone?: string
 ) {
   const tz = resolveStatsTimeZone(timeZone);
-  const defaultSince = subWeeks(new Date(), weeksBack);
-  const rows = filterForStats(streams, {
-    since: filter?.since ?? defaultSince,
-    until: filter?.until,
-    label: filter?.label ?? "",
-  });
+  const rows = filterForStats(
+    streams,
+    filter ?? { since: subWeeks(new Date(), weeksBack), label: "" }
+  );
   const byWeek: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {
@@ -384,11 +382,13 @@ export function computeStreamsByWeek(
     byWeek[weekStart].durationMs += row.durationMs;
   }
 
-  return Object.entries(byWeek).map(([week, data]) => ({
-    week,
-    streams: data.streams,
-    minutes: minutesFromMs(data.durationMs),
-  }));
+  return Object.entries(byWeek)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([week, data]) => ({
+      week,
+      streams: data.streams,
+      minutes: minutesFromMs(data.durationMs),
+    }));
 }
 
 export function computeStreamsByMonth(
@@ -398,12 +398,10 @@ export function computeStreamsByMonth(
   timeZone?: string
 ) {
   const tz = resolveStatsTimeZone(timeZone);
-  const defaultSince = subMonths(new Date(), monthsBack);
-  const rows = filterForStats(streams, {
-    since: filter?.since ?? defaultSince,
-    until: filter?.until,
-    label: filter?.label ?? "",
-  });
+  const rows = filterForStats(
+    streams,
+    filter ?? { since: subMonths(new Date(), monthsBack), label: "" }
+  );
   const byMonth: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {
@@ -413,11 +411,13 @@ export function computeStreamsByMonth(
     byMonth[monthKey].durationMs += row.durationMs;
   }
 
-  return Object.entries(byMonth).map(([month, data]) => ({
-    month,
-    streams: data.streams,
-    minutes: minutesFromMs(data.durationMs),
-  }));
+  return Object.entries(byMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, data]) => ({
+      month,
+      streams: data.streams,
+      minutes: minutesFromMs(data.durationMs),
+    }));
 }
 
 export function computeStreamsByDay(
@@ -426,12 +426,7 @@ export function computeStreamsByDay(
   timeZone?: string
 ) {
   const tz = resolveStatsTimeZone(timeZone);
-  const defaultSince = subDays(new Date(), 90);
-  const rows = filterForStats(streams, {
-    since: filter?.since ?? defaultSince,
-    until: filter?.until,
-    label: filter?.label ?? "",
-  });
+  const rows = filterForStats(streams, filter ?? { since: subDays(new Date(), 90), label: "" });
   const byDay: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {

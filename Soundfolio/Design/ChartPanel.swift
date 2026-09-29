@@ -39,6 +39,10 @@ struct SeriesChart: View {
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4))
         }
+        .chartYAxis {
+            AxisMarks(position: .leading)
+        }
+        .chartYAxisLabel(metricLabel, position: .leading)
     }
 }
 
