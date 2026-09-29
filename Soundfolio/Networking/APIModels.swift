@@ -156,6 +156,7 @@ struct AlbumDetail: Codable {
     let streams: Int
     let minutesListened: Int
     let share: Int
+    let firstPlayedAt: Date?
     let tracks: [AlbumTrackRow]
 }
 

@@ -620,6 +620,7 @@ enum StatsEngine {
             streams: rows.count,
             minutesListened: minutes,
             share: periodShare(minutes: minutes, streams: streams, range: range),
+            firstPlayedAt: rows.map(\.playedAt).min(),
             tracks: tracks
         )
     }

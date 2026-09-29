@@ -383,6 +383,7 @@ struct AlbumDetailView: View {
                         StatCard(label: "Plays", value: detail.streams.formatted(), accent: accent)
                         StatCard(label: "Minutes", value: detail.minutesListened.formatted(), accent: accent)
                         StatCard(label: "Tracks heard", value: detail.tracks.count.formatted(), accent: accent)
+                        StatCard(label: "First play", value: shortDate(detail.firstPlayedAt), accent: accent)
                         StatCard(label: "Share", value: "\(detail.share)%", hint: "of minutes", accent: accent)
                     }
 

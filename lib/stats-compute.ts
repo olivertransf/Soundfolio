@@ -774,6 +774,9 @@ export function computeAlbumDetail(
     streams: rows.length,
     minutesListened,
     share: shareOfPeriod(minutesListened, streams, filter),
+    firstPlayedAt: rows.length
+      ? new Date(Math.min(...rows.map((row) => row.playedAt.getTime())))
+      : null,
     tracks: [...trackGroups.values()]
       .map((group) => ({
         trackName: group.trackName,

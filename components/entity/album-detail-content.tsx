@@ -12,6 +12,7 @@ import {
 import { EntityHero } from "@/components/entity/entity-hero";
 import { FilterToolbar } from "@/components/filter-toolbar";
 import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
+import { LocalDateTime } from "@/components/local-datetime";
 import { RankedEntityList } from "@/components/ranked-entity-list";
 import { useStreams } from "@/components/streams-provider";
 import {
@@ -104,6 +105,14 @@ function AlbumDetailInner() {
           { label: "Plays", value: detail.streams.toLocaleString() },
           { label: "Minutes", value: detail.minutesListened.toLocaleString() },
           { label: "Tracks heard", value: detail.tracks.length.toLocaleString() },
+          {
+            label: "First play",
+            value: detail.firstPlayedAt ? (
+              <LocalDateTime date={detail.firstPlayedAt.toISOString()} pattern="MMM d, yyyy" />
+            ) : (
+              "—"
+            ),
+          },
           { label: "Share", value: `${detail.share}%`, hint: "of minutes" },
         ]}
       />
