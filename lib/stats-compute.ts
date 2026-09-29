@@ -456,6 +456,40 @@ export function calendarDaysInFilter(
   return 1;
 }
 
+function weekStartKey(date: string, timeZone: string) {
+  const weekday = getDayOfWeekInTimeZone(startOfCalendarDateInZone(date, timeZone), timeZone);
+  return addCalendarDaysInZone(date, -((weekday + 6) % 7), timeZone);
+}
+
+function eachDateKey(start: string | undefined, end: string | undefined, step: number, timeZone: string) {
+  if (!start || !end || start > end) return [];
+  const keys: string[] = [];
+  let cursor = start;
+  for (let guard = 0; cursor <= end && guard < 4000; guard += 1) {
+    keys.push(cursor);
+    cursor = addCalendarDaysInZone(cursor, step, timeZone);
+  }
+  return keys;
+}
+
+function eachMonthKey(start: string | undefined, end: string | undefined) {
+  if (!start || !end || start > end) return [];
+  const keys: string[] = [];
+  let [year, month] = start.split("-").map(Number);
+  const [endYear, endMonth] = end.split("-").map(Number);
+  for (let guard = 0; year !== undefined && month !== undefined && guard < 600; guard += 1) {
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    keys.push(key);
+    if (year === endYear && month === endMonth) break;
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return keys;
+}
+
 export function computeStreamsByWeek(
   streams: Stream[],
   weeksBack = 26,
@@ -470,22 +504,20 @@ export function computeStreamsByWeek(
   const byWeek: Record<string, { streams: number; durationMs: number }> = {};
 
   for (const row of rows) {
-    const localDate = formatCalendarDateInZone(row.playedAt, tz);
-    const localWeekday = getDayOfWeekInTimeZone(row.playedAt, tz);
-    const offsetFromMonday = (localWeekday + 6) % 7;
-    const weekStart = addCalendarDaysInZone(localDate, -offsetFromMonday, tz);
+    const weekStart = weekStartKey(formatCalendarDateInZone(row.playedAt, tz), tz);
     if (!byWeek[weekStart]) byWeek[weekStart] = { streams: 0, durationMs: 0 };
     byWeek[weekStart].streams += 1;
     byWeek[weekStart].durationMs += row.durationMs;
   }
 
-  return Object.entries(byWeek)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([week, data]) => ({
-      week,
-      streams: data.streams,
-      minutes: minutesFromMs(data.durationMs),
-    }));
+  const keys = Object.keys(byWeek).sort();
+  const start = filter?.since ? weekStartKey(formatCalendarDateInZone(filter.since, tz), tz) : keys[0];
+  const end = filter?.until ? weekStartKey(formatCalendarDateInZone(filter.until, tz), tz) : keys[keys.length - 1];
+  return eachDateKey(start, end, 7, tz).map((week) => ({
+    week,
+    streams: byWeek[week]?.streams ?? 0,
+    minutes: minutesFromMs(byWeek[week]?.durationMs ?? 0),
+  }));
 }
 
 export function computeStreamsByMonth(
@@ -508,13 +540,14 @@ export function computeStreamsByMonth(
     byMonth[monthKey].durationMs += row.durationMs;
   }
 
-  return Object.entries(byMonth)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, data]) => ({
-      month,
-      streams: data.streams,
-      minutes: minutesFromMs(data.durationMs),
-    }));
+  const keys = Object.keys(byMonth).sort();
+  const start = filter?.since ? formatCalendarDateInZone(filter.since, tz).slice(0, 7) : keys[0];
+  const end = filter?.until ? formatCalendarDateInZone(filter.until, tz).slice(0, 7) : keys[keys.length - 1];
+  return eachMonthKey(start, end).map((month) => ({
+    month,
+    streams: byMonth[month]?.streams ?? 0,
+    minutes: minutesFromMs(byMonth[month]?.durationMs ?? 0),
+  }));
 }
 
 export function computeStreamsByDay(
@@ -533,13 +566,14 @@ export function computeStreamsByDay(
     byDay[day].durationMs += row.durationMs;
   }
 
-  return Object.entries(byDay)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([label, data]) => ({
-      label,
-      streams: data.streams,
-      minutes: minutesFromMs(data.durationMs),
-    }));
+  const keys = Object.keys(byDay).sort();
+  const start = filter?.since ? formatCalendarDateInZone(filter.since, tz) : keys[0];
+  const end = filter?.until ? formatCalendarDateInZone(filter.until, tz) : keys[keys.length - 1];
+  return eachDateKey(start, end, 1, tz).map((label) => ({
+    label,
+    streams: byDay[label]?.streams ?? 0,
+    minutes: minutesFromMs(byDay[label]?.durationMs ?? 0),
+  }));
 }
 
 export function computeStreamsByHour(

@@ -33,7 +33,7 @@ export function ChartPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="flex h-full flex-col gap-2 border border-border bg-card p-3">
+    <section className="flex h-full min-w-0 flex-col gap-2 border border-border bg-card p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
@@ -85,13 +85,8 @@ function barPath(x: number, y: number, width: number, height: number) {
   return `M ${x} ${y + height} V ${y + radius} Q ${x} ${y} ${x + radius} ${y} H ${x + width - radius} Q ${x + width} ${y} ${x + width} ${y + radius} V ${y + height} Z`;
 }
 
-function tickIndexes(count: number) {
-  if (count <= 8) return Array.from({ length: count }, (_, index) => index);
-  const step = Math.ceil(count / 6);
-  const indexes: number[] = [];
-  for (let index = 0; index < count; index += step) indexes.push(index);
-  if (indexes[indexes.length - 1] !== count - 1) indexes.push(count - 1);
-  return indexes;
+function labelWidth(label: string) {
+  return chartAxisLabel(label).length * 6.6 + 8;
 }
 
 export function BarSeriesChart({
@@ -123,102 +118,82 @@ export function BarSeriesChart({
   const max = Math.max(1, ...values);
   const height = 176;
   const showScale = points.length > 8;
-  const padLeft = 28;
-  const padRight = 8;
   const padTop = 22;
-  const padBottom = 22;
-  const plotWidth = width - padLeft - padRight;
+  const padBottom = 28;
   const plotHeight = height - padTop - padBottom;
-  const gap = points.length > 40 ? 1 : 3;
-  const barWidth = Math.max(1, (plotWidth - gap * Math.max(points.length - 1, 0)) / Math.max(points.length, 1));
-
-  const centers =
-    width > 0 ? values.map((_, index) => padLeft + index * (barWidth + gap) + barWidth / 2) : [];
-  const candidates = tickIndexes(points.length);
-  const visible: number[] = [];
-  let lastRight = -Infinity;
-  for (const index of candidates) {
-    const text = chartAxisLabel(points[index]?.label ?? "");
-    const half = (text.length * 7.4) / 2;
-    const x = centers[index] ?? 0;
-    if (x - half < lastRight + 12) continue;
-    visible.push(index);
-    lastRight = x + half;
-  }
+  const maxLabel = Math.max(20, ...points.map((point) => labelWidth(point.label)));
+  const slot = maxLabel;
+  const edge = maxLabel / 2;
+  const minContent = edge * 2 + points.length * slot;
+  const contentWidth = Math.max(width, minContent);
+  const usedSlot = points.length > 0 ? (contentWidth - edge * 2) / points.length : slot;
+  const barWidth = Math.max(2, usedSlot - 3);
+  const baseline = padTop + plotHeight;
 
   return (
-    <div ref={frameRef} className="h-44 w-full">
-      {points.length === 0 ? (
-        <p className="px-2 py-8 text-center text-sm text-muted-foreground">No plays in this range.</p>
-      ) : width < 1 ? null : (
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="none"
-          className="block h-full w-full"
-          role="img"
-          aria-label={label}
-        >
-          {showScale ? (
-            <text x={padLeft} y={12} fontSize={11} className="fill-muted-foreground">
-              {compactNumber(max)} {unit}
-            </text>
-          ) : null}
-          <text
-            x={padLeft - 6}
-            y={padTop + plotHeight}
-            textAnchor="end"
-            fontSize={11}
-            className="fill-muted-foreground"
+    <div className="flex h-44 w-full min-w-0">
+      <div className="relative w-11 shrink-0 text-[11px] text-muted-foreground">
+        {showScale ? (
+          <span className="absolute left-0 top-0 leading-none">
+            {compactNumber(max)}
+            <span className="block text-[10px]">{unit}</span>
+          </span>
+        ) : null}
+        <span className="absolute left-0 leading-none" style={{ top: baseline - 8 }}>
+          0
+        </span>
+      </div>
+      <div ref={frameRef} className="h-44 min-w-0 flex-1 overflow-x-auto">
+        {points.length === 0 ? (
+          <p className="px-2 py-8 text-center text-sm text-muted-foreground">No plays in this range.</p>
+        ) : width < 1 ? null : (
+          <svg
+            viewBox={`0 0 ${contentWidth} ${height}`}
+            width={contentWidth}
+            height={height}
+            className="block"
+            role="img"
+            aria-label={label}
           >
-            0
-          </text>
-          <line
-            x1={padLeft}
-            x2={width - padRight}
-            y1={padTop + plotHeight}
-            y2={padTop + plotHeight}
-            className="stroke-border"
-          />
-          {values.map((value, index) => {
-            const barHeight = Math.max(value > 0 ? 2 : 0, (value / max) * plotHeight);
-            const x = padLeft + index * (barWidth + gap);
-            const y = padTop + plotHeight - barHeight;
-            const point = points[index];
-            return (
-              <g key={`${point?.label ?? index}`}>
-                <path d={barPath(x, y, barWidth, barHeight)} className="fill-primary">
-                  <title>
-                    {chartAxisLabel(point?.label ?? "")}: {value.toLocaleString()} {unit}
-                  </title>
-                </path>
-                {points.length <= 8 && value > 0 ? (
+            <line x1={0} x2={contentWidth} y1={baseline} y2={baseline} className="stroke-border" />
+            {values.map((value, index) => {
+              const barHeight = Math.max(value > 0 ? 2 : 0, (value / max) * plotHeight);
+              const x = edge + index * usedSlot + (usedSlot - barWidth) / 2;
+              const y = baseline - barHeight;
+              const point = points[index];
+              return (
+                <g key={`${point?.label ?? index}`}>
+                  <path d={barPath(x, y, barWidth, barHeight)} className="fill-primary">
+                    <title>
+                      {chartAxisLabel(point?.label ?? "")}: {value.toLocaleString()} {unit}
+                    </title>
+                  </path>
+                  {points.length <= 8 && value > 0 ? (
+                    <text
+                      x={x + barWidth / 2}
+                      y={Math.max(12, y - 4)}
+                      textAnchor="middle"
+                      fontSize={11}
+                      className="fill-foreground"
+                    >
+                      {compactNumber(value)}
+                    </text>
+                  ) : null}
                   <text
-                    x={x + barWidth / 2}
-                    y={Math.max(12, y - 4)}
+                    x={edge + index * usedSlot + usedSlot / 2}
+                    y={height - 6}
                     textAnchor="middle"
                     fontSize={11}
-                    className="fill-foreground"
+                    className="fill-muted-foreground"
                   >
-                    {compactNumber(value)}
+                    {chartAxisLabel(points[index]?.label ?? "")}
                   </text>
-                ) : null}
-              </g>
-            );
-          })}
-          {visible.map((index) => (
-            <text
-              key={`tick-${points[index]?.label ?? index}`}
-              x={centers[index]}
-              y={height - 4}
-              textAnchor="middle"
-              fontSize={11}
-              className="fill-muted-foreground"
-            >
-              {chartAxisLabel(points[index]?.label ?? "")}
-            </text>
-          ))}
-        </svg>
-      )}
+                </g>
+              );
+            })}
+          </svg>
+        )}
+      </div>
     </div>
   );
 }
