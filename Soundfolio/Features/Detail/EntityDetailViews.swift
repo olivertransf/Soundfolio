@@ -38,6 +38,7 @@ struct TrackDetailView: View {
                     }
                     playsOverTime
                     playsByHour
+                    playsByWeekday
                     if !detail.recentPlays.isEmpty {
                         RankColumn(title: "Recent plays") {
                             VStack(spacing: 0) {
@@ -93,6 +94,18 @@ struct TrackDetailView: View {
         }
         return ChartPanel(
             title: "Plays by hour",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Plays")
+        ) {
+            SeriesChart(points: points, metricLabel: "Plays", useMinutes: false, accent: accent)
+        }
+    }
+
+    private var playsByWeekday: some View {
+        let points = StatsEngine.patterns(from: scoped, preferences: preferences).byDay.map {
+            HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
+        }
+        return ChartPanel(
+            title: "Plays by weekday",
             caption: ChartCopy.caption(range: rangeLabel, metric: "Plays")
         ) {
             SeriesChart(points: points, metricLabel: "Plays", useMinutes: false, accent: accent)
@@ -175,6 +188,8 @@ struct ArtistDetailView: View {
                     listeningOverTime
                     weekdayChart
                     topTrackChart(detail)
+                    albumChart(detail)
+                    minutesByHour
 
                     if horizontalSizeClass == .regular {
                         HStack(alignment: .top, spacing: 12) {
@@ -230,6 +245,30 @@ struct ArtistDetailView: View {
         }
         return ChartPanel(
             title: "Minutes by track",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
+    }
+
+    private func albumChart(_ detail: ArtistDetail) -> some View {
+        let points = detail.topAlbums.map {
+            HistoryPoint(label: $0.albumName, minutes: $0.minutesListened, streams: $0.streams)
+        }
+        return ChartPanel(
+            title: "Minutes by album",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
+    }
+
+    private var minutesByHour: some View {
+        let points = StatsEngine.patterns(from: scoped, preferences: preferences).byHour.map {
+            HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
+        }
+        return ChartPanel(
+            title: "Minutes by hour",
             caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
         ) {
             SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
@@ -349,6 +388,8 @@ struct AlbumDetailView: View {
 
                     minutesPerTrack(detail)
                     listeningOverTime
+                    minutesByHour
+                    weekdayChart
 
                     RankColumn(title: "Tracks") {
                         VStack(spacing: 0) {
@@ -386,6 +427,30 @@ struct AlbumDetailView: View {
 
     private var reloadID: String {
         "\(albumName)-\(artistName)-\(preferences.period.rawValue)-\(preferences.customFrom)-\(preferences.customTo)-\(streamStore.revision)"
+    }
+
+    private var minutesByHour: some View {
+        let points = StatsEngine.patterns(from: scoped, preferences: preferences).byHour.map {
+            HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
+        }
+        return ChartPanel(
+            title: "Minutes by hour",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
+    }
+
+    private var weekdayChart: some View {
+        let points = StatsEngine.patterns(from: scoped, preferences: preferences).byDay.map {
+            HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
+        }
+        return ChartPanel(
+            title: "Minutes by weekday",
+            caption: ChartCopy.caption(range: rangeLabel, metric: "Minutes")
+        ) {
+            SeriesChart(points: points, metricLabel: "Minutes", useMinutes: true, accent: accent)
+        }
     }
 
     private func minutesPerTrack(_ detail: AlbumDetail) -> some View {

@@ -118,9 +118,9 @@ export function BarSeriesChart({
   let lastRight = -Infinity;
   for (const index of candidates) {
     const text = chartAxisLabel(points[index]?.label ?? "");
-    const half = (text.length * 6.4) / 2;
+    const half = (text.length * 7.4) / 2;
     const x = centers[index] ?? 0;
-    if (x - half < lastRight + 6) continue;
+    if (x - half < lastRight + 12) continue;
     visible.push(index);
     lastRight = x + half;
   }

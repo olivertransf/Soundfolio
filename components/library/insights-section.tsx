@@ -18,6 +18,7 @@ import {
   calendarDaysInFilter,
   computeInsightSummary,
   computeListeningSpan,
+  computePeriodBreakdown,
   computeStreamsByDayOfWeek,
   computeStreamsByHour,
   parseTimeRange,
@@ -70,6 +71,10 @@ function InsightsSectionInner() {
     () => computeInsightSummary(streams, filter, viewerTimeZone ?? undefined),
     [streams, filter, viewerTimeZone]
   );
+  const breakdown = useMemo(
+    () => computePeriodBreakdown(streams, filter, viewerTimeZone ?? undefined),
+    [streams, filter, viewerTimeZone]
+  );
 
   if (loading) {
     return <p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>;
@@ -87,6 +92,14 @@ function InsightsSectionInner() {
             hint: summary.mostActiveDay ? `${summary.mostActiveMinutes.toLocaleString()} min` : undefined,
           },
           { label: "Top 10 tracks", value: `${summary.topTenShare}%`, hint: "of minutes" },
+          {
+            label: "Peak hour",
+            value: breakdown.peakHourLabel ? chartAxisLabel(breakdown.peakHourLabel) : "—",
+            hint: breakdown.peakHourLabel ? `${breakdown.peakHourMinutes.toLocaleString()} min` : undefined,
+          },
+          { label: "Avg / play", value: breakdown.averageMinutesPerPlay.toLocaleString(), hint: "min" },
+          { label: "Active days", value: breakdown.activeDays.toLocaleString() },
+          { label: "Replays", value: `${breakdown.replayShare}%`, hint: "of minutes" },
         ]}
       />
 
@@ -130,6 +143,33 @@ function InsightsSectionInner() {
           caption={chartCaption(filter.label, metric)}
         >
           <BarSeriesChart points={weekdays} metric={metric} label="Listening by weekday" />
+        </ChartPanel>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <ChartPanel
+          title={metric === "minutes" ? "Minutes by time of day" : "Plays by time of day"}
+          caption={`${chartCaption(filter.label, metric)} · Night 12a-6a, morning 6a-12p, afternoon 12p-6p, evening 6p-12a`}
+        >
+          <BarSeriesChart points={breakdown.dayparts} metric={metric} label="Listening by time of day" />
+        </ChartPanel>
+        <ChartPanel
+          title={metric === "minutes" ? "Weekday vs weekend" : "Plays on weekdays and weekends"}
+          caption={`${chartCaption(filter.label, metric)} · Monday-Friday versus Saturday-Sunday`}
+        >
+          <BarSeriesChart points={breakdown.weekParts} metric={metric} label="Weekday versus weekend" />
+        </ChartPanel>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <ChartPanel title="Minutes by artist" caption={`${chartCaption(filter.label, "minutes")} · Top 5 and the rest`}>
+          <BarSeriesChart points={breakdown.artistShare} metric="minutes" label="Top artists by minutes" />
+        </ChartPanel>
+        <ChartPanel
+          title="Minutes from replays"
+          caption={`${chartCaption(filter.label, "minutes")} · Tracks heard once versus played again`}
+        >
+          <BarSeriesChart points={breakdown.replays} metric="minutes" label="Replay minutes" />
         </ChartPanel>
       </div>
 

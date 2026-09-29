@@ -27,15 +27,25 @@ struct InsightsView: View {
                 FilterToolbar(preferences: preferences, context: .patterns)
 
                 let summary = StatsEngine.insightSummary(from: streamStore.streams, preferences: preferences)
-                HStack(spacing: 8) {
+                let breakdown = StatsEngine.periodBreakdown(from: streamStore.streams, preferences: preferences)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                     StatCard(label: "Albums", value: summary.uniqueAlbums.formatted(), accent: accent)
                     StatCard(
                         label: "Most active day",
-                        value: summary.mostActiveDay ?? "—",
+                        value: shortDay(summary.mostActiveDay),
                         hint: summary.mostActiveDay == nil ? nil : "\(summary.mostActiveMinutes.formatted()) min",
                         accent: accent
                     )
                     StatCard(label: "Top 10 tracks", value: "\(summary.topTenShare)%", hint: "of minutes", accent: accent)
+                    StatCard(
+                        label: "Peak hour",
+                        value: breakdown.peakHour,
+                        hint: breakdown.peakHour == "—" ? nil : "\(breakdown.peakHourMinutes.formatted()) min",
+                        accent: accent
+                    )
+                    StatCard(label: "Avg / play", value: breakdown.averageMinutesPerPlay.formatted(), hint: "min", accent: accent)
+                    StatCard(label: "Active days", value: breakdown.activeDays.formatted(), accent: accent)
+                    StatCard(label: "Replays", value: "\(breakdown.replayShare)%", hint: "of minutes", accent: accent)
                 }
 
                 ChartPanel(
@@ -69,6 +79,44 @@ struct InsightsView: View {
                     caption: ChartCopy.caption(range: rangeLabel, metric: metric.label)
                 ) {
                     weekdayChart
+                }
+
+                ChartPanel(
+                    title: metric == .minutes ? "Minutes by time of day" : "Plays by time of day",
+                    caption: "\(ChartCopy.caption(range: rangeLabel, metric: metric.label)) · Night 12a-6a, morning 6a-12p, afternoon 12p-6p, evening 6p-12a"
+                ) {
+                    SeriesChart(
+                        points: breakdown.dayparts,
+                        metricLabel: metric.label,
+                        useMinutes: metric == .minutes,
+                        accent: accent
+                    )
+                }
+
+                ChartPanel(
+                    title: metric == .minutes ? "Weekday vs weekend" : "Plays on weekdays and weekends",
+                    caption: "\(ChartCopy.caption(range: rangeLabel, metric: metric.label)) · Monday-Friday versus Saturday-Sunday"
+                ) {
+                    SeriesChart(
+                        points: breakdown.weekParts,
+                        metricLabel: metric.label,
+                        useMinutes: metric == .minutes,
+                        accent: accent
+                    )
+                }
+
+                ChartPanel(
+                    title: "Minutes by artist",
+                    caption: "\(ChartCopy.caption(range: rangeLabel, metric: "Minutes")) · Top 5 and the rest"
+                ) {
+                    SeriesChart(points: breakdown.artistShare, metricLabel: "Minutes", useMinutes: true, accent: accent)
+                }
+
+                ChartPanel(
+                    title: "Minutes from replays",
+                    caption: "\(ChartCopy.caption(range: rangeLabel, metric: "Minutes")) · Tracks heard once versus played again"
+                ) {
+                    SeriesChart(points: breakdown.replays, metricLabel: "Minutes", useMinutes: true, accent: accent)
                 }
 
                 ChartPanel(title: "Top 10 share", caption: "Share of minutes in this period") {
@@ -110,6 +158,17 @@ struct InsightsView: View {
             HistoryPoint(label: $0.label, minutes: $0.minutes, streams: $0.streams)
         }
         return series(points)
+    }
+
+    private func shortDay(_ label: String?) -> String {
+        guard let label else { return "—" }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: label) else { return label }
+        let display = DateFormatter()
+        display.setLocalizedDateFormatFromTemplate("MMMd")
+        return display.string(from: date)
     }
 
     private func series(_ points: [HistoryPoint]) -> some View {

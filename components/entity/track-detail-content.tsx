@@ -18,6 +18,7 @@ import { useStreams } from "@/components/streams-provider";
 import {
   calendarDaysInFilter,
   computeListeningSpan,
+  computeStreamsByDayOfWeek,
   computeStreamsByHour,
   computeTrackDetail,
   parseTimeRange,
@@ -69,6 +70,10 @@ function TrackDetailInner() {
   );
   const hours = useMemo(
     () => computeStreamsByHour(scoped, filter, viewerTimeZone ?? undefined),
+    [scoped, filter, viewerTimeZone]
+  );
+  const weekdays = useMemo(
+    () => computeStreamsByDayOfWeek(scoped, filter, viewerTimeZone ?? undefined),
     [scoped, filter, viewerTimeZone]
   );
 
@@ -131,9 +136,14 @@ function TrackDetailInner() {
       <ChartPanel title={historyChartTitle(mode, "streams")} caption={chartCaption(filter.label, "streams")}>
         <BarSeriesChart points={history} metric="streams" label={historyChartTitle(mode, "streams")} />
       </ChartPanel>
-      <ChartPanel title="Plays by hour" caption={chartCaption(filter.label, "streams")}>
-        <BarSeriesChart points={hours} metric="streams" label="Plays by hour" />
-      </ChartPanel>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <ChartPanel title="Plays by hour" caption={chartCaption(filter.label, "streams")}>
+          <BarSeriesChart points={hours} metric="streams" label="Plays by hour" />
+        </ChartPanel>
+        <ChartPanel title="Plays by weekday" caption={chartCaption(filter.label, "streams")}>
+          <BarSeriesChart points={weekdays} metric="streams" label="Plays by weekday" />
+        </ChartPanel>
+      </div>
 
       {detail.recentPlays.length > 0 ? (
         <SectionBlock title="Recent plays in period">

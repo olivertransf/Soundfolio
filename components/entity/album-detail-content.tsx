@@ -18,6 +18,8 @@ import {
   calendarDaysInFilter,
   computeAlbumDetail,
   computeListeningSpan,
+  computeStreamsByDayOfWeek,
+  computeStreamsByHour,
   parseTimeRange,
 } from "@/lib/stats-compute";
 import { historyChartData } from "@/lib/stats-chart-data";
@@ -69,6 +71,14 @@ function AlbumDetailInner() {
     minutes: track.minutes,
     streams: track.streams,
   }));
+  const hours = useMemo(
+    () => computeStreamsByHour(scoped, filter, viewerTimeZone ?? undefined),
+    [scoped, filter, viewerTimeZone]
+  );
+  const weekdays = useMemo(
+    () => computeStreamsByDayOfWeek(scoped, filter, viewerTimeZone ?? undefined),
+    [scoped, filter, viewerTimeZone]
+  );
 
   if (loading) {
     return <p className="py-16 text-center text-sm text-muted-foreground">Loading album…</p>;
@@ -104,6 +114,14 @@ function AlbumDetailInner() {
       <ChartPanel title={historyChartTitle(mode, "minutes")} caption={chartCaption(filter.label, "minutes")}>
         <BarSeriesChart points={history} metric="minutes" label={historyChartTitle(mode, "minutes")} />
       </ChartPanel>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <ChartPanel title="Minutes by hour" caption={chartCaption(filter.label, "minutes")}>
+          <BarSeriesChart points={hours} metric="minutes" label="Minutes by hour" />
+        </ChartPanel>
+        <ChartPanel title="Minutes by weekday" caption={chartCaption(filter.label, "minutes")}>
+          <BarSeriesChart points={weekdays} metric="minutes" label="Minutes by weekday" />
+        </ChartPanel>
+      </div>
 
       <SectionBlock title="Tracks">
         <ContentPanel>

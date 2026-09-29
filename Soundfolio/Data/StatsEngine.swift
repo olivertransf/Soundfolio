@@ -12,6 +12,18 @@ enum HistoryGrain {
     case months
 }
 
+struct PeriodBreakdown {
+    let dayparts: [HistoryPoint]
+    let weekParts: [HistoryPoint]
+    let artistShare: [HistoryPoint]
+    let replays: [HistoryPoint]
+    let peakHour: String
+    let peakHourMinutes: Int
+    let averageMinutesPerPlay: Int
+    let activeDays: Int
+    let replayShare: Int
+}
+
 struct InsightSummary {
     let uniqueAlbums: Int
     let mostActiveDay: String?
@@ -19,6 +31,18 @@ struct InsightSummary {
     let topTenShare: Int
     let topTenMinutes: Int
     let restMinutes: Int
+}
+
+struct PeriodBreakdown {
+    let dayparts: [HistoryPoint]
+    let weekParts: [HistoryPoint]
+    let artistShare: [HistoryPoint]
+    let replays: [HistoryPoint]
+    let peakHour: String?
+    let peakHourMinutes: Int
+    let averageMinutesPerPlay: Int
+    let activeDays: Int
+    let replayShare: Int
 }
 
 enum StatsEngine {
@@ -337,6 +361,111 @@ enum StatsEngine {
             topTenShare: share,
             topTenMinutes: topMinutes,
             restMinutes: max(0, totalMinutes - topMinutes)
+        )
+    }
+
+    static func periodBreakdown(from streams: [StreamRecord], preferences: StatsPreferences) -> PeriodBreakdown {
+        let filter = parseTimeRange(preferences: preferences)
+        let rows = filtered(streams, range: filter)
+        let calendar = Calendar.current
+        var daypartMs = Array(repeating: 0, count: 4)
+        var daypartPlays = Array(repeating: 0, count: 4)
+        var weekdayMs = 0
+        var weekdayPlays = 0
+        var weekendMs = 0
+        var weekendPlays = 0
+        var totalMs = 0
+        var days = Set<String>()
+        var tracks: [String: (plays: Int, durationMs: Int)] = [:]
+        var byHour = Array(repeating: 0, count: 24)
+
+        for row in rows {
+            let instant = ListenBucket.instant(
+                playedAt: row.playedAt,
+                durationMs: row.durationMs,
+                trackId: row.trackId,
+                timeZone: calendar.timeZone
+            )
+            let hour = calendar.component(.hour, from: instant)
+            let part = hour < 6 ? 0 : hour < 12 ? 1 : hour < 18 ? 2 : 3
+            daypartMs[part] += row.durationMs
+            daypartPlays[part] += 1
+            byHour[hour] += row.durationMs
+            let weekday = calendar.component(.weekday, from: instant)
+            if weekday == 1 || weekday == 7 {
+                weekendMs += row.durationMs
+                weekendPlays += 1
+            } else {
+                weekdayMs += row.durationMs
+                weekdayPlays += 1
+            }
+            totalMs += row.durationMs
+            days.insert(dayKey(for: row.playedAt, calendar: calendar))
+            let key = trackKey(for: row)
+            var group = tracks[key] ?? (plays: 0, durationMs: 0)
+            group.plays += 1
+            group.durationMs += row.durationMs
+            tracks[key] = group
+        }
+
+        var onceMs = 0
+        var oncePlays = 0
+        var replayMs = 0
+        var replayPlays = 0
+        for group in tracks.values {
+            if group.plays <= 1 {
+                onceMs += group.durationMs
+                oncePlays += group.plays
+            } else {
+                replayMs += group.durationMs
+                replayPlays += group.plays
+            }
+        }
+
+        let totalMinutes = ListeningMinutes.minutes(fromMs: totalMs)
+        let replayMinutes = ListeningMinutes.minutes(fromMs: replayMs)
+        let artists = topArtists(
+            from: rows,
+            sort: .minutes,
+            limit: 5,
+            range: StatsTimeRange(since: nil, until: nil, label: "")
+        )
+        let topArtistMinutes = artists.reduce(0) { $0 + $1.minutesListened }
+        var artistPoints = artists.map {
+            HistoryPoint(label: $0.artistName, minutes: $0.minutesListened, streams: $0.streams)
+        }
+        let rest = max(0, totalMinutes - topArtistMinutes)
+        if rest > 0 {
+            artistPoints.append(HistoryPoint(label: "Rest", minutes: rest, streams: 0))
+        }
+
+        let peakIndex = byHour.enumerated().max(by: { $0.element < $1.element })?.offset ?? 0
+        let peakHour12 = peakIndex % 12 == 0 ? 12 : peakIndex % 12
+        let peakLabel = rows.isEmpty ? "—" : "\(peakHour12)\(peakIndex < 12 ? "a" : "p")"
+        let labels = ["Night", "Morning", "Afternoon", "Evening"]
+
+        return PeriodBreakdown(
+            dayparts: labels.enumerated().map { index, label in
+                HistoryPoint(
+                    label: label,
+                    minutes: ListeningMinutes.minutes(fromMs: daypartMs[index]),
+                    streams: daypartPlays[index]
+                )
+            },
+            weekParts: [
+                HistoryPoint(label: "Weekday", minutes: ListeningMinutes.minutes(fromMs: weekdayMs), streams: weekdayPlays),
+                HistoryPoint(label: "Weekend", minutes: ListeningMinutes.minutes(fromMs: weekendMs), streams: weekendPlays),
+            ],
+            artistShare: artistPoints,
+            replays: [
+                HistoryPoint(label: "Played once", minutes: ListeningMinutes.minutes(fromMs: onceMs), streams: oncePlays),
+                HistoryPoint(label: "Played again", minutes: replayMinutes, streams: replayPlays),
+            ],
+            peakHour: peakLabel,
+            peakHourMinutes: ListeningMinutes.minutes(fromMs: byHour[peakIndex]),
+            averageMinutesPerPlay: rows.isEmpty ? 0 : Int((Double(totalMs) / Double(rows.count) / 60_000).rounded()),
+            activeDays: days.count,
+            replayShare: totalMinutes > 0 ? Int((Double(replayMinutes) / Double(totalMinutes) * 100).rounded()) : 0
         )
     }
 

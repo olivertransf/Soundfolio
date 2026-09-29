@@ -29,7 +29,9 @@ import {
   calendarDaysInFilter,
   computeListeningDiversity,
   computeListeningSpan,
+  computePeriodBreakdown,
   computeRecentStreams,
+  computeStreamsByDayOfWeek,
   computeTopAlbums,
   computeTopArtists,
   computeTopTracks,
@@ -96,6 +98,14 @@ export function OverviewContent() {
   const history = useMemo(
     () => historyChartData(deferredStreams, historyMode, filter, viewerTimeZone ?? "UTC"),
     [deferredStreams, historyMode, filter, viewerTimeZone]
+  );
+  const breakdown = useMemo(
+    () => computePeriodBreakdown(deferredStreams, filter, viewerTimeZone ?? undefined),
+    [deferredStreams, filter, viewerTimeZone]
+  );
+  const weekdays = useMemo(
+    () => computeStreamsByDayOfWeek(deferredStreams, filter, viewerTimeZone ?? undefined),
+    [deferredStreams, filter, viewerTimeZone]
   );
   const avgMinPerDay = Math.round(stats.totalMinutes / days);
   const avgStreamsPerDay = Math.round(stats.totalStreams / days);
@@ -220,6 +230,18 @@ export function OverviewContent() {
               label={historyChartTitle(historyMode, "minutes")}
             />
           </ChartPanel>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <ChartPanel
+              title="Minutes by time of day"
+              caption={`${chartCaption(filter.label, "minutes")} · Night 12a-6a, morning 6a-12p, afternoon 12p-6p, evening 6p-12a`}
+            >
+              <BarSeriesChart points={breakdown.dayparts} metric="minutes" label="Minutes by time of day" />
+            </ChartPanel>
+            <ChartPanel title="Minutes by weekday" caption={chartCaption(filter.label, "minutes")}>
+              <BarSeriesChart points={weekdays} metric="minutes" label="Minutes by weekday" />
+            </ChartPanel>
+          </div>
 
           <section className="space-y-2">
             <div className="flex items-baseline justify-between gap-3">

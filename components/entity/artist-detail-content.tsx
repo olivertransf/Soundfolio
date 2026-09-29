@@ -20,6 +20,7 @@ import {
   computeArtistDetail,
   computeListeningSpan,
   computeStreamsByDayOfWeek,
+  computeStreamsByHour,
   parseTimeRange,
   parseTopSortBy,
 } from "@/lib/stats-compute";
@@ -73,6 +74,15 @@ function ArtistDetailInner() {
     minutes: track.minutesListened,
     streams: track.streams,
   }));
+  const albumBars = detail.topAlbums.map((album) => ({
+    label: album.albumName,
+    minutes: album.minutesListened,
+    streams: album.streams,
+  }));
+  const hours = useMemo(
+    () => computeStreamsByHour(scoped, filter, viewerTimeZone ?? undefined),
+    [scoped, filter, viewerTimeZone]
+  );
 
   if (loading) {
     return <p className="py-16 text-center text-sm text-muted-foreground">Loading artist…</p>;
@@ -103,6 +113,12 @@ function ArtistDetailInner() {
         </ChartPanel>
         <ChartPanel title="Minutes by track" caption={chartCaption(filter.label, "minutes")}>
           <BarSeriesChart points={trackBars} metric="minutes" label="Top tracks by minutes" />
+        </ChartPanel>
+        <ChartPanel title="Minutes by album" caption={chartCaption(filter.label, "minutes")}>
+          <BarSeriesChart points={albumBars} metric="minutes" label="Top albums by minutes" />
+        </ChartPanel>
+        <ChartPanel title="Minutes by hour" caption={chartCaption(filter.label, "minutes")}>
+          <BarSeriesChart points={hours} metric="minutes" label="Minutes by hour" />
         </ChartPanel>
       </div>
 

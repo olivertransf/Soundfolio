@@ -336,6 +336,103 @@ export function computeInsightSummary(streams: Stream[], filter?: TimeRangeFilte
   };
 }
 
+export type MinuteBucket = {
+  label: string;
+  minutes: number;
+  streams: number;
+};
+
+export function computePeriodBreakdown(
+  streams: Stream[],
+  filter?: TimeRangeFilter,
+  timeZone?: string
+) {
+  const tz = resolveStatsTimeZone(timeZone);
+  const rows = filterForStats(streams, filter);
+  const daypartMs = [0, 0, 0, 0];
+  const daypartPlays = [0, 0, 0, 0];
+  let weekdayMs = 0;
+  let weekdayPlays = 0;
+  let weekendMs = 0;
+  let weekendPlays = 0;
+  let totalMs = 0;
+  const activeDays = new Set<string>();
+  const tracks = new Map<string, { plays: number; durationMs: number }>();
+
+  for (const row of rows) {
+    const instant = getListenBucketInstant(row.playedAt, row.durationMs, row.trackId, tz);
+    const hour = getHourInTimeZone(instant, tz);
+    const part = hour < 6 ? 0 : hour < 12 ? 1 : hour < 18 ? 2 : 3;
+    daypartMs[part] += row.durationMs;
+    daypartPlays[part] += 1;
+    const weekday = getDayOfWeekInTimeZone(instant, tz);
+    if (weekday === 0 || weekday === 6) {
+      weekendMs += row.durationMs;
+      weekendPlays += 1;
+    } else {
+      weekdayMs += row.durationMs;
+      weekdayPlays += 1;
+    }
+    totalMs += row.durationMs;
+    activeDays.add(formatCalendarDateInZone(row.playedAt, tz));
+    const key = trackGroupKey(row.trackId, row.trackName, row.artistName);
+    const group = tracks.get(key) ?? { plays: 0, durationMs: 0 };
+    group.plays += 1;
+    group.durationMs += row.durationMs;
+    tracks.set(key, group);
+  }
+
+  let onceMs = 0;
+  let oncePlays = 0;
+  let replayMs = 0;
+  let replayPlays = 0;
+  for (const group of tracks.values()) {
+    if (group.plays <= 1) {
+      onceMs += group.durationMs;
+      oncePlays += group.plays;
+    } else {
+      replayMs += group.durationMs;
+      replayPlays += group.plays;
+    }
+  }
+
+  const totalMinutes = minutesFromMs(totalMs);
+  const replayMinutes = minutesFromMs(replayMs);
+  const artists = computeTopArtists(streams, 5, filter, "minutes");
+  const topArtistMinutes = artists.reduce((sum, artist) => sum + artist.minutesListened, 0);
+  const daypartLabels = ["Night", "Morning", "Afternoon", "Evening"] as const;
+  const peak = computePeakHour(streams, filter, timeZone);
+
+  return {
+    dayparts: daypartLabels.map((label, index) => ({
+      label,
+      minutes: minutesFromMs(daypartMs[index] ?? 0),
+      streams: daypartPlays[index] ?? 0,
+    })),
+    weekParts: [
+      { label: "Weekday", minutes: minutesFromMs(weekdayMs), streams: weekdayPlays },
+      { label: "Weekend", minutes: minutesFromMs(weekendMs), streams: weekendPlays },
+    ] satisfies MinuteBucket[],
+    artistShare: [
+      ...artists.map((artist) => ({
+        label: artist.artistName,
+        minutes: artist.minutesListened,
+        streams: artist.streams,
+      })),
+      { label: "Rest", minutes: Math.max(0, totalMinutes - topArtistMinutes), streams: 0 },
+    ].filter((point) => point.label !== "Rest" || point.minutes > 0),
+    replays: [
+      { label: "Played once", minutes: minutesFromMs(onceMs), streams: oncePlays },
+      { label: "Played again", minutes: replayMinutes, streams: replayPlays },
+    ] satisfies MinuteBucket[],
+    peakHourLabel: peak?.label ?? null,
+    peakHourMinutes: peak?.minutes ?? 0,
+    averageMinutesPerPlay: rows.length ? Math.round(totalMs / rows.length / 60000) : 0,
+    activeDays: activeDays.size,
+    replayShare: totalMinutes > 0 ? Math.round((replayMinutes / totalMinutes) * 100) : 0,
+  };
+}
+
 export function calendarDaysInFilter(
   filter: TimeRangeFilter,
   span: { first: Date; last: Date } | null,
