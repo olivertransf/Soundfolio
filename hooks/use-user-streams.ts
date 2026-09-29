@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { firestoreErrorMessage, isFirestoreQuotaError } from "@/lib/firestore/errors";
 import {
   fetchStreamDocSnapshot,
+  fetchStreamsPlayedAfter,
   fetchUserStreamsPage,
 } from "@/lib/firestore/streams";
 import {
@@ -123,6 +124,25 @@ export function useUserStreams() {
       setError(null);
 
       try {
+        const since =
+          !options.fullRefresh && options.cachedMeta?.newestPlayedAt
+            ? new Date(options.cachedMeta.newestPlayedAt)
+            : null;
+        if (since) {
+          const newer = await fetchStreamsPlayedAfter(uid, since);
+          if (token !== loadTokenRef.current) return;
+          if (newer.length > 0) {
+            setStreams((current) => mergeStreamLists(current, newer));
+            const meta = await upsertStreamCache(uid, newer, { hasMore: false });
+            if (token !== loadTokenRef.current) return;
+            setCacheMeta(meta);
+          }
+          setHasMore(false);
+          setFullyLoaded(true);
+          setLoading(false);
+          return;
+        }
+
         const firstPage = await fetchUserStreamsPage(uid);
         if (token !== loadTokenRef.current) return;
 

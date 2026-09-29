@@ -162,7 +162,11 @@ function mapStream(document: FirestoreDocument): DevStreamRow {
   };
 }
 
-export async function getDevStreamPage(uid: string, pageToken?: string) {
+export async function getDevStreamPage(
+  uid: string,
+  pageToken?: string,
+  options?: { newerThan?: string; limit?: number }
+) {
   assertDevelopment();
   const cursor = pageToken
     ? (JSON.parse(Buffer.from(pageToken, "base64url").toString("utf8")) as {
@@ -176,8 +180,17 @@ export async function getDevStreamPage(uid: string, pageToken?: string) {
       { field: { fieldPath: "playedAt" }, direction: "DESCENDING" },
       { field: { fieldPath: "__name__" }, direction: "DESCENDING" },
     ],
-    limit: STREAM_PAGE_SIZE,
+    limit: options?.limit ?? STREAM_PAGE_SIZE,
   };
+  if (options?.newerThan) {
+    structuredQuery.where = {
+      fieldFilter: {
+        field: { fieldPath: "playedAt" },
+        op: "GREATER_THAN",
+        value: { timestampValue: options.newerThan },
+      },
+    };
+  }
   if (cursor) {
     structuredQuery.startAt = {
       values: [{ timestampValue: cursor.playedAt }, { referenceValue: cursor.name }],
@@ -243,7 +256,12 @@ function refreshNewestPage(cache: LibraryCache) {
   if (Date.now() - cache.savedAt < COMPLETE_CACHE_REFRESH_AFTER_MS) return;
   refreshingHead = (async () => {
     try {
-      const page = await getDevStreamPage(cache.user.uid);
+      const newest = cache.streams.reduce(
+        (max, row) => (row.playedAt > max ? row.playedAt : max),
+        ""
+      );
+      if (!newest) return;
+      const page = await getDevStreamPage(cache.user.uid, undefined, { newerThan: newest, limit: 100 });
       const seen = new Set(cache.streams.map((row) => row.id));
       const fresh = page.streams.filter((row) => !seen.has(row.id));
       if (fresh.length > 0) cache.streams.unshift(...fresh);

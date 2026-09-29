@@ -20,76 +20,89 @@ final class StreamStore {
     private(set) var errorMessage: String?
     private(set) var revision = 0
 
-    private var listener: ListenerRegistration?
     private var activeUID: String?
     private var persistTask: Task<Void, Never>?
+    private var catchUpTask: Task<Void, Never>?
 
     func start(uid: String) {
         guard activeUID != uid else { return }
         stop()
         activeUID = uid
-        isLoading = true
         errorMessage = nil
 
         if let cached = StreamPersistence.load(uid: uid), !cached.isEmpty {
             streams = cached
             revision &+= 1
             isLoading = false
+        } else {
+            isLoading = true
         }
 
-        listener = Firestore.firestore()
-            .collection("users")
-            .document(uid)
-            .collection("streams")
-            .order(by: "playedAt", descending: true)
-            .addSnapshotListener { [weak self] snapshot, error in
-                Task { @MainActor in
-                    guard let self else { return }
+        catchUpTask = Task {
+            do {
+                try await self.catchUp(uid: uid)
+            } catch {
+                if !Task.isCancelled {
+                    self.errorMessage = error.localizedDescription
                     self.isLoading = false
-                    if let error {
-                        self.errorMessage = error.localizedDescription
-                        return
-                    }
-                    guard let documents = snapshot?.documents else {
-                        self.streams = []
-                        self.revision &+= 1
-                        return
-                    }
-                    let remote = documents.compactMap { Self.record(from: $0) }
-                    let next = Self.mergeStreams(local: self.streams, remote: remote)
-                    // Include duration/art field updates — count/first-id alone misses backfills.
-                    let changed = next != self.streams
-                    self.streams = next
-                    if changed {
-                        self.revision &+= 1
-                        self.schedulePersist(uid: uid)
-                    }
                 }
             }
+        }
     }
 
-    /// One-shot fetch from Firestore. Pull-to-refresh uses this — not Last.fm.
+    /// Pull-to-refresh. Reads plays newer than the local library, not the whole collection.
     func reloadFromServer() async throws {
         guard let uid = activeUID else {
             throw StreamStoreError.notStarted
         }
         errorMessage = nil
-        let snapshot = try await Firestore.firestore()
+        try await catchUp(uid: uid)
+    }
+
+    private func catchUp(uid: String) async throws {
+        let remote = try await fetchRemote(uid: uid, after: streams.map(\.playedAt).max())
+        guard !Task.isCancelled else { return }
+        isLoading = false
+        guard !remote.isEmpty else { return }
+        let next = Self.mergeStreams(local: streams, remote: remote)
+        guard next != streams else { return }
+        streams = next
+        revision &+= 1
+        schedulePersist(uid: uid)
+    }
+
+    /// `after` limits the read to new plays. A missing local library is the one full read.
+    private func fetchRemote(uid: String, after: Date?) async throws -> [StreamRecord] {
+        let base = Firestore.firestore()
             .collection("users")
             .document(uid)
             .collection("streams")
-            .order(by: "playedAt", descending: true)
-            .getDocuments()
-        let remote = snapshot.documents.compactMap { Self.record(from: $0) }
-        streams = remote
-        revision &+= 1
-        schedulePersist(uid: uid)
-        isLoading = false
+        if let after {
+            var collected: [StreamRecord] = []
+            var last: QueryDocumentSnapshot?
+            for _ in 0..<5 {
+                var page = base
+                    .whereField("playedAt", isGreaterThan: Timestamp(date: after))
+                    .order(by: "playedAt", descending: true)
+                    .limit(to: 100)
+                if let last {
+                    page = page.start(afterDocument: last)
+                }
+                let snap = try await page.getDocuments()
+                collected.append(contentsOf: snap.documents.compactMap { Self.record(from: $0) })
+                guard snap.documents.count == 100, let end = snap.documents.last else { break }
+                last = end
+            }
+            return collected
+        }
+
+        let snap = try await base.order(by: "playedAt", descending: true).getDocuments()
+        return snap.documents.compactMap { Self.record(from: $0) }
     }
 
     func stop() {
-        listener?.remove()
-        listener = nil
+        catchUpTask?.cancel()
+        catchUpTask = nil
         persistTask?.cancel()
         persistTask = nil
         if let activeUID {

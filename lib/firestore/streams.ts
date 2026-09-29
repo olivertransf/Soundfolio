@@ -13,6 +13,7 @@ import {
   orderBy,
   limit,
   startAfter,
+  where,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { getFirebaseFirestore } from "@/lib/firebase/client";
@@ -104,6 +105,34 @@ export async function fetchUserStreams(uid: string): Promise<Stream[]> {
     all.push(...page.streams);
     hasMore = page.hasMore;
     cursor = page.lastDoc;
+  }
+  return all;
+}
+
+/** Plays strictly newer than `after`. Does not walk older history. */
+export async function fetchStreamsPlayedAfter(uid: string, after: Date, pageSize = 100) {
+  const all: Stream[] = [];
+  let cursor: QueryDocumentSnapshot | undefined;
+  const afterTimestamp = toTimestamp(after);
+  for (let page = 0; page < 5; page += 1) {
+    const q = cursor
+      ? query(
+          userStreamsRef(uid),
+          where("playedAt", ">", afterTimestamp),
+          orderBy("playedAt", "desc"),
+          startAfter(cursor),
+          limit(pageSize)
+        )
+      : query(
+          userStreamsRef(uid),
+          where("playedAt", ">", afterTimestamp),
+          orderBy("playedAt", "desc"),
+          limit(pageSize)
+        );
+    const snap = await getDocs(q);
+    all.push(...snap.docs.map((entry) => fromDoc(entry.id, entry.data() as Record<string, unknown>)));
+    if (snap.docs.length < pageSize) break;
+    cursor = snap.docs[snap.docs.length - 1];
   }
   return all;
 }
