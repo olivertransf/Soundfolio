@@ -46,7 +46,7 @@ import {
 
 export function OverviewContent() {
   const searchParams = useSearchParams();
-  const { streams, loading, loadingMore, refreshing, fullyLoaded } = useStreams();
+  const { streams, loading, loadingMore, refreshing, fullyLoaded, error, reload } = useStreams();
   const limits = useListDepth();
   const deferredStreams = useDeferredValue(streams);
   const [previewKind, setPreviewKind] = useState<EntityKind>("tracks");
@@ -110,10 +110,26 @@ export function OverviewContent() {
     new URLSearchParams(searchParams.toString())
   );
 
-  if (loading) {
+  if (loading && streams.length === 0) {
     return (
       <div className="flex py-20 items-center justify-center text-sm text-muted-foreground">
         Loading your stats…
+      </div>
+    );
+  }
+
+  if (error && streams.length === 0) {
+    return (
+      <div className="flex py-24 flex-col items-center justify-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Could not load your stats</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
+        <button
+          type="button"
+          className="text-sm font-medium text-primary hover:underline"
+          onClick={() => void reload()}
+        >
+          Try again
+        </button>
       </div>
     );
   }

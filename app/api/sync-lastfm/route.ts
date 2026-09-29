@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyFirebaseIdToken } from "@/lib/auth/verify-id-token";
 import { DEV_LASTFM_USERNAME } from "@/lib/dev-lastfm-user";
-import { getDevLibrary, writeDevStreams } from "@/lib/dev-firestore";
+import { getDevUser, writeDevStreams } from "@/lib/dev-firestore";
 import { getRecentTracks, isLastFmConfigured } from "@/lib/lastfm";
 import {
   filterNovelScrobbles,
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   let uid: string;
   if (devSync) {
-    uid = (await getDevLibrary()).user.uid;
+    uid = (await getDevUser()).uid;
   } else {
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -99,7 +99,7 @@ export function LastFmSyncProvider({ children }: { children: ReactNode }) {
       });
       if (outcome.written > 0) {
         streamsCtx.setStreams(working);
-        await streamsCtx.refreshHead();
+        if (user) await streamsCtx.refreshHead();
       }
       if (outcome.kind === "added" || outcome.kind === "upToDate") {
         writeLastSyncAt();

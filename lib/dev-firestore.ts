@@ -1,4 +1,4 @@
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEV_LASTFM_USERNAME } from "@/lib/dev-lastfm-user";
@@ -74,27 +74,25 @@ async function firebaseCliAccessToken() {
   return body.access_token;
 }
 
-async function firestoreFetch(url: string, init: RequestInit) {
-  let delay = 1000;
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const response = await fetch(url, init);
-    if (response.status !== 429) return response;
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    delay *= 2;
-  }
-  throw new Error("Firestore request failed (429).");
-}
+let firestoreChain: Promise<unknown> = Promise.resolve();
 
-async function firestoreGet(path: string) {
-  const token = await firebaseCliAccessToken();
-  const response = await firestoreFetch(
-    `https://firestore.googleapis.com/v1/projects/${projectId()}/databases/(default)/documents/${path}`,
-    { headers: { Authorization: `Bearer ${token}` } }
+async function firestoreFetch(url: string, init: RequestInit) {
+  const run = async () => {
+    let delay = 1000;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const response = await fetch(url, init);
+      if (response.status !== 429) return response;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2;
+    }
+    throw new Error("Firestore request failed (429).");
+  };
+  const result = firestoreChain.then(run, run);
+  firestoreChain = result.then(
+    () => undefined,
+    () => undefined
   );
-  if (!response.ok) {
-    throw new Error(`Firestore request failed (${response.status}).`);
-  }
-  return response.json() as Promise<unknown>;
+  return result;
 }
 
 function stringField(fields: Record<string, FirestoreValue>, key: string) {
@@ -113,22 +111,19 @@ export type DevLibraryUser = {
   lastfmUsername: string | null;
 };
 
-export async function getSoleDevUser(): Promise<DevLibraryUser> {
+const DEV_UID = "lLqJcmE1iYbrHx9OUmLaXriCGAi1";
+
+export async function getDevUser(): Promise<DevLibraryUser> {
   assertDevelopment();
-  const body = (await firestoreGet("users?pageSize=2")) as { documents?: FirestoreDocument[] };
-  const documents = body.documents ?? [];
-  if (documents.length !== 1) {
-    throw new Error("Expected exactly one user.");
-  }
-  const document = documents[0];
-  if (!document) throw new Error("Expected exactly one user.");
-  const uid = document.name.split("/").pop() ?? "";
-  const fields = document.fields ?? {};
   return {
-    uid,
-    displayName: nullableString(fields, "displayName"),
-    lastfmUsername: nullableString(fields, "lastfmUsername")?.trim() || DEV_LASTFM_USERNAME,
+    uid: DEV_UID,
+    displayName: null,
+    lastfmUsername: DEV_LASTFM_USERNAME,
   };
+}
+
+export async function getSoleDevUser(): Promise<DevLibraryUser> {
+  return getDevUser();
 }
 
 export type DevStreamRow = {
@@ -228,57 +223,107 @@ type LibraryCache = {
   savedAt: number;
   user: DevLibraryUser;
   streams: DevStreamRow[];
+  nextPageToken?: string;
+  complete: boolean;
 };
 
 let memoryCache: LibraryCache | null = null;
-let loadingLibrary: Promise<LibraryCache> | null = null;
+let appending: Promise<void> | null = null;
 
 function readDiskCache() {
   try {
     const cache = JSON.parse(readFileSync(libraryCachePath, "utf8")) as LibraryCache;
-    if (Date.now() - cache.savedAt > 15 * 60 * 1000) return null;
     if (!cache.user?.uid || !Array.isArray(cache.streams) || cache.streams.length === 0) return null;
+    if (cache.complete === undefined) cache.complete = true;
+    if (cache.complete && Date.now() - cache.savedAt > 15 * 60 * 1000) return null;
     return cache;
   } catch {
     return null;
   }
 }
 
-export function getDevLibrary() {
-  if (memoryCache) return Promise.resolve(memoryCache);
-  const disk = readDiskCache();
-  if (disk) {
-    memoryCache = disk;
-    return Promise.resolve(disk);
-  }
-  if (!loadingLibrary) {
-    loadingLibrary = (async () => {
-      const user = await getSoleDevUser();
-      const streams: DevStreamRow[] = [];
-      let pageToken: string | undefined;
-      do {
-        const page = await getDevStreamPage(user.uid, pageToken);
-        streams.push(...page.streams);
-        pageToken = page.nextPageToken;
-      } while (pageToken);
-      const cache = { savedAt: Date.now(), user, streams };
-      memoryCache = cache;
-      writeFileSync(libraryCachePath, JSON.stringify(cache));
-      return cache;
-    })().finally(() => {
-      loadingLibrary = null;
-    });
-  }
-  return loadingLibrary;
+function writeDiskCache(cache: LibraryCache) {
+  writeFileSync(libraryCachePath, JSON.stringify(cache));
 }
 
-export function invalidateDevLibraryCache() {
-  memoryCache = null;
-  try {
-    unlinkSync(libraryCachePath);
-  } catch {
-    // cache file may not exist yet
+function currentCache(user: DevLibraryUser) {
+  if (!memoryCache) {
+    memoryCache =
+      readDiskCache() ?? {
+        savedAt: Date.now(),
+        user,
+        streams: [],
+        complete: false,
+      };
   }
+  return memoryCache;
+}
+
+async function appendNextPage() {
+  const user = await getDevUser();
+  const cache = currentCache(user);
+  if (cache.complete) return;
+  const page = await getDevStreamPage(user.uid, cache.nextPageToken);
+  const seen = new Set(cache.streams.map((row) => row.id));
+  cache.streams.push(...page.streams.filter((row) => !seen.has(row.id)));
+  cache.nextPageToken = page.nextPageToken;
+  cache.complete = !page.nextPageToken;
+  cache.savedAt = Date.now();
+  cache.user = user;
+  writeDiskCache(cache);
+}
+
+async function ensureStreams(count: number) {
+  const user = await getDevUser();
+  const cache = currentCache(user);
+  while (!cache.complete && cache.streams.length < count) {
+    if (!appending) {
+      appending = appendNextPage().finally(() => {
+        appending = null;
+      });
+    }
+    await appending;
+  }
+}
+
+export async function readDevLibrarySlice(start: number, limit = 2000) {
+  assertDevelopment();
+  const user = await getDevUser();
+  const cache = currentCache(user);
+  let partial = false;
+  if (!cache.complete && cache.streams.length < start + limit) {
+    try {
+      await ensureStreams(start + limit);
+    } catch {
+      partial = !cache.complete;
+      if (cache.streams.length === 0) {
+        throw new Error("Firestore request failed (429).");
+      }
+    }
+  }
+  const streams = cache.streams.slice(start, start + limit);
+  const stalled = partial && !cache.complete;
+  const nextOffset = cache.complete
+    ? start + streams.length < cache.streams.length
+      ? start + streams.length
+      : null
+    : stalled
+      ? cache.streams.length
+      : start + streams.length;
+  return {
+    user,
+    streams,
+    nextOffset,
+    total: cache.streams.length,
+    complete: cache.complete,
+    partial: stalled,
+  };
+}
+
+export async function getDevLibrary() {
+  const user = await getDevUser();
+  await ensureStreams(Number.MAX_SAFE_INTEGER);
+  return currentCache(user);
 }
 
 function firestoreValue(value: string | number | boolean | Date | null) {
@@ -337,6 +382,30 @@ export async function writeDevStreams(uid: string, streams: StreamInput[]) {
     written += batch.length;
   }
 
-  invalidateDevLibraryCache();
+  if (memoryCache) {
+    const rows = streams.map((stream) => inputToDevRow(uid, stream));
+    const seen = new Set(rows.map((row) => row.id));
+    memoryCache.streams = [...rows, ...memoryCache.streams.filter((row) => !seen.has(row.id))];
+    memoryCache.savedAt = Date.now();
+    writeDiskCache(memoryCache);
+  }
   return written;
+}
+
+function inputToDevRow(uid: string, stream: StreamInput): DevStreamRow {
+  const playedAt = stream.playedAt.toISOString();
+  return {
+    id: streamDocumentId({ ...stream, userId: uid }),
+    trackId: stream.trackId,
+    trackName: stream.trackName,
+    artistName: stream.artistName,
+    artistArt: stream.artistArt ?? null,
+    albumName: stream.albumName,
+    albumArt: stream.albumArt ?? null,
+    durationMs: stream.durationMs,
+    playedAt,
+    isDemo: stream.isDemo ?? false,
+    createdAt: (stream.createdAt ?? stream.playedAt).toISOString(),
+    updatedAt: (stream.updatedAt ?? stream.playedAt).toISOString(),
+  };
 }

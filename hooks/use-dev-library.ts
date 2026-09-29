@@ -21,6 +21,7 @@ type DevStreamPayload = {
 type DevLibraryPage = {
   streams: DevStreamPayload[];
   nextOffset: number | null;
+  partial?: boolean;
   error?: string;
 };
 
@@ -35,19 +36,20 @@ function toStream(row: DevStreamPayload): Stream {
 
 export function useDevLibrary(enabled: boolean) {
   const [streams, setStreams] = useState<Stream[]>([]);
-  const [loading, setLoading] = useState(enabled);
+  const [request, setRequest] = useState<"idle" | "loading" | "partial" | "ready" | "error">("idle");
   const [loadingMore, setLoadingMore] = useState(false);
-  const [fullyLoaded, setFullyLoaded] = useState(!enabled);
   const [error, setError] = useState<string | null>(null);
+  const loading = enabled && (request === "idle" || request === "loading");
+  const fullyLoaded = !enabled || request === "ready";
 
   const reload = useCallback(async () => {
     if (!enabled) return;
-    setLoading(true);
+    setRequest("loading");
     setLoadingMore(false);
-    setFullyLoaded(false);
     setError(null);
     const all: Stream[] = [];
     let offset: number | null = 0;
+    let pause = 8000;
     try {
       do {
         const url = offset ? `/api/dev/library?offset=${offset}` : "/api/dev/library";
@@ -56,17 +58,23 @@ export function useDevLibrary(enabled: boolean) {
         if (!response.ok) {
           throw new Error(page.error ?? "Could not load the dev library.");
         }
-        all.push(...page.streams.map(toStream));
-        setStreams([...all]);
-        offset = page.nextOffset;
-        setLoading(false);
+        if (page.streams.length > 0) {
+          all.push(...page.streams.map(toStream));
+          setStreams([...all]);
+        }
+        offset = page.partial ? (page.nextOffset ?? offset) : page.nextOffset;
+        setRequest(offset === null ? "ready" : "partial");
         setLoadingMore(offset !== null);
+        if (page.partial) {
+          await new Promise((resolve) => setTimeout(resolve, pause));
+          pause = Math.min(pause * 2, 30000);
+        }
       } while (offset !== null);
-      setFullyLoaded(true);
+      setRequest("ready");
       setLoadingMore(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the dev library.");
-      setLoading(false);
+      setRequest("error");
       setLoadingMore(false);
     }
   }, [enabled]);
@@ -74,9 +82,8 @@ export function useDevLibrary(enabled: boolean) {
   useEffect(() => {
     if (!enabled) {
       setStreams([]);
-      setLoading(false);
+      setRequest("idle");
       setLoadingMore(false);
-      setFullyLoaded(true);
       setError(null);
       return;
     }
