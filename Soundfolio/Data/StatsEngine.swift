@@ -33,18 +33,6 @@ struct InsightSummary {
     let restMinutes: Int
 }
 
-struct PeriodBreakdown {
-    let dayparts: [HistoryPoint]
-    let weekParts: [HistoryPoint]
-    let artistShare: [HistoryPoint]
-    let replays: [HistoryPoint]
-    let peakHour: String?
-    let peakHourMinutes: Int
-    let averageMinutesPerPlay: Int
-    let activeDays: Int
-    let replayShare: Int
-}
-
 enum StatsEngine {
     static func parseTimeRange(preferences: StatsPreferences) -> StatsTimeRange {
         let calendar = Calendar.current
@@ -112,7 +100,7 @@ enum StatsEngine {
             totalHours: ListeningMinutes.hours(fromMs: totalMs)
         )
         let diversity = OverviewDiversity(
-            uniqueTracks: Set(rows.map(trackKey)).count,
+            uniqueTracks: Set(rows.map { trackKey(for: $0) }).count,
             uniqueArtists: Set(rows.map { EntityNormalize.artistGroupKey(artistName: $0.artistName) }).count
         )
         let spanDates = rows.map(\.playedAt)
