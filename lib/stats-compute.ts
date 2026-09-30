@@ -23,6 +23,8 @@ import {
   matchesEntity,
   normalizeEntityKey,
   pickBetterDisplayName,
+  preferAlbumTitle,
+  sameAlbum,
   trackGroupKey,
 } from "@/lib/entity-normalize";
 import { hoursFromMs, minutesFromMs } from "@/lib/listening-minutes";
@@ -163,10 +165,10 @@ export function computeTopTracks(
     group.durationMs += row.durationMs;
     group.trackName = pickBetterDisplayName(group.trackName, row.trackName);
     group.artistName = pickBetterDisplayName(group.artistName, row.artistName);
-    group.albumName = pickBetterDisplayName(group.albumName, row.albumName);
+    group.albumName = preferAlbumTitle(group.albumName, row.albumName);
     if (!group.trackId && isCatalogTrackId(row.trackId)) group.trackId = row.trackId;
     if (!group.albumArt && row.albumArt) {
-      group.albumName = pickBetterDisplayName(group.albumName, row.albumName);
+      group.albumName = preferAlbumTitle(group.albumName, row.albumName);
       group.albumArt = row.albumArt;
     }
     groups.set(key, group);
@@ -253,7 +255,7 @@ export function computeTopAlbums(
     };
     group.streams += 1;
     group.durationMs += row.durationMs;
-    group.albumName = pickBetterDisplayName(group.albumName, row.albumName);
+    group.albumName = preferAlbumTitle(group.albumName, row.albumName);
     group.artistName = pickBetterDisplayName(group.artistName, row.artistName);
     if (!group.albumArt && row.albumArt) group.albumArt = row.albumArt;
     groups.set(key, group);
@@ -692,6 +694,16 @@ export function formatHourLabel(label: string) {
   return date.toLocaleTimeString(undefined, { hour: "numeric" });
 }
 
+function earliestAlbumPlay(streams: Stream[], albumName: string, artistName: string): Date | null {
+  let earliest = Number.POSITIVE_INFINITY;
+  for (const row of filterForStats(streams)) {
+    if (!sameAlbum(row.albumName, albumName) || !matchesEntity(row.artistName, artistName)) continue;
+    const playedAt = row.playedAt.getTime();
+    if (playedAt < earliest) earliest = playedAt;
+  }
+  return Number.isFinite(earliest) ? new Date(earliest) : null;
+}
+
 function shareOfPeriod(entityMinutes: number, streams: Stream[], filter?: TimeRangeFilter) {
   const total = computeTotalStats(streams, filter).totalMinutes;
   if (total <= 0) return 0;
@@ -780,7 +792,7 @@ export function computeAlbumDetail(
   filter?: TimeRangeFilter
 ) {
   const rows = filterForStats(streams, filter).filter(
-    (row) => matchesEntity(row.albumName, albumName) && matchesEntity(row.artistName, artistName)
+    (row) => sameAlbum(row.albumName, albumName) && matchesEntity(row.artistName, artistName)
   );
   const totalMs = rows.reduce((sum, row) => sum + row.durationMs, 0);
   const minutesListened = minutesFromMs(totalMs);
@@ -794,7 +806,7 @@ export function computeAlbumDetail(
     trackGroups.set(key, group);
   }
   const albumNameResolved = rows.reduce(
-    (current, row) => pickBetterDisplayName(current, row.albumName),
+    (current, row) => preferAlbumTitle(current, row.albumName),
     albumName
   );
   const artistNameResolved = rows.reduce(
@@ -808,9 +820,7 @@ export function computeAlbumDetail(
     streams: rows.length,
     minutesListened,
     share: shareOfPeriod(minutesListened, streams, filter),
-    firstPlayedAt: rows.length
-      ? new Date(Math.min(...rows.map((row) => row.playedAt.getTime())))
-      : null,
+    firstPlayedAt: earliestAlbumPlay(streams, albumName, artistName),
     tracks: [...trackGroups.values()]
       .map((group) => ({
         trackName: group.trackName,

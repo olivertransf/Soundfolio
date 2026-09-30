@@ -354,7 +354,7 @@ struct AlbumDetailView: View {
 
     private var scoped: [StreamRecord] {
         streamStore.streams.filter {
-            EntityNormalize.matches($0.albumName, albumName) && EntityNormalize.matches($0.artistName, artistName)
+            EntityNormalize.sameAlbum($0.albumName, albumName) && EntityNormalize.matches($0.artistName, artistName)
         }
     }
 

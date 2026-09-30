@@ -151,10 +151,10 @@ enum StatsEngine {
             group.durationMs += row.durationMs
             group.trackName = EntityNormalize.betterDisplay(group.trackName, row.trackName)
             group.artistName = EntityNormalize.betterDisplay(group.artistName, row.artistName)
-            group.albumName = EntityNormalize.betterDisplay(group.albumName, row.albumName)
+            group.albumName = EntityNormalize.preferAlbumTitle(group.albumName, row.albumName)
             if group.albumArt == nil, let art = row.albumArt {
                 group.albumArt = art
-                group.albumName = EntityNormalize.betterDisplay(group.albumName, row.albumName)
+                group.albumName = EntityNormalize.preferAlbumTitle(group.albumName, row.albumName)
             }
             groups[key] = group
         }
@@ -207,7 +207,7 @@ enum StatsEngine {
             var group = groups[key] ?? (row.albumName, row.artistName, row.albumArt, 0, 0)
             group.streams += 1
             group.durationMs += row.durationMs
-            group.albumName = EntityNormalize.betterDisplay(group.albumName, row.albumName)
+            group.albumName = EntityNormalize.preferAlbumTitle(group.albumName, row.albumName)
             group.artistName = EntityNormalize.betterDisplay(group.artistName, row.artistName)
             if group.albumArt == nil, let art = row.albumArt { group.albumArt = art }
             groups[key] = group
@@ -581,7 +581,7 @@ enum StatsEngine {
 
     static func albumDetail(name: String, artist: String, streams: [StreamRecord], range: StatsTimeRange) -> AlbumDetail {
         let rows = filtered(streams, range: range).filter {
-            EntityNormalize.matches($0.albumName, name) && EntityNormalize.matches($0.artistName, artist)
+            EntityNormalize.sameAlbum($0.albumName, name) && EntityNormalize.matches($0.artistName, artist)
         }
         let totalMs = rows.reduce(0) { $0 + $1.durationMs }
         let minutes = ListeningMinutes.minutes(fromMs: totalMs)
@@ -599,7 +599,7 @@ enum StatsEngine {
         }
         .sorted { $0.streams > $1.streams }
 
-        let albumName = rows.reduce(name) { EntityNormalize.betterDisplay($0, $1.albumName) }
+        let albumName = rows.reduce(name) { EntityNormalize.preferAlbumTitle($0, $1.albumName) }
         let artistName = rows.reduce(artist) { EntityNormalize.betterDisplay($0, $1.artistName) }
         return AlbumDetail(
             albumName: albumName,
@@ -608,7 +608,9 @@ enum StatsEngine {
             streams: rows.count,
             minutesListened: minutes,
             share: periodShare(minutes: minutes, streams: streams, range: range),
-            firstPlayedAt: rows.map(\.playedAt).min(),
+            firstPlayedAt: credited(streams).filter {
+                EntityNormalize.sameAlbum($0.albumName, name) && EntityNormalize.matches($0.artistName, artist)
+            }.map(\.playedAt).min(),
             tracks: tracks
         )
     }

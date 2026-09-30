@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsx --test lib/listen-dedupe.test.ts",
+    "test": "tsx --test lib/*.test.ts",
     "db:migrate-firestore": "npx tsx scripts/migrate-mongodb-to-firestore.ts",
     "db:migrate-firestore:dry-run": "npx tsx scripts/migrate-mongodb-to-firestore.ts --dry-run",
     "db:migrate-legacy": "npx tsx scripts/migrate-legacy-streams.ts",

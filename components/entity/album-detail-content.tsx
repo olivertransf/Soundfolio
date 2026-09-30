@@ -24,7 +24,7 @@ import {
   parseTimeRange,
 } from "@/lib/stats-compute";
 import { historyChartData } from "@/lib/stats-chart-data";
-import { matchesEntity } from "@/lib/entity-normalize";
+import { matchesEntity, sameAlbum } from "@/lib/entity-normalize";
 import { trackPath } from "@/lib/entity-paths";
 import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
 import {
@@ -56,7 +56,7 @@ function AlbumDetailInner() {
   const scoped = useMemo(
     () =>
       streams.filter(
-        (row) => matchesEntity(row.albumName, albumName) && matchesEntity(row.artistName, artistName)
+        (row) => sameAlbum(row.albumName, albumName) && matchesEntity(row.artistName, artistName)
       ),
     [streams, albumName, artistName]
   );
