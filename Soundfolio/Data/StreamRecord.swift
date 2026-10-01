@@ -9,8 +9,36 @@ struct StreamRecord: Identifiable, Hashable {
     let albumName: String
     let albumArt: String?
     let durationMs: Int
+    /// Song length or imported listen length before overlap credit. Matches `durationMs` on stored rows.
+    let catalogDurationMs: Int
     let playedAt: Date
     let isDemo: Bool
+
+    init(
+        id: String,
+        trackId: String,
+        trackName: String,
+        artistName: String,
+        artistArt: String?,
+        albumName: String,
+        albumArt: String?,
+        durationMs: Int,
+        playedAt: Date,
+        isDemo: Bool,
+        catalogDurationMs: Int? = nil
+    ) {
+        self.id = id
+        self.trackId = trackId
+        self.trackName = trackName
+        self.artistName = artistName
+        self.artistArt = artistArt
+        self.albumName = albumName
+        self.albumArt = albumArt
+        self.durationMs = durationMs
+        self.catalogDurationMs = catalogDurationMs ?? durationMs
+        self.playedAt = playedAt
+        self.isDemo = isDemo
+    }
 
     static func documentId(uid: String, trackId: String, playedAt: Date) -> String {
         "\(uid)__\(trackId)__\(Int(playedAt.timeIntervalSince1970 * 1000))"
@@ -27,7 +55,8 @@ struct StreamRecord: Identifiable, Hashable {
             albumArt: albumArt,
             durationMs: durationMs,
             playedAt: playedAt,
-            isDemo: isDemo
+            isDemo: isDemo,
+            catalogDurationMs: catalogDurationMs
         )
     }
 
@@ -42,7 +71,8 @@ struct StreamRecord: Identifiable, Hashable {
             albumArt: albumArt,
             durationMs: durationMs,
             playedAt: playedAt,
-            isDemo: isDemo
+            isDemo: isDemo,
+            catalogDurationMs: catalogDurationMs
         )
     }
 
@@ -57,7 +87,8 @@ struct StreamRecord: Identifiable, Hashable {
             albumArt: albumArt,
             durationMs: durationMs,
             playedAt: playedAt,
-            isDemo: isDemo
+            isDemo: isDemo,
+            catalogDurationMs: durationMs
         )
     }
 }

@@ -28,6 +28,7 @@ import {
   trackGroupKey,
 } from "@/lib/entity-normalize";
 import { hoursFromMs, minutesFromMs } from "@/lib/listening-minutes";
+import { creditListenDurations, listenBucketDurationMs } from "@/lib/listen-credit";
 import { dedupeListens } from "@/lib/listen-dedupe";
 
 export type { TopSortBy } from "@/lib/top-sort";
@@ -97,6 +98,7 @@ function inFilter(stream: Stream, filter?: TimeRangeFilter) {
 }
 
 const dedupedCache = new WeakMap<Stream[], Stream[]>();
+const creditedCache = new WeakMap<Stream[], Stream[]>();
 
 /** One deduped copy per stream-array identity so rankings, recents, and charts share it. */
 export function dedupedStreams(streams: Stream[]): Stream[] {
@@ -107,9 +109,20 @@ export function dedupedStreams(streams: Stream[]): Stream[] {
   return next;
 }
 
+/** Deduped plays with listen time cut where the next play starts. */
+function creditedStreams(streams: Stream[]): Stream[] {
+  const base = dedupedStreams(streams);
+  const cached = creditedCache.get(base);
+  if (cached) return cached;
+  const eligible = base.filter((stream) => !stream.isDemo && stream.durationMs > 0);
+  const next = creditListenDurations(eligible);
+  creditedCache.set(base, next);
+  return next;
+}
+
 export function filterForStats(streams: Stream[], filter?: TimeRangeFilter) {
-  return dedupedStreams(streams).filter(
-    (stream) => !stream.isDemo && stream.durationMs > 0 && inFilter(stream, filter)
+  return creditedStreams(streams).filter(
+    (stream) => stream.durationMs > 0 && inFilter(stream, filter)
   );
 }
 
@@ -362,7 +375,7 @@ export function computePeriodBreakdown(
   const tracks = new Map<string, { plays: number; durationMs: number }>();
 
   for (const row of rows) {
-    const instant = getListenBucketInstant(row.playedAt, row.durationMs, row.trackId, tz);
+    const instant = getListenBucketInstant(row.playedAt, listenBucketDurationMs(row), row.trackId, tz);
     const hour = getHourInTimeZone(instant, tz);
     const part = hour < 6 ? 0 : hour < 12 ? 1 : hour < 18 ? 2 : 3;
     daypartMs[part] += row.durationMs;
@@ -589,7 +602,7 @@ export function computeStreamsByHour(
   for (let h = 0; h < 24; h++) byHour[h] = { streams: 0, durationMs: 0 };
 
   for (const row of rows) {
-    const instant = getListenBucketInstant(row.playedAt, row.durationMs, row.trackId, tz);
+    const instant = getListenBucketInstant(row.playedAt, listenBucketDurationMs(row), row.trackId, tz);
     const h = getHourInTimeZone(instant, tz);
     byHour[h].streams += 1;
     byHour[h].durationMs += row.durationMs;
@@ -615,7 +628,7 @@ export function computeStreamsByDayOfWeek(
   for (let d = 0; d < 7; d++) byDay[d] = { streams: 0, durationMs: 0 };
 
   for (const row of rows) {
-    const instant = getListenBucketInstant(row.playedAt, row.durationMs, row.trackId, tz);
+    const instant = getListenBucketInstant(row.playedAt, listenBucketDurationMs(row), row.trackId, tz);
     const d = getDayOfWeekInTimeZone(instant, tz);
     byDay[d].streams += 1;
     byDay[d].durationMs += row.durationMs;
@@ -643,7 +656,7 @@ export function computeListeningHeatmap(
   }
 
   for (const row of rows) {
-    const instant = getListenBucketInstant(row.playedAt, row.durationMs, row.trackId, tz);
+    const instant = getListenBucketInstant(row.playedAt, listenBucketDurationMs(row), row.trackId, tz);
     const d = getDayOfWeekInTimeZone(instant, tz);
     const h = getHourInTimeZone(instant, tz);
     counts[`${d}-${h}`] += 1;

@@ -71,19 +71,21 @@ enum StatsEngine {
         }
     }
 
+    private static func timed(_ streams: [StreamRecord]) -> [StreamRecord] {
+        ListenCredit.credit(ListenDedupe.dedupe(streams.filter { !$0.isDemo && $0.durationMs > 0 }))
+    }
+
     private static func filtered(_ streams: [StreamRecord], range: StatsTimeRange) -> [StreamRecord] {
-        let matched = streams.filter { stream in
-            guard !stream.isDemo else { return false }
+        timed(streams).filter { stream in
             guard stream.durationMs > 0 else { return false }
             if let since = range.since, stream.playedAt < since { return false }
             if let until = range.until, stream.playedAt > until { return false }
             return true
         }
-        return ListenDedupe.dedupe(matched)
     }
 
     private static func credited(_ streams: [StreamRecord]) -> [StreamRecord] {
-        ListenDedupe.dedupe(streams.filter { !$0.isDemo && $0.durationMs > 0 })
+        timed(streams).filter { $0.durationMs > 0 }
     }
 
     private static func trackKey(for row: StreamRecord) -> String {
@@ -370,7 +372,7 @@ enum StatsEngine {
         for row in rows {
             let instant = ListenBucket.instant(
                 playedAt: row.playedAt,
-                durationMs: row.durationMs,
+                durationMs: row.catalogDurationMs,
                 trackId: row.trackId,
                 timeZone: calendar.timeZone
             )
@@ -468,7 +470,7 @@ enum StatsEngine {
         for row in rows {
             let instant = ListenBucket.instant(
                 playedAt: row.playedAt,
-                durationMs: row.durationMs,
+                durationMs: row.catalogDurationMs,
                 trackId: row.trackId,
                 timeZone: calendar.timeZone
             )
