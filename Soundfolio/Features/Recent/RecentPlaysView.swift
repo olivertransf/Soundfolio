@@ -105,7 +105,7 @@ struct RecentPlaysView: View {
             }
             if shown < streams.count {
                 Button("Show more (\(shown) of \(streams.count))") {
-                    shown = min(preferences.listDepth.recent, shown + 50)
+                    shown += 50
                 }
                 .font(SoundfolioTheme.rowSubtitleFont)
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -147,7 +147,7 @@ struct RecentPlaysView: View {
         error = nil
         streams = statsCache.recentStreams(
             from: streamStore.streams,
-            limit: preferences.listDepth.recent,
+            limit: streamStore.streams.count,
             preferences: usesPeriodFilter ? preferences : nil,
             revision: streamStore.revision
         )

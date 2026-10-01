@@ -43,8 +43,8 @@ function RecentSectionInner() {
     const source = limitToPeriod
       ? filterForStats(streams, filter)
       : streams.filter((s) => !s.isDemo);
-    return computeRecentStreams(source, limits.recent, limitToPeriod ? filter : undefined);
-  }, [streams, filter, limitToPeriod, limits.recent]);
+    return computeRecentStreams(source, source.length, limitToPeriod ? filter : undefined);
+  }, [streams, filter, limitToPeriod]);
 
   if (loading) {
     return (
@@ -82,7 +82,7 @@ function RecentSectionInner() {
       <ShowMoreButton
         shown={Math.min(shown, recent.length)}
         total={recent.length}
-        onShowMore={() => setShown((count) => Math.min(limits.recent, count + limits.page))}
+        onShowMore={() => setShown((count) => count + limits.page)}
       />
     </div>
   );

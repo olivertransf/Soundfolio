@@ -46,16 +46,16 @@ function RankingsSectionInner() {
   );
 
   const tracks = useMemo(
-    () => computeTopTracks(streams, limits.rankings, filter, sortBy),
-    [streams, filter, sortBy, limits.rankings]
+    () => computeTopTracks(streams, streams.length, filter, sortBy),
+    [streams, filter, sortBy]
   );
   const artists = useMemo(
-    () => computeTopArtists(streams, limits.rankings, filter, sortBy),
-    [streams, filter, sortBy, limits.rankings]
+    () => computeTopArtists(streams, streams.length, filter, sortBy),
+    [streams, filter, sortBy]
   );
   const albums = useMemo(
-    () => computeTopAlbums(streams, limits.rankings, filter, sortBy),
-    [streams, filter, sortBy, limits.rankings]
+    () => computeTopAlbums(streams, streams.length, filter, sortBy),
+    [streams, filter, sortBy]
   );
 
   const trackItems: RankedEntityItem[] = tracks.map((track) => ({
@@ -134,7 +134,7 @@ function RankingsSectionInner() {
           <ShowMoreButton
             shown={Math.min(shown, singleItems.length)}
             total={singleItems.length}
-            onShowMore={() => setShown((count) => Math.min(limits.rankings, count + limits.page))}
+            onShowMore={() => setShown((count) => count + limits.page)}
           />
         </div>
       </div>
@@ -154,7 +154,7 @@ function RankingsSectionInner() {
         <ShowMoreButton
           shown={Math.min(shown, longest)}
           total={longest}
-          onShowMore={() => setShown((count) => Math.min(limits.rankings, count + limits.page))}
+          onShowMore={() => setShown((count) => count + limits.page)}
         />
       </div>
     </div>

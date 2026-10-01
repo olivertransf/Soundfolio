@@ -252,7 +252,7 @@ struct RankingsTabView: View {
                 }
                 if !loading && shown < max(tracks.count, artists.count, albums.count) {
                     Button("Show more (\(min(shown, max(tracks.count, artists.count, albums.count))) of \(max(tracks.count, artists.count, albums.count)))") {
-                        shown = min(preferences.listDepth.rankings, shown + 50)
+                        shown += 50
                     }
                     .font(SoundfolioTheme.rowSubtitleFont)
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -279,19 +279,19 @@ struct RankingsTabView: View {
             streams: streamStore.streams,
             preferences: preferences,
             revision: revision,
-            limit: preferences.listDepth.rankings
+            limit: streamStore.streams.count
         )
         artists = statsCache.topArtists(
             streams: streamStore.streams,
             preferences: preferences,
             revision: revision,
-            limit: preferences.listDepth.rankings
+            limit: streamStore.streams.count
         )
         albums = statsCache.topAlbums(
             streams: streamStore.streams,
             preferences: preferences,
             revision: revision,
-            limit: preferences.listDepth.rankings
+            limit: streamStore.streams.count
         )
     }
 }
