@@ -113,6 +113,11 @@ export function BarSeriesChart({
     return () => observer.disconnect();
   }, []);
 
+  const scrollStart = `${points[0]?.label ?? ""}:${points.length}`;
+  useLayoutEffect(() => {
+    frameRef.current?.scrollTo({ left: 0 });
+  }, [scrollStart]);
+
   const unit = metric === "minutes" ? "min" : "plays";
   const values = points.map((point) => (metric === "minutes" ? point.minutes : point.streams));
   const max = Math.max(1, ...values);

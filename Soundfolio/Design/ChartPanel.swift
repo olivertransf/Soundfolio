@@ -37,6 +37,7 @@ struct SeriesChart: View {
             .cornerRadius(4)
         }
         .frame(height: 160)
+        .chartXScale(domain: points.map(\.label))
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4))
         }

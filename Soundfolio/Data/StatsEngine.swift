@@ -268,7 +268,7 @@ enum StatsEngine {
 
         let cap = 26
 
-        return buckets.keys.sorted().suffix(cap).map { label in
+        return buckets.keys.sorted().suffix(cap).reversed().map { label in
             let bucket = buckets[label] ?? (0, 0)
             return HistoryPoint(
                 label: label,
@@ -304,7 +304,7 @@ enum StatsEngine {
             buckets[key] = bucket
         }
 
-        return buckets.keys.sorted().suffix(160).map { label in
+        return buckets.keys.sorted().suffix(160).reversed().map { label in
             let bucket = buckets[label] ?? (0, 0)
             return HistoryPoint(
                 label: label,

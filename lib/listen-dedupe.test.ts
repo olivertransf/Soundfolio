@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { dedupeListens } from "@/lib/listen-dedupe";
+import { historyChartData } from "@/lib/stats-chart-data";
 import { computeStreamsByMonth, computeStreamsByWeek, computeTotalStats } from "@/lib/stats-compute";
 import type { Stream } from "@/lib/types/stream";
 
@@ -66,4 +67,19 @@ test("history series honor the range end", () => {
   assert.equal(weeks.reduce((sum, row) => sum + row.streams, 0), 1);
   assert.equal(months.reduce((sum, row) => sum + row.streams, 0), 1);
   assert.equal(computeTotalStats(streams, filter).totalStreams, 1);
+});
+
+test("history chart puts the latest bucket on the left", () => {
+  const streams = [
+    stream({ trackId: "s1", playedAt: new Date("2026-01-10T15:00:00.000Z"), durationMs: 60_000 }),
+    stream({ trackId: "s2", playedAt: new Date("2026-03-10T15:00:00.000Z"), durationMs: 60_000 }),
+  ];
+  const filter = {
+    since: new Date("2026-01-01T00:00:00.000Z"),
+    until: new Date("2026-03-31T23:59:59.000Z"),
+    label: "Q1",
+  };
+  const months = historyChartData(streams, "months", filter, "UTC");
+  assert.equal(months[0]?.label, "2026-03");
+  assert.equal(months.at(-1)?.label, "2026-01");
 });
