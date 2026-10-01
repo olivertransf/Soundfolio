@@ -17,7 +17,7 @@ export function isListenEndAnchored(trackId: string, durationMs: number): boolea
   return true;
 }
 
-const bucketDuration = new WeakMap<Stream, number>();
+const bucketDuration = new WeakMap<object, number>();
 
 /** Catalog length or imported ms_played, before overlap credit. */
 export function listenBucketDurationMs(row: Stream): number {
@@ -61,7 +61,7 @@ export function creditListenDurations<T extends ListenRow>(rows: T[]): T[] {
   return rows.map((row, index) => {
     if (credited[index] === row.durationMs) return row;
     const next = { ...row, durationMs: credited[index] };
-    if ("id" in row) bucketDuration.set(next as Stream, row.durationMs);
+    bucketDuration.set(next, row.durationMs);
     return next;
   });
 }
