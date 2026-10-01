@@ -694,14 +694,28 @@ export function formatHourLabel(label: string) {
   return date.toLocaleTimeString(undefined, { hour: "numeric" });
 }
 
-function earliestAlbumPlay(streams: Stream[], albumName: string, artistName: string): Date | null {
+function songKey(trackName: string, artistName: string) {
+  return `${normalizeEntityKey(trackName)}\0${normalizeEntityKey(artistName)}`;
+}
+
+function earliestPlay(streams: Stream[], matches: (row: Stream) => boolean): Date | null {
   let earliest = Number.POSITIVE_INFINITY;
   for (const row of filterForStats(streams)) {
-    if (!sameAlbum(row.albumName, albumName) || !matchesEntity(row.artistName, artistName)) continue;
+    if (!matches(row)) continue;
     const playedAt = row.playedAt.getTime();
     if (playedAt < earliest) earliest = playedAt;
   }
   return Number.isFinite(earliest) ? new Date(earliest) : null;
+}
+
+function earliestAlbumPlay(streams: Stream[], albumName: string, artistName: string): Date | null {
+  const songs = new Set<string>();
+  for (const row of filterForStats(streams)) {
+    if (!sameAlbum(row.albumName, albumName) || !matchesEntity(row.artistName, artistName)) continue;
+    songs.add(songKey(row.trackName, row.artistName));
+  }
+  if (songs.size === 0) return null;
+  return earliestPlay(streams, (row) => songs.has(songKey(row.trackName, row.artistName)));
 }
 
 function shareOfPeriod(entityMinutes: number, streams: Stream[], filter?: TimeRangeFilter) {
@@ -743,7 +757,10 @@ export function computeTrackDetail(
     minutesListened,
     rank: rankIndex < 0 ? null : rankIndex + 1,
     share: shareOfPeriod(minutesListened, streams, filter),
-    firstPlayedAt: dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null,
+    firstPlayedAt: earliestPlay(
+      streams,
+      (row) => matchesEntity(row.trackName, trackName) && matchesEntity(row.artistName, artistName)
+    ),
     lastPlayedAt: dates.length ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null,
     recentPlays: [...rows]
       .sort((a, b) => b.playedAt.getTime() - a.playedAt.getTime())

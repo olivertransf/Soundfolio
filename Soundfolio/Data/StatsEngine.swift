@@ -548,7 +548,9 @@ enum StatsEngine {
             minutesListened: minutes,
             rank: rank,
             share: periodShare(minutes: minutes, streams: streams, range: range),
-            firstPlayedAt: dates.min(),
+            firstPlayedAt: credited(streams).filter {
+                EntityNormalize.matches($0.trackName, name) && EntityNormalize.matches($0.artistName, artist)
+            }.map(\.playedAt).min(),
             lastPlayedAt: dates.max(),
             recentPlays: recentStreams(from: rows, limit: 20)
         )
@@ -608,11 +610,24 @@ enum StatsEngine {
             streams: rows.count,
             minutesListened: minutes,
             share: periodShare(minutes: minutes, streams: streams, range: range),
-            firstPlayedAt: credited(streams).filter {
-                EntityNormalize.sameAlbum($0.albumName, name) && EntityNormalize.matches($0.artistName, artist)
-            }.map(\.playedAt).min(),
+            firstPlayedAt: earliestAlbumPlay(name: name, artist: artist, streams: streams),
             tracks: tracks
         )
+    }
+
+    private static func earliestAlbumPlay(name: String, artist: String, streams: [StreamRecord]) -> Date? {
+        let songs = Set(
+            credited(streams)
+                .filter {
+                    EntityNormalize.sameAlbum($0.albumName, name) && EntityNormalize.matches($0.artistName, artist)
+                }
+                .map { "\(EntityNormalize.key($0.trackName))\u{0}\(EntityNormalize.key($0.artistName))" }
+        )
+        guard !songs.isEmpty else { return nil }
+        return credited(streams)
+            .filter { songs.contains("\(EntityNormalize.key($0.trackName))\u{0}\(EntityNormalize.key($0.artistName))") }
+            .map(\.playedAt)
+            .min()
     }
 
     private static func periodShare(minutes: Int, streams: [StreamRecord], range: StatsTimeRange) -> Int {
