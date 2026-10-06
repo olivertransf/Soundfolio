@@ -35,13 +35,23 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
-function sessionSavedKey(uid: string) {
-  return `soundfolio:session:${uid}`;
+const SESSION_RENEW_AFTER_MS = 24 * 60 * 60 * 1000;
+
+function sessionRenewedKey(uid: string) {
+  return `soundfolio:session-renewed:${uid}`;
+}
+
+function shouldRenewSession(uid: string) {
+  try {
+    const renewedAt = Number(localStorage.getItem(sessionRenewedKey(uid)) ?? "0");
+    return !Number.isFinite(renewedAt) || Date.now() - renewedAt >= SESSION_RENEW_AFTER_MS;
+  } catch {
+    return true;
+  }
 }
 
 async function saveSessionCookie(user: User) {
-  const key = sessionSavedKey(user.uid);
-  if (sessionStorage.getItem(key) === "1") return;
+  if (!shouldRenewSession(user.uid)) return;
 
   const idToken = await user.getIdToken(true);
   const response = await fetch("/api/auth/session", {
@@ -54,12 +64,16 @@ async function saveSessionCookie(user: User) {
     const data = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Error(data?.error ?? "Could not save the sign-in session.");
   }
-  sessionStorage.setItem(key, "1");
+  try {
+    localStorage.setItem(sessionRenewedKey(user.uid), String(Date.now()));
+  } catch {
+    // The cookie is already set. A blocked storage write only means the next visit renews again.
+  }
 }
 
 async function clearSessionCookie(uid: string | undefined) {
   await fetch("/api/auth/session", { method: "DELETE", credentials: "same-origin" });
-  if (uid) sessionStorage.removeItem(sessionSavedKey(uid));
+  if (uid) localStorage.removeItem(sessionRenewedKey(uid));
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -91,9 +105,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     });
 
+    const renewOnReturn = () => {
+      if (document.visibilityState !== "visible") return;
+      const current = auth.currentUser;
+      if (!current) return;
+      void saveSessionCookie(current).catch((error) => {
+        console.error("[auth] session cookie failed", error);
+      });
+    };
+    document.addEventListener("visibilitychange", renewOnReturn);
+
     return () => {
       cancelled = true;
       unsubscribe();
+      document.removeEventListener("visibilitychange", renewOnReturn);
     };
   }, []);
 
