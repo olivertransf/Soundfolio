@@ -33,9 +33,10 @@ export function syncViewerTimeZoneCookie(options?: { updateUrl?: boolean }): str
   if (!tz) return null;
 
   const previous = readViewerTimeZoneCookie();
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
   document.cookie = `${VIEWER_TIMEZONE_COOKIE}=${encodeURIComponent(
     tz
-  )}; Max-Age=31536000; Path=/; SameSite=Lax`;
+  )}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
 
   if (options?.updateUrl !== false && typeof window !== "undefined") {
     const url = new URL(window.location.href);
