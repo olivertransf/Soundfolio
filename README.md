@@ -4,7 +4,7 @@ Personal listening analytics across web and iOS. Import your Spotify Extended St
 
 Default UI range is **This year** (`ytd`). Use the period control or `?range=all` for all time.
 
-**Live:** [soundfolio-stats.vercel.app](https://soundfolio-stats.vercel.app) · **Repository:** [github.com/olivertransf/Soundfolio](https://github.com/olivertransf/Soundfolio)
+**Repository:** [github.com/olivertransf/Soundfolio](https://github.com/olivertransf/Soundfolio)
 
 Soundfolio is not affiliated with Spotify. Spotify is a trademark of Spotify AB.
 
