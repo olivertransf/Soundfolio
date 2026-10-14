@@ -74,10 +74,8 @@ export async function runLastFmSync(
   }
 
   const profile = user ? await getUserProfile(user.uid) : null;
-  const lastfmUsername = devSync
-    ? DEV_LASTFM_USERNAME
-    : profile?.lastfmUsername?.trim();
-  if (!lastfmUsername) {
+  const lastfmUsername = devSync ? DEV_LASTFM_USERNAME : profile?.lastfmUsername?.trim();
+  if (!devSync && !lastfmUsername) {
     throw new Error("Add your Last.fm username in onboarding.");
   }
 

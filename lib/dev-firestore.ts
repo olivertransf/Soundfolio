@@ -111,14 +111,16 @@ export type DevLibraryUser = {
   lastfmUsername: string | null;
 };
 
-const DEV_UID = "lLqJcmE1iYbrHx9OUmLaXriCGAi1";
-
 export async function getDevUser(): Promise<DevLibraryUser> {
   assertDevelopment();
+  const uid = process.env.DEV_FIREBASE_UID?.trim();
+  if (!uid) {
+    throw new Error("Set DEV_FIREBASE_UID in .env.local.");
+  }
   return {
-    uid: DEV_UID,
+    uid,
     displayName: null,
-    lastfmUsername: DEV_LASTFM_USERNAME,
+    lastfmUsername: DEV_LASTFM_USERNAME || null,
   };
 }
 

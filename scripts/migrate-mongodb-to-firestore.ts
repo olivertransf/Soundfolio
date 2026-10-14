@@ -2,7 +2,7 @@
  * One-time migration: copy MongoDB `streams` into Firestore `users/{uid}/streams/{id}`.
  *
  * Usage:
- *   MONGODB_URI=... FIREBASE_SERVICE_ACCOUNT_JSON=... npm run db:migrate-firestore -- --uid=lLqJcmE1iYbrHx9OUmLaXriCGAi1
+ *   MONGODB_URI=... FIREBASE_SERVICE_ACCOUNT_JSON=... npm run db:migrate-firestore -- --uid=YOUR_FIREBASE_UID
  *   npm run db:migrate-firestore -- --dry-run --uid=YOUR_FIREBASE_UID
  */
 import "dotenv/config";

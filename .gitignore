@@ -55,3 +55,6 @@ xcuserdata/
 
 # Local secrets
 Config/Secrets.xcconfig
+
+# Firebase app config for this machine. Copy GoogleService-Info.example.plist and fill it in locally.
+Soundfolio/GoogleService-Info.plist

@@ -5,7 +5,7 @@ import { verifyFirebaseIdToken } from "@/lib/auth/verify-id-token";
 export const maxDuration = 60;
 
 const PAGE_SIZE = 450;
-const LEGACY_UID = process.env.LEGACY_USER_ID?.trim() ?? "lLqJcmE1iYbrHx9OUmLaXriCGAi1";
+const LEGACY_UID = process.env.LEGACY_USER_ID?.trim() ?? "";
 
 function bearerToken(request: NextRequest) {
   const bearer = request.headers.get("authorization");
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 401 });
   }
 
-  if (uid !== LEGACY_UID) {
+  if (!LEGACY_UID || uid !== LEGACY_UID) {
     return NextResponse.json({ error: "This import is limited to the legacy account owner." }, { status: 403 });
   }
 

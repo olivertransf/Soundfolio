@@ -57,7 +57,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Fill in `NEXT_PUBLIC_FIREBASE_*` and `LASTFM_API_KEY` (see `.env.example`).
+Fill in `NEXT_PUBLIC_FIREBASE_*` and `LASTFM_API_KEY` in `.env.local` (see `.env.example`). Do not commit that file or `Soundfolio/GoogleService-Info.plist`. Copy `Soundfolio/GoogleService-Info.example.plist` for the iOS app, and put the reversed Google client id in `Config/Secrets.xcconfig`.
 
 ## Vercel
 

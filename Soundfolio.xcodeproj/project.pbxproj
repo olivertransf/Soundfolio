@@ -18,6 +18,7 @@
 
 /* Begin PBXFileReference section */
 		4A917D2B2FC104AB007C1A24 /* Soundfolio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Soundfolio.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E4A1B2C32FC104AB007C1A25 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/App.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -49,6 +50,7 @@
 		4A917D222FC104AB007C1A24 = {
 			isa = PBXGroup;
 			children = (
+				E4A1B2C32FC104AB007C1A25 /* App.xcconfig */,
 				4A917D2D2FC104AB007C1A24 /* Soundfolio */,
 				4A917D2C2FC104AB007C1A24 /* Products */,
 			);
@@ -275,6 +277,7 @@
 		};
 		4A917D372FC104AC007C1A24 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E4A1B2C32FC104AB007C1A25 /* App.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = soundfolio;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -323,6 +326,7 @@
 		};
 		4A917D382FC104AC007C1A24 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E4A1B2C32FC104AB007C1A25 /* App.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = soundfolio;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
