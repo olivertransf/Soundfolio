@@ -40,7 +40,7 @@ export function GroupBySelect({
         <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden />
       </PopoverTrigger>
       <PopoverContent
-        className="w-[min(100vw-2rem,14rem)] min-w-[9.5rem] p-1"
+        className="w-[min(calc(100vw-2rem),14rem)] min-w-[9.5rem] p-1"
         align="start"
       >
         <div className="flex flex-col p-0.5">

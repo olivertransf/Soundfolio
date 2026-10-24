@@ -33,7 +33,7 @@ export function LiveSyncStatus({ className, fullWidth = false }: LiveSyncStatusP
         disabled={!canSync}
         onClick={() => void sync()}
         className={cn(
-          "inline-flex h-8 max-w-[min(100vw-2rem,20rem)] items-center gap-2 rounded-full border px-3 text-xs font-medium transition-colors",
+          "inline-flex h-11 max-w-[min(calc(100vw-2rem),20rem)] items-center gap-2 rounded-full border px-3 text-xs font-medium transition-colors md:h-8",
           fullWidth && "w-full max-w-none justify-center",
           loading && "border-primary/40 bg-primary/10 text-primary",
           outcome?.kind === "added" &&
@@ -58,7 +58,7 @@ export function LiveSyncStatus({ className, fullWidth = false }: LiveSyncStatusP
         <Progress
           value={progress ?? 0}
           aria-label="Last.fm sync progress"
-          className="h-1 w-full max-w-[min(100vw-2rem,20rem)]"
+          className="h-1 w-full max-w-[min(calc(100vw-2rem),20rem)]"
         />
       ) : null}
     </div>

@@ -16,7 +16,7 @@ export function AccountMenu() {
       type="button"
       variant="ghost"
       size="icon-sm"
-      className="shrink-0"
+      className="size-11 shrink-0 md:size-7"
       aria-label="Sign out"
       onClick={() => {
         void (async () => {

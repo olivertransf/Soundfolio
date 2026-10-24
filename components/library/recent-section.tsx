@@ -77,7 +77,7 @@ function RecentSectionInner() {
           streams={recent.slice(0, shown)}
           className="min-h-[28rem] lg:min-h-[calc(100dvh-12rem)]"
         />
-        <PatternsSidePanel className="min-h-[20rem] lg:sticky lg:top-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-12rem)]" />
+        <PatternsSidePanel className="min-h-[20rem] lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-12rem)]" />
       </div>
       <ShowMoreButton
         shown={Math.min(shown, recent.length)}

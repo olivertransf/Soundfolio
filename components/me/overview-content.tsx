@@ -264,7 +264,7 @@ export function OverviewContent() {
           </section>
         </div>
 
-        <aside className="flex min-h-[24rem] min-w-0 flex-col lg:sticky lg:top-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-4.5rem-env(safe-area-inset-top,0px))]">
+        <aside className="flex min-h-[24rem] min-w-0 flex-col lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-5.25rem-env(safe-area-inset-top,0px))]">
           <RecentPlaysPanel
             compact
             className="min-h-0 flex-1"

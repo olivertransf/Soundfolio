@@ -244,11 +244,11 @@ export function DisplayPreferences() {
       <PopoverTrigger
         type="button"
         aria-label="Display settings"
-        className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
+        className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "size-11 md:size-7")}
       >
         <Palette className="h-4 w-4" />
       </PopoverTrigger>
-      <PopoverContent className="w-[min(100vw-2rem,22rem)] gap-3 p-3">
+      <PopoverContent className="max-h-[calc(100dvh-4rem)] w-[min(calc(100vw-2rem),22rem)] touch-pan-y gap-3 overflow-y-auto overscroll-contain p-3">
         <PopoverHeader className="mb-1">
           <PopoverTitle className="text-sm">Display</PopoverTitle>
         </PopoverHeader>

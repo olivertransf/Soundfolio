@@ -157,7 +157,7 @@ export function TimeRangeTabs() {
         >
           {customLabel}
         </PopoverTrigger>
-        <PopoverContent className="w-[min(100vw-2rem,18rem)] space-y-3 p-3" align="start">
+        <PopoverContent className="w-[min(calc(100vw-2rem),18rem)] space-y-3 p-3" align="start">
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">From</label>
             <Input

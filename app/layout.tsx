@@ -39,9 +39,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark overflow-x-hidden">
+    <html lang="en" className="dark overflow-x-clip">
       <body
-        className={`${sans.variable} font-sans antialiased min-h-dvh min-h-screen min-w-0 overflow-x-hidden pb-[env(safe-area-inset-bottom,0px)] [-webkit-tap-highlight-color:transparent]`}
+        className={`${sans.variable} font-sans antialiased min-h-dvh min-h-screen min-w-0 overflow-x-clip pb-[env(safe-area-inset-bottom,0px)] [-webkit-tap-highlight-color:transparent]`}
       >
         <AuthProvider>
           <ViewerTimezoneSync />

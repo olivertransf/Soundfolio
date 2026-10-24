@@ -33,7 +33,7 @@ export function LibraryLoadProgress() {
           : "Starting";
 
   return (
-    <div className="sticky top-[calc(3.25rem+env(safe-area-inset-top,0px))] z-40 -mt-1 mb-3 space-y-1.5 bg-background/95 py-2 backdrop-blur-sm">
+    <div className="sticky top-[calc(3.625rem+env(safe-area-inset-top,0px))] z-40 -mt-1 mb-3 space-y-1.5 bg-background/95 py-2 backdrop-blur-sm lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))]">
       <div className="flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
         <span>Loading history</span>
         <span className="tabular-nums">

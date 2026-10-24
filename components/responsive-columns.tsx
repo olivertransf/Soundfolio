@@ -41,7 +41,7 @@ export function RankColumn({
       <div
         className={cn(
           "border-b border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
-          stickyHeader && "sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] z-0"
+          stickyHeader && "sticky top-[calc(4.25rem+env(safe-area-inset-top,0px))] z-0"
         )}
       >
         {title}

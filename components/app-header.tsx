@@ -49,10 +49,10 @@ export function AppHeader({
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm pt-[env(safe-area-inset-top,0px)]">
-        <div className="app-container grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2 md:grid-cols-[auto_minmax(0,1fr)_auto]">
+        <div className="app-container grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-1.5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:py-2">
           <Link
             href={homeHref}
-            className="min-w-0 shrink-0 text-base font-semibold tracking-tight"
+            className="min-w-0 shrink-0 whitespace-nowrap text-base font-semibold tracking-tight"
             onClick={() => onMobileOpenChange(false)}
           >
             <span className="text-primary">Sound</span>
@@ -78,15 +78,15 @@ export function AppHeader({
             </div>
           </nav>
 
-          <div className="flex items-center justify-self-end gap-1">
-            <LiveSyncStatus />
+          <div className="flex items-center justify-self-end gap-0.5 md:gap-1">
+            <LiveSyncStatus className="hidden md:inline-flex" />
             <DisplayPreferences />
             <AccountMenu />
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="shrink-0 md:hidden"
+              className="size-11 shrink-0 md:hidden"
               aria-expanded={mobileOpen}
               aria-controls="mobile-drawer-nav"
               onClick={() => onMobileOpenChange(!mobileOpen)}
@@ -124,7 +124,7 @@ export function AppHeader({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="shrink-0"
+            className="size-11 shrink-0"
             onClick={() => onMobileOpenChange(false)}
           >
             <X className="h-5 w-5" />
