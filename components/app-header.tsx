@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
@@ -33,6 +33,41 @@ export function AppHeader({
   onMobileOpenChange: (open: boolean) => void;
 }) {
   const pathname = usePathname();
+  const drawerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const drawer = drawerRef.current;
+    const focusable = () => Array.from(drawer?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled])'
+    ) ?? []);
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onMobileOpenChange(false);
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const closeOnDesktop = () => { if (desktop.matches) onMobileOpenChange(false); };
+    desktop.addEventListener("change", closeOnDesktop);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      desktop.removeEventListener("change", closeOnDesktop);
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [mobileOpen, onMobileOpenChange]);
+
   const [statsNavQuery, setStatsNavQuery] = useState(() => defaultStatsNavQuery());
 
   const navApp: NavAppKind = pathname.startsWith("/demo") ? "demo" : "main";
@@ -108,9 +143,14 @@ export function AppHeader({
       ) : null}
 
       <aside
+        ref={drawerRef}
         id="mobile-drawer-nav"
+        role="dialog"
+        aria-modal={mobileOpen || undefined}
+        aria-label="Navigation"
+        inert={!mobileOpen}
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-[min(18rem,92vw)] flex-col border-l border-border bg-card pb-[env(safe-area-inset-bottom,0px)] pl-3 pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[calc(1.5rem+env(safe-area-inset-top,0px))] transition-transform duration-200 ease-out md:hidden",
+          "fixed inset-y-0 right-0 z-50 flex w-[min(18rem,92vw)] flex-col border-l border-border bg-card pb-[env(safe-area-inset-bottom,0px)] pl-3 pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[calc(1.5rem+env(safe-area-inset-top,0px))] transition-transform duration-200 ease-out motion-reduce:transition-none md:hidden",
           mobileOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
         )}
         aria-hidden={!mobileOpen}
@@ -125,6 +165,7 @@ export function AppHeader({
             variant="ghost"
             size="icon-sm"
             className="size-11 shrink-0"
+            aria-label="Close menu"
             onClick={() => onMobileOpenChange(false)}
           >
             <X className="h-5 w-5" />

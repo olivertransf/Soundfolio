@@ -1,5 +1,6 @@
 "use client";
 
+import { useViewportWidth } from "@/hooks/use-media-query";
 import { useEffect, useState } from "react";
 import { listDepthLimits, loadDisplayPreferences, type ListDepth } from "@/lib/display-preferences";
 
@@ -13,5 +14,13 @@ export function useListDepth() {
     return () => window.removeEventListener("soundfolio:prefs", sync);
   }, []);
 
-  return listDepthLimits[depth];
+  const width = useViewportWidth();
+  const limits = listDepthLimits[depth];
+  if (width >= 768) return limits;
+  return {
+    ...limits,
+    dashboard: depth === "deep" ? 10 : 5,
+    dashboardRecent: depth === "deep" ? 10 : 5,
+    page: depth === "deep" ? 20 : 10,
+  };
 }

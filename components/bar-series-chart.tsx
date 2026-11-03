@@ -33,7 +33,7 @@ export function ChartPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="flex h-full min-w-0 flex-col gap-2 border border-border bg-card p-3">
+    <section className="flex min-w-0 flex-col gap-2 border border-border bg-card p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold tracking-tight">{title}</h2>

@@ -30,7 +30,8 @@ function RankingsSectionInner() {
   const { streams, loading } = useStreams();
   const limits = useListDepth();
   const [kind, setKind] = useState<EntityKind>("tracks");
-  const [shown, setShown] = useState<number>(limits.page);
+  const [pages, setPages] = useState(1);
+  const shown = pages * limits.page;
 
   const range = searchParams.get("range") ?? undefined;
   const from = searchParams.get("from") ?? undefined;
@@ -134,7 +135,7 @@ function RankingsSectionInner() {
           <ShowMoreButton
             shown={Math.min(shown, singleItems.length)}
             total={singleItems.length}
-            onShowMore={() => setShown((count) => count + limits.page)}
+            onShowMore={() => setPages((count) => count + 1)}
           />
         </div>
       </div>
@@ -154,7 +155,7 @@ function RankingsSectionInner() {
         <ShowMoreButton
           shown={Math.min(shown, longest)}
           total={longest}
-          onShowMore={() => setShown((count) => count + limits.page)}
+          onShowMore={() => setPages((count) => count + 1)}
         />
       </div>
     </div>

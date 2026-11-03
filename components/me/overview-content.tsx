@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Clock, Headphones, Music, Play, Users } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
 import { ArtistArt } from "@/components/artist-art";
@@ -48,6 +48,7 @@ import {
 
 export function OverviewContent() {
   const searchParams = useSearchParams();
+  const isDemo = usePathname().startsWith("/demo");
   const { streams, loading, loadingMore, refreshing, fullyLoaded, error, reload } = useStreams();
   const limits = useListDepth();
   const deferredStreams = useDeferredValue(streams);
@@ -113,11 +114,13 @@ export function OverviewContent() {
 
   const libraryRecentHref = librarySectionHref(
     "recent",
-    new URLSearchParams(searchParams.toString())
+    new URLSearchParams(searchParams.toString()),
+    isDemo
   );
   const libraryRankingsHref = librarySectionHref(
     "rankings",
-    new URLSearchParams(searchParams.toString())
+    new URLSearchParams(searchParams.toString()),
+    isDemo
   );
 
   if (loading && streams.length === 0) {
@@ -264,7 +267,7 @@ export function OverviewContent() {
           </section>
         </div>
 
-        <aside className="flex min-h-[24rem] min-w-0 flex-col lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-5.25rem-env(safe-area-inset-top,0px))]">
+        <aside className="flex min-w-0 flex-col lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-5.25rem-env(safe-area-inset-top,0px))]">
           <RecentPlaysPanel
             compact
             className="min-h-0 flex-1"

@@ -24,7 +24,8 @@ function RecentSectionInner() {
   const { streams, loading } = useStreams();
   const limits = useListDepth();
   const [limitToPeriod, setLimitToPeriod] = useState(true);
-  const [shown, setShown] = useState<number>(limits.page);
+  const [pages, setPages] = useState(1);
+  const shown = pages * limits.page;
 
   const range = searchParams.get("range") ?? undefined;
   const from = searchParams.get("from") ?? undefined;
@@ -72,18 +73,19 @@ function RecentSectionInner() {
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
-        <RecentPlaysPanel
-          title="Recent"
-          streams={recent.slice(0, shown)}
-          className="min-h-[28rem] lg:min-h-[calc(100dvh-12rem)]"
-        />
-        <PatternsSidePanel className="min-h-[20rem] lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-12rem)]" />
+        <div className="min-w-0">
+          <RecentPlaysPanel
+            title="Recent"
+            streams={recent.slice(0, shown)}
+          />
+          <ShowMoreButton
+            shown={Math.min(shown, recent.length)}
+            total={recent.length}
+            onShowMore={() => setPages((count) => count + 1)}
+          />
+        </div>
+        <PatternsSidePanel className="max-h-[28rem] lg:max-h-none lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-12rem)]" />
       </div>
-      <ShowMoreButton
-        shown={Math.min(shown, recent.length)}
-        total={recent.length}
-        onShowMore={() => setShown((count) => count + limits.page)}
-      />
     </div>
   );
 }

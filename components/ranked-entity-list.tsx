@@ -33,7 +33,7 @@ export function RankedEntityList({
   return (
     <div
       className={cn(
-        "grid gap-x-2 gap-y-0.5",
+        "grid min-w-0 gap-x-2 gap-y-0.5",
         columns === "one" && "grid-cols-1",
         columns === "two" && "md:grid-cols-2",
         columns === "three" && "md:grid-cols-2 xl:grid-cols-3",
@@ -42,7 +42,7 @@ export function RankedEntityList({
       )}
     >
       {items.map((item, i) => (
-        <div key={item.key} className="[content-visibility:auto] [contain-intrinsic-size:auto_2.75rem]">
+        <div key={item.key} className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_2.75rem]">
           <RankedStreamRow
             rank={i + 1}
             href={item.href}

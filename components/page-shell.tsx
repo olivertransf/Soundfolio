@@ -11,7 +11,7 @@ export function PageShell({
   width?: "wide" | "default" | "narrow";
 }) {
   return (
-    <div className={cn("mx-auto w-full max-w-6xl space-y-4 xl:max-w-[87.5rem]", className)}>
+    <div className={cn("mx-auto min-w-0 w-full max-w-6xl space-y-4 xl:max-w-[87.5rem]", className)}>
       {children}
     </div>
   );
@@ -37,7 +37,7 @@ export function PageHeader({
         ) : null}
         {meta ? <div className="pt-0.5">{meta}</div> : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
   );
 }
@@ -57,7 +57,7 @@ export function SectionBlock({
 }) {
   return (
     <section className={cn("space-y-2", className)}>
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
           {description ? (

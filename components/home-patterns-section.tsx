@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
 import {
   detectViewerTimeZone,
@@ -67,6 +67,7 @@ function RankedMetricRows({
 function usePatternsData() {
   const { streams, loading: streamsLoading } = useStreams();
   const searchParams = useSearchParams();
+  const isDemo = usePathname().startsWith("/demo");
   const [timeZone, setTimeZone] = useState("");
   const [byHour, setByHour] = useState<PatternRow[]>([]);
   const [byDay, setByDay] = useState<PatternRow[]>([]);
@@ -130,10 +131,12 @@ function usePatternsData() {
 /** Compact sidebar column for the dashboard, beside Recent. */
 export function PatternsSidePanel({ className }: { className?: string }) {
   const searchParams = useSearchParams();
+  const isDemo = usePathname().startsWith("/demo");
   const { loading, error, peakHour, peakDay, topHours, topDays } = usePatternsData();
   const patternsHref = librarySectionHref(
     "patterns",
-    new URLSearchParams(searchParams.toString())
+    new URLSearchParams(searchParams.toString()),
+    isDemo
   );
 
   return (

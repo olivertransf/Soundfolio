@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { LibraryRecentSection } from "@/components/library/recent-section";
@@ -20,13 +20,14 @@ type LibrarySection = (typeof sections)[number]["id"];
 
 function LibraryContentInner() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const section = (searchParams.get("section") as LibrarySection | null) ?? "recent";
 
   const setSection = (next: LibrarySection) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("section", next);
-    router.replace(`/library?${params.toString()}`);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   return (
@@ -84,8 +85,8 @@ export function LibraryContent() {
   );
 }
 
-export function librarySectionHref(section: LibrarySection, searchParams: URLSearchParams) {
+export function librarySectionHref(section: LibrarySection, searchParams: URLSearchParams, demo = false) {
   const params = new URLSearchParams(searchParams.toString());
   params.set("section", section);
-  return `/library?${params.toString()}`;
+  return `${demo ? "/demo/library" : "/library"}?${params.toString()}`;
 }

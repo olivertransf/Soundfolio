@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchDemoStreams } from "@/lib/firestore/streams";
 import { getDemoStreams, type DemoStreamRow } from "@/lib/demo-seed";
 import type { Stream } from "@/lib/types/stream";
 
@@ -31,14 +30,8 @@ export function useDemoStreams() {
     setLoading(true);
     setError(null);
     try {
-      const remote = await fetchDemoStreams();
-      if (remote.length > 0) {
-        setStreams(remote);
-        return;
-      }
       setStreams(demoRowsToStreams(getDemoStreams()));
     } catch (err) {
-      setStreams(demoRowsToStreams(getDemoStreams()));
       setError(err instanceof Error ? err.message : null);
     } finally {
       setLoading(false);

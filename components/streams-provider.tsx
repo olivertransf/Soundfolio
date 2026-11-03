@@ -66,16 +66,7 @@ export function StreamsProvider({ children }: { children: ReactNode }) {
   return <StreamsContext.Provider value={value}>{children}</StreamsContext.Provider>;
 }
 
-function DevLibraryProvider({ children }: { children: ReactNode }) {
-  const data = useDevLibrary(true);
-  return <StreamsContext.Provider value={data}>{children}</StreamsContext.Provider>;
-}
-
 export function DemoStreamsProvider({ children }: { children: ReactNode }) {
-  if (process.env.NODE_ENV === "development") {
-    return <DevLibraryProvider>{children}</DevLibraryProvider>;
-  }
-
   return <SyntheticDemoStreamsProvider>{children}</SyntheticDemoStreamsProvider>;
 }
 
@@ -84,7 +75,9 @@ function SyntheticDemoStreamsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      streams,
+      // Demo data lives in an isolated provider; include it in stats without
+      // changing the exclusion of demo records in real user libraries.
+      streams: streams.map((stream) => ({ ...stream, isDemo: false })),
       loading,
       loadingMore: false,
       loadedCount: streams.length,
