@@ -1,5 +1,6 @@
 "use client";
 
+import { EntityArchiveHistory } from "@/components/archive/entity-archive-history";
 import { Suspense, useMemo } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArtistArt } from "@/components/artist-art";
@@ -175,6 +176,7 @@ function ArtistDetailInner() {
           </ContentPanel>
         </SectionBlock>
       </div>
+      <EntityArchiveHistory artist={artistName} />
     </PageShell>
   );
 }

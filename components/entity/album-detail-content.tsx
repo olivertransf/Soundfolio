@@ -1,5 +1,6 @@
 "use client";
 
+import { EntityArchiveHistory } from "@/components/archive/entity-archive-history";
 import { Suspense, useMemo } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { AlbumArt } from "@/components/album-art";
@@ -157,6 +158,7 @@ function AlbumDetailInner() {
           />
         </ContentPanel>
       </SectionBlock>
+      <EntityArchiveHistory artist={artistName} album={albumName} />
     </PageShell>
   );
 }

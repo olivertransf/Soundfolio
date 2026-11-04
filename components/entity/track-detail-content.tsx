@@ -1,5 +1,6 @@
 "use client";
 
+import { EntityArchiveHistory } from "@/components/archive/entity-archive-history";
 import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
@@ -161,6 +162,7 @@ function TrackDetailInner() {
           </ContentPanel>
         </SectionBlock>
       ) : null}
+      <EntityArchiveHistory artist={artistName} track={trackName} />
     </PageShell>
   );
 }

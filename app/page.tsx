@@ -6,10 +6,10 @@ export default function RootPage() {
           Soundfolio
         </p>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
-          Your listening stats, your account
+          Your music, through the years
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-          Create a free account, connect Last.fm, and explore your listening history.
+          Build a personal listening archive, revisit old favorites, and keep your memories alongside the music.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <a
@@ -25,10 +25,10 @@ export default function RootPage() {
             Sign in
           </a>
           <a
-            href="/demo?range=ytd"
+            href="/demo/time-machine?month=2024-06"
             className="inline-flex h-11 items-center border border-border bg-secondary/30 px-4 text-sm font-medium text-foreground transition-colors hover:bg-secondary/50"
           >
-            View demo
+            Explore demo
           </a>
         </div>
       </div>

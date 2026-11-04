@@ -12,7 +12,7 @@ const sans = Geist({
 
 export const metadata: Metadata = {
   title: "Soundfolio",
-  description: "Self-hosted listening history and stats",
+  description: "Your personal music archive: listening history, memories, and discoveries across time.",
   appleWebApp: {
     capable: true,
     title: "Soundfolio",

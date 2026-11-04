@@ -1,4 +1,5 @@
 "use client";
+import { ArchiveEntry } from "@/components/archive/archive-entry";
 
 import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
@@ -169,6 +170,7 @@ export function OverviewContent() {
 
   return (
     <PageShell className="space-y-3">
+      <ArchiveEntry />
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
         <div className="min-w-0 space-y-3">
           <FilterToolbar context="dashboard" />

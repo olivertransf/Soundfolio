@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Library, Settings } from "lucide-react";
+import { LayoutDashboard, Library, Settings, History } from "lucide-react";
 import { defaultStatsNavQuery } from "@/lib/stats-session-preferences";
 
 export interface NavLinkItem {
@@ -26,15 +26,31 @@ export type NavLinksBundle = {
 
 export function createNavLinks(
   app: NavAppKind,
-  statsQuery: string = defaultStatsNavQuery()
+  statsQuery: string = defaultStatsNavQuery(),
 ): NavLinksBundle {
   const s = statsSuffix(statsQuery);
 
   if (app === "demo") {
     const main: NavLinkItem[] = [
-      { href: `/demo${s}`, label: "Dashboard", shortLabel: "Home", icon: LayoutDashboard },
-      { href: `/demo/library${s}`, label: "Library", shortLabel: "Library", icon: Library },
+      {
+        href: `/demo${s}`,
+        label: "Dashboard",
+        shortLabel: "Home",
+        icon: LayoutDashboard,
+      },
+      {
+        href: `/demo/library${s}`,
+        label: "Library",
+        shortLabel: "Library",
+        icon: Library,
+      },
     ];
+    main.splice(1, 0, {
+      href: app === "demo" ? "/demo/time-machine" : "/time-machine",
+      label: "Time Machine",
+      shortLabel: "Time",
+      icon: History,
+    });
     const library: NavLinkItem[] = [];
     const more: NavLinkItem[] = [];
     const all = [...main];
@@ -42,10 +58,31 @@ export function createNavLinks(
   }
 
   const main: NavLinkItem[] = [
-    { href: `/me${s}`, label: "Dashboard", shortLabel: "Dashboard", icon: LayoutDashboard },
-    { href: `/library${s}`, label: "Library", shortLabel: "Library", icon: Library },
-    { href: "/settings", label: "Settings", shortLabel: "Settings", icon: Settings },
+    {
+      href: `/me${s}`,
+      label: "Dashboard",
+      shortLabel: "Dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      href: `/library${s}`,
+      label: "Library",
+      shortLabel: "Library",
+      icon: Library,
+    },
+    {
+      href: "/settings",
+      label: "Settings",
+      shortLabel: "Settings",
+      icon: Settings,
+    },
   ];
+  main.splice(1, 0, {
+    href: "/time-machine",
+    label: "Time Machine",
+    shortLabel: "Time",
+    icon: History,
+  });
   const library: NavLinkItem[] = [];
   const more: NavLinkItem[] = [];
   const all = [...main];
