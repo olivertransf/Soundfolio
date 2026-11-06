@@ -9,6 +9,8 @@ import {
 } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ListeningJournal } from "./listening-journal";
+import { ListeningComparison, ListeningLab } from "./listening-lab";
 import { ArchivePeriodPicker } from "./archive-period-picker";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useStreams } from "@/components/streams-provider";
@@ -16,7 +18,6 @@ import { AlbumArt } from "@/components/album-art";
 import {
   buildArchive,
   monthlyInsights,
-  monthNarrative,
   trackLife,
   repeatedSequences,
   comparePeriods,
@@ -426,8 +427,8 @@ export function ArchiveExperience() {
       <header className="archive-heading">
         <div>
           <p className="archive-kicker">Your listening archive</p>
-          <h1>Listening Time Machine</h1>
-          <p className="archive-muted">Follow the music. Find the memories.</p>
+          <h1>Your life in music</h1>
+
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -574,7 +575,7 @@ export function ArchiveExperience() {
             aria-current={tab === t ? "page" : undefined}
             onClick={() => nav({ view: t.toLowerCase(), track: null })}
           >
-            {t}
+            {t === "Story" ? "Overview" : t}
           </button>
         ))}
       </nav>
@@ -700,115 +701,37 @@ export function ArchiveExperience() {
       ) : null}
       {!entityTrack && tab === "Story" ? (
         <>
-          <section className="archive-cover">
-            <div className="archive-cover-copy">
-              <p className="archive-kicker">A chapter in your listening</p>
-              <h2>{monthLabel(month)}</h2>
-              <p>{monthNarrative(p)}</p>
-              <div className="archive-cover-stats">
-                <span>
-                  <b>{p.rows.length.toLocaleString()}</b> plays
-                </span>
-                <span>
-                  <b>{(p.ms / 3600000).toFixed(1)}h</b> stored time*
-                </span>
-                <span>
-                  <b>{p.days.length}</b> active days
-                </span>
-              </div>
-              <p className="archive-muted">
-                {p.tracks.length} tracks · {p.artists.length} artists ·{" "}
-                {p.albums.length} observed albums
-                <br />
-                {insight.first.length} first-observed tracks ·{" "}
-                {
-                  p.artists.filter(
-                    (a) =>
-                      archive.all.artists
-                        .find((v) => v.key === a.key)
-                        ?.first.slice(0, 7) === month,
-                  ).length
-                }{" "}
-                first-observed artists
-              </p>
-              <p className="archive-muted">
-                * Stored duration totals may include estimates. See coverage.
-              </p>
-            </div>
-            <div className="archive-collage">
-              {p.albums.slice(0, 4).map((t) => (
-                <AlbumArt
-                  key={t.key}
-                  src={t.art}
-                  alt={`${t.artist}: ${t.name}`}
-                  width={180}
-                  height={180}
-                  className="archive-cover-art"
-                />
-              ))}
-            </div>
-          </section>
-          {insight.edge ? (
-            <p className="archive-banner">
-              Coverage boundary: this month may be partial. First observed means
-              first in this archive, never first heard. Totals are not adjusted
-              for missing days.
-            </p>
-          ) : null}
+          <ListeningJournal archive={archive} month={month} notes={notes} ready={ready} update={update} onMonth={(value) => nav({ month: value, track: null })} onTrack={(track) => nav({ track })} />
+          {insight.edge ? <p className="archive-muted journal-coverage">Partial month · insights reflect the records available.</p> : null}
+          <ListeningLab
+            key={month}
+            archive={archive}
+            period={p}
+            month={month}
+            metric={sort}
+            onBrowse={() => {
+              const from = `${month}-01`;
+              const to = `${month}-${new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate()}`;
+              setDateFrom(from);
+              setDateTo(to);
+              nav({ view: "explore", from, to });
+            }}
+            onMonth={(value) => nav({ month: value, track: null })}
+            onEntity={(item, kind) => {
+              if (kind === "tracks") nav({ track: item.key });
+              else
+                router.push(
+                  `${demo ? "/demo" : ""}${kind === "artists" ? artistPath(item.name) : albumPath(item.artist, item.name)}?range=all&archiveMonth=${month}&tz=${encodeURIComponent(tz)}`,
+                );
+            }}
+          />
+          <details className="journal-details"><summary>More from this month · memories, calendar & details</summary>
           <div className="archive-inline-actions">
-            <button
-              className={control}
-              onClick={() => openMemory(`month:${month}`)}
-            >
-              ＋ Add a memory
-            </button>
-            <button
-              className={control}
-              onClick={() => nav({ view: "compare" })}
-            >
-              Compare this month
-            </button>
-            <button className={control} onClick={exportPeriod}>
-              Export period JSON
-            </button>
-            <button className={control} onClick={imageExport}>
-              Download summary image
-            </button>
-            <button className={control} onClick={() => window.print()}>
-              Print story
-            </button>
+            <button className={control} onClick={() => openMemory(`month:${month}`)}>Add a memory</button>
+            <button className={control} onClick={exportPeriod}>Export period</button>
+            <button className={control} onClick={imageExport}>Save image</button>
+            <button className={control} onClick={() => window.print()}>Print</button>
           </div>
-          <Chapter
-            title="The soundtrack"
-            description="The music that occupied this month. Switch between plays and stored duration above."
-          >
-            {rankList(p.tracks)}
-            <button
-              className={control}
-              onClick={() => {
-                const from = `${month}-01`,
-                  to = `${month}-${new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate()}`;
-                setDateFrom(from);
-                setDateTo(to);
-                nav({ view: "explore", from, to });
-              }}
-            >
-              Explore all tracks from this month →
-            </button>
-            <details>
-              <summary>Explore artists and albums</summary>
-              <div className="archive-split">
-                <div>
-                  <h3>Artists</h3>
-                  {rankList(p.artists, 8, "artist")}
-                </div>
-                <div>
-                  <h3>Albums observed</h3>
-                  {rankList(p.albums, 8, "album")}
-                </div>
-              </div>
-            </details>
-          </Chapter>
           <Chapter
             title="On repeat"
             description="Favorites heard at least five times, with their spread across days."
@@ -1026,6 +949,7 @@ export function ArchiveExperience() {
                 ))}
             </div>
           </Chapter>
+          </details>
         </>
       ) : null}
       {!entityTrack && tab === "Compare" ? (
@@ -1114,6 +1038,15 @@ export function ArchiveExperience() {
               corrected.
             </p>
           ) : null}
+          <ListeningComparison
+            a={comparisonA}
+            b={comparisonB}
+            onArtist={(item) =>
+              router.push(
+                `${demo ? "/demo" : ""}${artistPath(item.name)}?range=all&archiveMonth=${month}&tz=${encodeURIComponent(tz)}`,
+              )
+            }
+          />
           <p className="archive-big-number">
             {Math.round(comparison.overlap * 100)}% <span>artist overlap</span>
           </p>
@@ -1163,34 +1096,6 @@ export function ArchiveExperience() {
               {rankList(comparison.onlyB)}
             </div>
           </div>
-          <h3>Artists gaining or losing share (B → A)</h3>
-          {[
-            ...new Set([
-              ...comparisonA.artists.map((t) => t.key),
-              ...comparisonB.artists.map((t) => t.key),
-            ]),
-          ]
-            .map((k) => {
-              const a = comparisonA.artists.find((t) => t.key === k),
-                b = comparisonB.artists.find((t) => t.key === k);
-              return {
-                name: a?.name || b!.name,
-                delta:
-                  (a?.plays || 0) / Math.max(1, comparisonA.rows.length) -
-                  (b?.plays || 0) / Math.max(1, comparisonB.rows.length),
-                a: a?.plays || 0,
-                b: b?.plays || 0,
-              };
-            })
-            .filter((t) => Math.max(t.a, t.b) >= 5)
-            .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-            .slice(0, 8)
-            .map((t) => (
-              <p key={t.name}>
-                {t.name}: {t.b} → {t.a} plays · {(t.delta * 100).toFixed(1)}{" "}
-                percentage points
-              </p>
-            ))}
           <div className="archive-split">
             <PatternSummary period={comparisonA} tz={tz} />
             <PatternSummary period={comparisonB} tz={tz} />

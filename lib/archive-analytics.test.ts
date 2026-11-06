@@ -13,6 +13,8 @@ import {
   repeatedSequences,
 } from "./archive-analytics";
 import { annotationStorageKey, emptyArchiveNotes } from "./archive-notes";
+import { listeningProfile } from "./archive-listening-lab";
+
 import type { Stream } from "./types/stream";
 function row(
   at: string,
@@ -190,4 +192,28 @@ test("real archive excludes demo-flagged records rather than mixing sources", ()
   const fictional = row("2024-01-01Z");
   fictional.isDemo = true;
   assert.equal(buildArchive([fictional]).rows.length, 0);
+});
+
+test("listening charts agree on local date and hour across daylight saving", () => {
+  const archive = buildArchive(
+    [
+      row("2024-03-10T07:45:00Z", "Before", "spotify:a", 60_000),
+      row("2024-03-10T09:30:00Z", "Early", "spotify:b", 120_000),
+      row("2024-03-10T10:30:00Z", "Later", "spotify:c", 0),
+    ],
+    "America/Los_Angeles",
+  );
+  const period = archive.months.get("2024-03")!;
+  const profile = listeningProfile(archive, period);
+  assert.equal(profile.days.get("2024-03-09")?.plays, 1);
+  assert.equal(profile.hours[23].ms, 60_000);
+  assert.equal(profile.hours[1].ms, 120_000);
+  assert.equal(profile.hours[2].plays, 0);
+  assert.equal(profile.hours[3].plays, 1);
+  assert.equal(profile.heat[36].plays, 2);
+  assert.equal(profile.longestStreak, 2);
+  assert.equal(
+    profile.heat.reduce((sum, cell) => sum + cell.ms, 0),
+    period.ms,
+  );
 });

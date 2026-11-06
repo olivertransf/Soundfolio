@@ -800,6 +800,14 @@ body {
   padding: 18px 0;
   border-bottom: 1px solid var(--border);
 }
+.archive-rediscovery > [data-art] {
+  flex-shrink: 0;
+  align-self: flex-start;
+  width: 64px;
+  height: 64px;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
 .archive-history {
   max-height: 400px;
   overflow: auto;
@@ -1051,3 +1059,329 @@ body {
     gap: 8px;
   }
 }
+
+/* Interactive archive charts use the same panels and accent as the rest of Soundfolio. */
+.listening-lab {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  margin: 20px 0;
+}
+.lab-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  min-width: 0;
+}
+.lab-header > label {
+  display: grid;
+  gap: 4px;
+  width: min(100%, 16rem);
+}
+.lab-header .archive-segmented {
+  max-width: 100%;
+}
+.lab-header .archive-segmented button {
+  padding-inline: 9px;
+}
+.lab-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: clamp(10px, 2vw, 18px);
+}
+.archive .lab-panel h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.lab-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.lab-facts > div {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 12px;
+}
+.lab-facts svg {
+  color: var(--primary);
+}
+.lab-facts strong {
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.lab-facts span {
+  font-size: 12px;
+  font-weight: 500;
+}
+.lab-facts small {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.lab-plot {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  gap: 8px;
+}
+.lab-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 20px;
+  font-size: 10px;
+  color: var(--muted-foreground);
+  text-align: right;
+}
+.lab-bars {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.lab-bars > button {
+  display: grid;
+  grid-template-rows: 126px 20px;
+  min-width: 0;
+  color: var(--muted-foreground);
+}
+.lab-bar-track {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  background: var(--secondary);
+  border-radius: 3px 3px 0 0;
+}
+.lab-bar {
+  display: block;
+  width: 100%;
+  max-width: 54px;
+  background: color-mix(in srgb, var(--primary) 58%, var(--secondary));
+  border-radius: 3px 3px 0 0;
+}
+.lab-bars button:hover .lab-bar-track,
+.lab-bars button[aria-pressed="true"] .lab-bar-track {
+  background: color-mix(in srgb, var(--primary) 22%, var(--secondary));
+}
+.lab-bars button[aria-pressed="true"] .lab-bar,
+.lab-bars button:hover .lab-bar {
+  background: var(--primary);
+}
+.lab-tick {
+  font-size: 9px;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-align: center;
+}
+.lab-heat {
+  display: grid;
+  grid-template-columns: auto repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted-foreground);
+  align-items: center;
+}
+.lab-heat-row {
+  display: contents;
+}
+.lab-heat button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.lab-heat button:hover,
+.lab-heat button[aria-pressed="true"] {
+  border-color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--foreground);
+}
+.lab-rank-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: 8px;
+}
+.lab-rank-controls label {
+  display: grid;
+  gap: 4px;
+}
+.lab-rank-list,
+.lab-comparison-list {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.lab-rank-list button {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 2ch minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  text-align: left;
+}
+.lab-rank-list button:hover {
+  border-color: var(--primary);
+}
+.lab-rank-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  background: color-mix(in srgb, var(--primary) 13%, transparent);
+}
+.lab-rank-index,
+.lab-rank-name small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.lab-rank-name small {
+  display: block;
+}
+.lab-rank-list strong,
+.lab-comparison-bar strong {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lab-comparison {
+  margin: 16px 0;
+}
+.lab-comparison-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.lab-comparison-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lab-comparison-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+.lab-comparison-legend span:nth-child(2) i {
+  background: var(--muted-foreground);
+}
+.lab-comparison-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.lab-comparison-bar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1ch minmax(0, 1fr) 5ch;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+}
+.lab-comparison-track {
+  background: var(--secondary);
+  height: 9px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.lab-comparison-track i {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+}
+.lab-comparison-bar:last-child i {
+  background: var(--muted-foreground);
+}
+@media (max-width: 700px) {
+  .lab-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lab-bars {
+    gap: 1px;
+  }
+  .lab-axis {
+    max-width: 38px;
+  }
+}
+
+.lab-bucket-control {
+  display: grid;
+  gap: 4px;
+  width: min(100%, 20rem);
+}
+
+/* Listening journal: artwork first, details on demand. */
+.listening-journal { display: grid; gap: 32px; }
+.journal-hero { display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 40px; padding: clamp(24px, 4vw, 52px); background: radial-gradient(ellipse at top right, color-mix(in srgb, var(--primary) 12%, var(--card)), var(--card) 70%); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.archive .journal-hero h2 { font-size: clamp(32px, 4vw, 56px); letter-spacing: -.055em; line-height: 1.08; margin: 12px 0 20px; }
+.journal-lead { color: var(--muted-foreground); font-size: 16px; }
+.journal-lead strong { color: var(--foreground); font-weight: 500; }
+.journal-numbers { display: flex; gap: 28px; margin: 28px 0; color: var(--muted-foreground); font-size: 11px; }
+.journal-numbers b { display: block; color: var(--foreground); font-size: 28px; font-weight: 500; letter-spacing: -.04em; }
+.journal-moods { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 8px; }
+.journal-moods button { padding: 7px 12px; border: 1px solid var(--border); border-radius: 24px; color: var(--muted-foreground); font-size: 11px; }
+.journal-moods button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.journal-moods button:disabled { opacity: .5; cursor: default; }
+.journal-sleeves { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; padding: 12px; }
+.journal-sleeves button { min-width: 0; transition: transform .2s; box-shadow: 0 12px 24px #0003; }
+.journal-sleeves button:hover { transform: translateY(-6px); }
+.journal-sleeves [data-art] { width: 100% !important; height: auto !important; aspect-ratio: 1; border-radius: 4px; }
+.journal-insights { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 24px; }
+.journal-insights > div { min-width: 0; padding: 12px 0; }
+.archive .journal-insights h3 { margin: 0; font-size: 14px; }
+.journal-discovery { display: flex; align-items: center; gap: 16px; }
+.journal-discovery p, .journal-track small { color: var(--muted-foreground); font-size: 12px; }
+.journal-ring { flex: 0 0 70px; width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; }
+.journal-ring b { display: grid; place-items: center; background: var(--background); width: 56px; height: 56px; border-radius: 50%; font-size: 17px; }
+.journal-track { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; margin-top: 8px; }
+.journal-track > span:first-of-type { flex: 1; min-width: 0; }
+.journal-track strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; font-weight: 500; }
+.journal-track small { display: block; margin-top: 4px; }
+.journal-chapters header { display: flex; justify-content: space-between; align-items: start; gap: 24px; }
+.journal-chapters header details { max-width: 320px; border: 0; margin: 0; padding: 0; font-size: 12px; color: var(--muted-foreground); }
+.journal-chapter-strip { display: grid; grid-auto-flow: column; grid-auto-columns: 180px; gap: 16px; overflow-x: auto; padding: 16px 2px; scroll-snap-type: x proximity; }
+.journal-chapter-strip > button { display: flex; flex-direction: column; text-align: left; gap: 6px; padding: 8px; border: 1px solid transparent; border-radius: 10px; scroll-snap-align: start; }
+.journal-chapter-strip > button[aria-pressed="true"] { border-color: var(--primary); background: var(--card); }
+.journal-chapter-strip small, .journal-chapter-strip > button > span { font-size: 10px; color: var(--muted-foreground); }
+.journal-chapter-strip strong { font-size: 14px; font-weight: 500; }
+.journal-chapter-art { position: relative; width: 100%; }
+.journal-chapter-art [data-art] { width: 100% !important; height: auto !important; aspect-ratio: 1; border-radius: 5px; }
+.journal-chapter-art > span { position: absolute; bottom: 8px; left: 8px; background: #0009; color: white; padding: 3px 7px; border-radius: 4px; font-size: 11px; }
+.journal-coverage { font-size: 11px; margin: 12px 0; }
+.archive .journal-details { margin-top: 28px; }
+.listening-lab { gap: 20px; margin-top: 32px; }
+.lab-panel { border-radius: 12px; padding: clamp(16px, 2vw, 24px); }
+.lab-bar-track { background: transparent; }
+.lab-bars > button { grid-template-rows: 170px 24px; }
+.lab-facts > div { background: transparent; border: 0; border-left: 2px solid var(--border); border-radius: 0; }
+.archive button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@media(max-width:700px) { .journal-hero { grid-template-columns: 1fr; gap: 24px; } .journal-sleeves { grid-template-columns: repeat(4,minmax(0,1fr)); order: -1; padding: 4px; } .journal-insights { grid-template-columns: 1fr; gap: 8px; } .journal-insights > div { border-bottom: 1px solid var(--border); padding: 16px 0; } .journal-chapters header { flex-direction: column; gap: 8px; } .journal-chapter-strip { grid-auto-columns: 150px; } .journal-numbers { gap: 24px; } }
+.journal-sleeves { max-width: 430px; justify-self: end; width: 100%; }
+.journal-sleeves button { position: relative; overflow: hidden; border-radius: 4px; }
+.journal-sleeves div[data-art] { background: radial-gradient(ellipse at 20% 20%, #667771, #283a38 50%, #162325); }
+.journal-sleeves button:nth-child(2) div[data-art] { background: radial-gradient(ellipse at 80% 20%, #b8a48a, #706351 50%, #363025); }
+.journal-sleeves button:nth-child(3) div[data-art] { background: radial-gradient(ellipse at 20% 80%, #767d9d, #414961 50%, #242936); }
+.journal-sleeves button:nth-child(4) div[data-art] { background: radial-gradient(ellipse at 80% 80%, #a17667, #654a40 50%, #30241f); }
+.journal-sleeve-label { position: absolute; inset: auto 0 0; text-align: left; padding: 24px 12px 12px; color: white; background: linear-gradient(transparent,#000b); font-size: 12px; line-height: 1.3; }
+.journal-sleeve-label small { display: block; font-size: 9px; opacity: .75; margin-top: 4px; }
+@media(max-width:700px) { .journal-sleeves { max-width: none; } .journal-sleeve-label { font-size: 9px; padding: 15px 5px 5px; } .journal-sleeve-label small { display: none; } }
