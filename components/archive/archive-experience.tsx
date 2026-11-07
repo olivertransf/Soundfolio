@@ -426,9 +426,7 @@ export function ArchiveExperience() {
     <div className="archive" data-archive>
       <header className="archive-heading">
         <div>
-          <p className="archive-kicker">Your listening archive</p>
-          <h1>Your life in music</h1>
-
+          <h1>Time Machine</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -448,7 +446,7 @@ export function ArchiveExperience() {
               }
             }}
           >
-            ✦ Surprise me
+            Surprise me
           </button>
           <button
             className={control}
@@ -471,8 +469,7 @@ export function ArchiveExperience() {
       </header>
       {demo ? (
         <p className="archive-banner">
-          FICTIONAL DEMO · All listening, memories, and eras in this demo are
-          synthetic.
+          Demo · fictional listening history and memories.
         </p>
       ) : null}
       {!fullyLoaded ? (
@@ -541,32 +538,6 @@ export function ArchiveExperience() {
         <p className="archive-timezone" title={tz}>
           Calendar · {tz.split("/").at(-1)?.replaceAll("_", " ")}
         </p>
-      </div>
-      <div
-        className="archive-year"
-        aria-label={`${month.slice(0, 4)} year overview`}
-      >
-        {Array.from({ length: 12 }, (_, i) => {
-          const m = `${month.slice(0, 4)}-${String(i + 1).padStart(2, "0")}`,
-            period = archive.months.get(m);
-          return (
-            <button
-              key={m}
-              aria-pressed={m === month}
-              className={m === month ? "selected" : ""}
-              title={
-                period
-                  ? `${period.rows.length} plays; led by ${period.artists[0]?.name}`
-                  : "No observed records"
-              }
-              onClick={() => nav({ month: m, track: null })}
-            >
-              <span>{monthLabel(m).split(" ")[0].slice(0, 3)}</span>
-              <span className="archive-month-mark">{period ? "●" : "·"}</span>
-              <small>{period?.artists[0]?.name || "No records"}</small>
-            </button>
-          );
-        })}
       </div>
       <nav className="archive-tabs" aria-label="Archive sections">
         {tabs.map((t) => (
@@ -725,7 +696,7 @@ export function ArchiveExperience() {
                 );
             }}
           />
-          <details className="journal-details"><summary>More from this month · memories, calendar & details</summary>
+          <details className="journal-details"><summary>Month details & export</summary>
           <div className="archive-inline-actions">
             <button className={control} onClick={() => openMemory(`month:${month}`)}>Add a memory</button>
             <button className={control} onClick={exportPeriod}>Export period</button>
@@ -955,7 +926,7 @@ export function ArchiveExperience() {
       {!entityTrack && tab === "Compare" ? (
         <Chapter
           title="Two chapters, side by side"
-          description="Choose months or enter inclusive custom ranges. A year or summer is simply a date range."
+          description="Compare months, eras, or date ranges."
         >
           <div className="archive-split">
             <div>
@@ -1254,7 +1225,7 @@ export function ArchiveExperience() {
         <>
           <Chapter
             title="Your musical eras"
-            description="Give a period a name in your own words. These are your labels, not conclusions about your life."
+            description="Name a period in your listening history."
           >
             <button
               className={control}
@@ -1519,7 +1490,7 @@ export function ArchiveExperience() {
       {!entityTrack && tab === "Explore" ? (
         <Chapter
           title="Search the archive"
-          description="Search tracks, artists, albums, named eras, memories, and tags. Results show observed music, never album completion."
+          description="Search music, eras, and memories."
         >
           <input
             aria-label="Search archive"
@@ -1781,7 +1752,7 @@ export function ArchiveExperience() {
       {!entityTrack && tab === "Coverage" ? (
         <Chapter
           title="What the archive can tell you"
-          description="Evidence comes first. Records describe what was captured, not all the music you have ever heard."
+          description="Coverage and calculation details for your imported history."
         >
           <dl className="archive-facts">
             <dt>Observed range</dt>

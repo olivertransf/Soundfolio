@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Activity, Clock3, Flame, ListMusic } from "lucide-react";
 import type {
   Archive,
   ArchiveEntity,
@@ -154,7 +153,6 @@ export function ListeningLab({
   );
   const rankMax = Math.max(1, ranked[0] ? rankValue(ranked[0]) : 0);
   const peak = [...profile.days].sort((a, b) => b[1].plays - a[1].plays)[0];
-  const mostPlayed = scoped.tracks[0];
   const topFiveShare = scoped.rows.length
     ? Math.round(
         (scoped.tracks
@@ -211,11 +209,7 @@ export function ListeningLab({
     <section className="listening-lab" aria-label="Listening analysis">
       <header className="lab-header">
         <div>
-          <p className="archive-kicker">A closer listen</p>
-          <h2>The rhythm of your month</h2>
-          <p className="archive-muted">
-            Touch a moment. See what was playing.
-          </p>
+          <h2>Listening activity</h2>
         </div>
         <label>
           Artist filter
@@ -241,28 +235,17 @@ export function ListeningLab({
       {scoped.rows.length > 0 && (
         <div className="lab-facts">
           <div>
-            <Activity size={16} aria-hidden="true" />
             <strong>{peak?.[1].plays ?? 0}</strong>
-            <span>Plays on your busiest date</span>
+            <span>Busiest day</span>
             <small>{peak?.[0]}</small>
           </div>
           <div>
-            <Flame size={16} aria-hidden="true" />
             <strong>{profile.longestStreak} days</strong>
-            <span>Longest listening streak</span>
-            <small>Consecutive dates with recorded plays</small>
+            <span>Listening streak</span>
           </div>
           <div>
-            <ListMusic size={16} aria-hidden="true" />
             <strong>{topFiveShare}%</strong>
-            <span>Share from your top five tracks</span>
-            <small>Of plays in this artist selection</small>
-          </div>
-          <div>
-            <Clock3 size={16} aria-hidden="true" />
-            <strong>{mostPlayed?.plays ?? 0} plays</strong>
-            <span>Most played track</span>
-            <small>{mostPlayed?.name}</small>
+            <span>Top five share</span>
           </div>
         </div>
       )}
@@ -462,7 +445,7 @@ export function ListeningLab({
       <div className="lab-panel">
         <h3>{month.slice(0, 4)} in context</h3>
         <p className="archive-muted">
-          Entire library · choose a month to open its story.
+          All artists · select a month.
         </p>
         <Bars
           points={yearPoints}
