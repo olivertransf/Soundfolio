@@ -651,21 +651,33 @@ export function computeListeningHeatmap(
   const rows = filterForStats(streams, filter);
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const counts: Record<string, number> = {};
+  const durationMs: Record<string, number> = {};
   for (let d = 0; d < 7; d++) {
-    for (let h = 0; h < 24; h++) counts[`${d}-${h}`] = 0;
+    for (let h = 0; h < 24; h++) {
+      counts[`${d}-${h}`] = 0;
+      durationMs[`${d}-${h}`] = 0;
+    }
   }
 
   for (const row of rows) {
     const instant = getListenBucketInstant(row.playedAt, listenBucketDurationMs(row), row.trackId, tz);
     const d = getDayOfWeekInTimeZone(instant, tz);
     const h = getHourInTimeZone(instant, tz);
-    counts[`${d}-${h}`] += 1;
+    const key = `${d}-${h}`;
+    counts[key] += 1;
+    durationMs[key] += row.durationMs;
   }
 
-  const grid: { day: number; hour: number; count: number }[] = [];
+  const grid: { day: number; hour: number; count: number; minutes: number }[] = [];
   for (let d = 0; d < 7; d++) {
     for (let h = 0; h < 24; h++) {
-      grid.push({ day: d, hour: h, count: counts[`${d}-${h}`] ?? 0 });
+      const key = `${d}-${h}`;
+      grid.push({
+        day: d,
+        hour: h,
+        count: counts[key] ?? 0,
+        minutes: minutesFromMs(durationMs[key] ?? 0),
+      });
     }
   }
 

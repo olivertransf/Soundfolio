@@ -1,35 +1,20 @@
 "use client";
-import { ArchiveEntry } from "@/components/archive/archive-entry";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, Headphones, Music, Play, Users } from "lucide-react";
-import { StatCard } from "@/components/stat-card";
-import { ArtistArt } from "@/components/artist-art";
-import { AlbumArt } from "@/components/album-art";
-import { PageShell } from "@/components/page-shell";
+import { useRouter } from "next/navigation";
+import { Music } from "lucide-react";
+import { BarSeriesChart, type ChartPoint } from "@/components/bar-series-chart";
 import { LiveSyncStatus } from "@/components/live-sync-status";
+import { PageShell } from "@/components/page-shell";
 import { useStreams } from "@/components/streams-provider";
-import { ShowMoreButton } from "@/components/show-more-button";
-import { useListDepth } from "@/components/use-list-depth";
-import { EntityKindTabs, type EntityKind } from "@/components/entity-kind-tabs";
-import { RankedEntityList } from "@/components/ranked-entity-list";
-import { RankColumn, ResponsiveColumns } from "@/components/responsive-columns";
-import { RecentPlaysPanel, RecentPlaysSeeAllLink } from "@/components/recent-plays-panel";
-import { FilterToolbar } from "@/components/filter-toolbar";
-import { librarySectionHref } from "@/components/library/library-content";
-import {
-  BarSeriesChart,
-  ChartPanel,
-  chartCaption,
-  historyChartTitle,
-} from "@/components/bar-series-chart";
+import { CoverRail } from "@/components/visual/cover-rail";
+import { albumCovers, artistCovers, recentCovers, trackCovers } from "@/components/visual/rank-covers";
+import { ResultLine, scopeResultLine } from "@/components/visual/result-line";
+import { useBasePath } from "@/components/visual/use-base-path";
+import { useViewerTimeZone } from "@/components/visual/use-viewer-time-zone";
 import { historyChartData } from "@/lib/stats-chart-data";
 import {
-  calendarDaysInFilter,
-  computeListeningDiversity,
-  computeListeningSpan,
   computePeriodBreakdown,
   computeRecentStreams,
   computeStreamsByDayOfWeek,
@@ -38,341 +23,131 @@ import {
   computeTopTracks,
   computeTotalStats,
   parseTimeRange,
-  parseTopSortBy,
 } from "@/lib/stats-compute";
-import { albumPath, artistPath, trackPath } from "@/lib/entity-paths";
-import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
-import {
-  detectViewerTimeZone,
-  readViewerTimeZoneCookie,
-} from "@/lib/viewer-timezone-client";
 
 export function OverviewContent() {
-  const searchParams = useSearchParams();
-  const isDemo = usePathname().startsWith("/demo");
-  const { streams, loading, loadingMore, refreshing, fullyLoaded, error, reload } = useStreams();
-  const limits = useListDepth();
+  const router = useRouter();
+  const base = useBasePath();
+  const timeZone = useViewerTimeZone();
+  const { streams, loading, error, reload } = useStreams();
   const deferredStreams = useDeferredValue(streams);
-  const [previewKind, setPreviewKind] = useState<EntityKind>("tracks");
-
-  const range = searchParams.get("range") ?? undefined;
-  const from = searchParams.get("from") ?? undefined;
-  const to = searchParams.get("to") ?? undefined;
-  const viewerTimeZone =
-    searchParams.get(VIEWER_TIMEZONE_PARAM) ??
-    (typeof window !== "undefined" ? readViewerTimeZoneCookie() : null) ??
-    detectViewerTimeZone();
-  const sortBy = parseTopSortBy(searchParams.get("sort") ?? undefined);
-
   const filter = useMemo(
-    () => parseTimeRange(range, from, to, viewerTimeZone ?? undefined),
-    [range, from, to, viewerTimeZone]
+    () => parseTimeRange("ytd", undefined, undefined, timeZone),
+    [timeZone]
   );
-
-  const stats = useMemo(() => computeTotalStats(deferredStreams, filter), [deferredStreams, filter]);
+  const stats = useMemo(
+    () => computeTotalStats(deferredStreams, filter),
+    [deferredStreams, filter]
+  );
   const topTracks = useMemo(
-    () => computeTopTracks(deferredStreams, limits.dashboard, filter, sortBy),
-    [deferredStreams, filter, sortBy, limits.dashboard]
+    () => computeTopTracks(deferredStreams, 12, filter, "minutes"),
+    [deferredStreams, filter]
   );
   const topArtists = useMemo(
-    () => computeTopArtists(deferredStreams, limits.dashboard, filter, sortBy),
-    [deferredStreams, filter, sortBy, limits.dashboard]
+    () => computeTopArtists(deferredStreams, 12, filter, "minutes"),
+    [deferredStreams, filter]
   );
   const topAlbums = useMemo(
-    () => computeTopAlbums(deferredStreams, limits.dashboard, filter, sortBy),
-    [deferredStreams, filter, sortBy, limits.dashboard]
-  );
-  const diversity = useMemo(
-    () => computeListeningDiversity(deferredStreams, filter),
+    () => computeTopAlbums(deferredStreams, 12, filter, "minutes"),
     [deferredStreams, filter]
   );
-  const span = useMemo(
-    () => computeListeningSpan(deferredStreams, filter),
+  const recent = useMemo(
+    () => computeRecentStreams(deferredStreams, 16, filter),
     [deferredStreams, filter]
   );
-  const recentStreams = useMemo(
-    () => computeRecentStreams(deferredStreams, limits.dashboardRecent, filter),
-    [deferredStreams, filter, limits.dashboardRecent]
-  );
-
-  const days = calendarDaysInFilter(filter, span, viewerTimeZone ?? undefined);
-  const historyMode = days > 400 ? "months" : days > 120 ? "weeks" : "days";
-  const history = useMemo(
-    () => historyChartData(deferredStreams, historyMode, filter, viewerTimeZone ?? "UTC"),
-    [deferredStreams, historyMode, filter, viewerTimeZone]
+  const year = useMemo(
+    () => historyChartData(deferredStreams, "months", filter, timeZone).slice().reverse(),
+    [deferredStreams, filter, timeZone]
   );
   const breakdown = useMemo(
-    () => computePeriodBreakdown(deferredStreams, filter, viewerTimeZone ?? undefined),
-    [deferredStreams, filter, viewerTimeZone]
+    () => computePeriodBreakdown(deferredStreams, filter, timeZone),
+    [deferredStreams, filter, timeZone]
   );
   const weekdays = useMemo(
-    () => computeStreamsByDayOfWeek(deferredStreams, filter, viewerTimeZone ?? undefined),
-    [deferredStreams, filter, viewerTimeZone]
+    () => computeStreamsByDayOfWeek(deferredStreams, filter, timeZone),
+    [deferredStreams, filter, timeZone]
   );
-  const avgMinPerDay = Math.round(stats.totalMinutes / days);
-  const avgStreamsPerDay = Math.round(stats.totalStreams / days);
-  const hasData = stats.totalStreams > 0;
 
-  const libraryRecentHref = librarySectionHref(
-    "recent",
-    new URLSearchParams(searchParams.toString()),
-    isDemo
-  );
-  const libraryRankingsHref = librarySectionHref(
-    "rankings",
-    new URLSearchParams(searchParams.toString()),
-    isDemo
-  );
+  const openMonth = (point: ChartPoint) => {
+    if (!/^\d{4}-\d{2}$/.test(point.label)) return;
+    router.push(`${base}/time-machine?month=${point.label}`);
+  };
 
   if (loading && streams.length === 0) {
-    return (
-      <div className="flex py-20 items-center justify-center text-sm text-muted-foreground">
-        Loading your stats…
-      </div>
-    );
+    return <p className="py-20 text-center text-sm text-muted-foreground">Loading your stats…</p>;
   }
 
   if (error && streams.length === 0) {
     return (
-      <div className="flex py-24 flex-col items-center justify-center gap-4 text-center">
-        <h1 className="text-2xl font-bold">Could not load your stats</h1>
-        <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
-        <button
-          type="button"
-          className="text-sm font-medium text-primary hover:underline"
-          onClick={() => void reload()}
-        >
+      <div className="flex flex-col items-center gap-3 py-24 text-center">
+        <h1 className="text-2xl font-semibold">Could not load your stats</h1>
+        <button type="button" className="text-sm font-medium text-primary" onClick={() => void reload()}>
           Try again
         </button>
       </div>
     );
   }
 
-  if (!hasData) {
+  if (stats.totalStreams === 0) {
+    if (loading || deferredStreams !== streams) {
+      return <p className="py-20 text-center text-sm text-muted-foreground">Loading your stats…</p>;
+    }
     return (
-      <div className="flex py-24 flex-col items-center justify-center gap-4 text-center">
-        <div className="flex h-14 w-14 items-center justify-center bg-primary/10">
-          <Music className="h-7 w-7 text-primary" />
-        </div>
-        <h1 className="text-2xl font-bold">No data yet</h1>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Sync Last.fm or import your listening history to see stats here.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <LiveSyncStatus />
-          <Link href="/history/import" className="text-sm font-medium text-primary hover:underline">
-            Import on web
-          </Link>
-        </div>
+      <div className="flex flex-col items-center gap-4 py-24 text-center">
+        <Music className="h-8 w-8 text-primary" />
+        <h1 className="text-2xl font-semibold">No plays this year</h1>
+        <LiveSyncStatus />
+        <Link href="/history/import" className="text-sm font-medium text-primary">
+          Import history
+        </Link>
       </div>
     );
   }
 
-  return (
-    <PageShell className="space-y-3">
-      <ArchiveEntry />
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        <div className="min-w-0 space-y-3">
-          <FilterToolbar context="dashboard" />
-
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <StatCard
-              label="Minutes"
-              value={stats.totalMinutes.toLocaleString()}
-              sub={`${stats.totalHours.toLocaleString()} hrs`}
-              icon={Clock}
-              variant="compact"
-            />
-            <StatCard
-              label="Plays"
-              value={stats.totalStreams.toLocaleString()}
-              icon={Play}
-              variant="compact"
-            />
-            <StatCard
-              label="Min / day"
-              value={avgMinPerDay.toLocaleString()}
-              sub={`~${days}d`}
-              icon={Clock}
-              variant="compact"
-            />
-            <StatCard
-              label="Plays / day"
-              value={avgStreamsPerDay.toLocaleString()}
-              icon={Headphones}
-              variant="compact"
-            />
-            <StatCard
-              label="Tracks"
-              value={diversity.uniqueTracks.toLocaleString()}
-              icon={Music}
-              variant="compact"
-            />
-            <StatCard
-              label="Artists"
-              value={diversity.uniqueArtists.toLocaleString()}
-              icon={Users}
-              variant="compact"
-            />
-          </div>
-
-          {!fullyLoaded || loadingMore ? (
-            <p className="text-xs text-muted-foreground">
-              Loading full history… totals can rise as older plays arrive (
-              {streams.length.toLocaleString()} loaded)
-            </p>
-          ) : refreshing ? (
-            <p className="text-xs text-muted-foreground">Updating history…</p>
-          ) : null}
-
-          <ChartPanel
-            title={historyChartTitle(historyMode, "minutes")}
-            caption={chartCaption(filter.label, "minutes")}
-          >
-            <BarSeriesChart
-              points={history}
-              metric="minutes"
-              label={historyChartTitle(historyMode, "minutes")}
-            />
-          </ChartPanel>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <ChartPanel
-              title="Minutes by time of day"
-              caption={`${chartCaption(filter.label, "minutes")} · Night 12a-6a, morning 6a-12p, afternoon 12p-6p, evening 6p-12a`}
-            >
-              <BarSeriesChart points={breakdown.dayparts} metric="minutes" label="Minutes by time of day" />
-            </ChartPanel>
-            <ChartPanel title="Minutes by weekday" caption={chartCaption(filter.label, "minutes")}>
-              <BarSeriesChart points={weekdays} metric="minutes" label="Minutes by weekday" />
-            </ChartPanel>
-          </div>
-
-          <section className="space-y-2">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-semibold tracking-tight">Top rankings</h2>
-              <Link
-                href={libraryRankingsHref}
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                See all
-              </Link>
-            </div>
-            <DashboardTopRankings
-              sortBy={sortBy}
-              previewKind={previewKind}
-              onPreviewKindChange={setPreviewKind}
-              tracks={topTracks}
-              artists={topArtists}
-              albums={topAlbums}
-            />
-          </section>
-        </div>
-
-        <aside className="flex min-w-0 flex-col lg:sticky lg:top-[calc(4.25rem+env(safe-area-inset-top,0px))] lg:h-[calc(100dvh-5.25rem-env(safe-area-inset-top,0px))]">
-          <RecentPlaysPanel
-            compact
-            className="min-h-0 flex-1"
-            streams={recentStreams}
-            action={<RecentPlaysSeeAllLink href={libraryRecentHref} />}
-          />
-        </aside>
-      </div>
-    </PageShell>
+  const daypart = breakdown.dayparts.reduce((best, part) =>
+    part.minutes > best.minutes ? part : best
   );
-}
-
-function DashboardTopRankings({
-  sortBy,
-  previewKind,
-  onPreviewKindChange,
-  tracks,
-  artists,
-  albums,
-}: {
-  sortBy: "minutes" | "streams";
-  previewKind: EntityKind;
-  onPreviewKindChange: (kind: EntityKind) => void;
-  tracks: ReturnType<typeof computeTopTracks>;
-  artists: ReturnType<typeof computeTopArtists>;
-  albums: ReturnType<typeof computeTopAlbums>;
-}) {
-  const trackItems = tracks.map((track) => ({
-    key: track.trackId,
-    href: trackPath(track.artistName, track.trackName),
-    title: track.trackName,
-    subtitle: track.artistName,
-    streams: track.streams,
-    minutes: track.minutesListened,
-    leading: (
-      <AlbumArt
-        src={track.albumArt}
-        alt={track.albumName}
-        width={32}
-        height={32}
-        className="size-8 shrink-0 rounded"
-      />
-    ),
-  }));
-  const artistItems = artists.map((artist) => ({
-    key: artist.artistName,
-    href: artistPath(artist.artistName),
-    title: artist.artistName,
-    streams: artist.streams,
-    minutes: artist.minutesListened,
-    leading: (
-      <ArtistArt
-        src={artist.artistArt}
-        alt={artist.artistName}
-        width={32}
-        height={32}
-        className="size-8 ring-1 ring-border"
-      />
-    ),
-  }));
-  const albumItems = albums.map((album) => ({
-    key: `${album.albumName}-${album.artistName}`,
-    href: albumPath(album.artistName, album.albumName),
-    title: album.albumName,
-    subtitle: album.artistName,
-    streams: album.streams,
-    minutes: album.minutesListened,
-    leading: (
-      <AlbumArt
-        src={album.albumArt}
-        alt={album.albumName}
-        width={32}
-        height={32}
-        className="size-8 shrink-0 rounded"
-      />
-    ),
-  }));
-  const singleItems =
-    previewKind === "tracks"
-      ? trackItems
-      : previewKind === "artists"
-        ? artistItems
-        : albumItems;
+  const line = scopeResultLine({
+    minutes: stats.totalMinutes,
+    scope: "this year",
+    when: daypart.minutes > 0 ? `mostly in the ${daypart.label.toLowerCase()}` : null,
+    leader: topArtists[0]?.artistName,
+  });
 
   return (
-    <>
-      <div className="space-y-2 xl:hidden">
-        <EntityKindTabs value={previewKind} onValueChange={onPreviewKindChange} />
-        <div className="border border-border bg-card p-1.5">
-          <RankedEntityList items={singleItems} sortBy={sortBy} columns="one" />
+    <PageShell className="space-y-6">
+      <section className="space-y-4">
+        <CoverRail items={albumCovers(topAlbums.slice(0, 5), base)} size="hero" />
+        <ResultLine>{line}</ResultLine>
+      </section>
+
+      <div className="rounded-xl border border-border bg-card p-3">
+        <BarSeriesChart
+          points={year}
+          metric="minutes"
+          label="Minutes by month"
+          onSelect={openMonth}
+        />
+      </div>
+
+      <CoverRail title="Tracks" items={trackCovers(topTracks, base)} />
+      <CoverRail title="Artists" items={artistCovers(topArtists, base)} shape="round" />
+      <CoverRail title="Albums" items={albumCovers(topAlbums, base)} />
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-3">
+          <BarSeriesChart
+            points={breakdown.dayparts}
+            metric="minutes"
+            label="Time of day"
+          />
+        </div>
+        <div className="rounded-xl border border-border bg-card p-3">
+          <BarSeriesChart points={weekdays} metric="minutes" label="Weekday" />
         </div>
       </div>
-      <ResponsiveColumns className="hidden xl:grid" cols={3}>
-        <RankColumn title="Tracks" stickyHeader={false}>
-          <RankedEntityList items={trackItems} sortBy={sortBy} columns="one" />
-        </RankColumn>
-        <RankColumn title="Artists" stickyHeader={false}>
-          <RankedEntityList items={artistItems} sortBy={sortBy} columns="one" />
-        </RankColumn>
-        <RankColumn title="Albums" stickyHeader={false}>
-          <RankedEntityList items={albumItems} sortBy={sortBy} columns="one" />
-        </RankColumn>
-      </ResponsiveColumns>
-    </>
+
+      <CoverRail title="Recent" items={recentCovers(recent, base)} />
+    </PageShell>
   );
 }

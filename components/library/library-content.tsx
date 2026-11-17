@@ -1,13 +1,26 @@
 "use client";
 
-import { Suspense } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { PageHeader, PageShell } from "@/components/page-shell";
-import { LibraryRecentSection } from "@/components/library/recent-section";
-import { LibraryRankingsSection } from "@/components/library/rankings-section";
-import { LibraryPatternsSection } from "@/components/library/patterns-section";
-import { LibraryInsightsSection } from "@/components/library/insights-section";
+import { Suspense, useDeferredValue, useMemo } from "react";
+import { PageShell } from "@/components/page-shell";
+import { useStreams } from "@/components/streams-provider";
+import { CoverRail } from "@/components/visual/cover-rail";
+import { albumCovers, artistCovers, recentCovers, trackCovers } from "@/components/visual/rank-covers";
+import { ResultLine, scopeResultLine } from "@/components/visual/result-line";
+import { useBasePath } from "@/components/visual/use-base-path";
+import { useViewerTimeZone } from "@/components/visual/use-viewer-time-zone";
+import { WeekHeatmap } from "@/components/visual/week-heatmap";
+import {
+  computeListeningHeatmap,
+  computePeakDay,
+  computePeakHour,
+  computeRecentStreams,
+  computeTopAlbums,
+  computeTopArtists,
+  computeTopTracks,
+  computeTotalStats,
+  formatHourLabel,
+  parseTimeRange,
+} from "@/lib/stats-compute";
 
 const sections = [
   { id: "recent", label: "Recent" },
@@ -19,54 +32,81 @@ const sections = [
 type LibrarySection = (typeof sections)[number]["id"];
 
 function LibraryContentInner() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const section = (searchParams.get("section") as LibrarySection | null) ?? "recent";
+  const base = useBasePath();
+  const timeZone = useViewerTimeZone();
+  const { streams, loading } = useStreams();
+  const deferredStreams = useDeferredValue(streams);
+  const filter = useMemo(
+    () => parseTimeRange("ytd", undefined, undefined, timeZone),
+    [timeZone]
+  );
+  const stats = useMemo(
+    () => computeTotalStats(deferredStreams, filter),
+    [deferredStreams, filter]
+  );
+  const heatmap = useMemo(
+    () => computeListeningHeatmap(deferredStreams, filter, timeZone),
+    [deferredStreams, filter, timeZone]
+  );
+  const peakHour = useMemo(
+    () => computePeakHour(deferredStreams, filter, timeZone),
+    [deferredStreams, filter, timeZone]
+  );
+  const peakDay = useMemo(
+    () => computePeakDay(deferredStreams, filter, timeZone),
+    [deferredStreams, filter, timeZone]
+  );
+  const tracks = useMemo(
+    () => computeTopTracks(deferredStreams, 12, filter, "minutes"),
+    [deferredStreams, filter]
+  );
+  const artists = useMemo(
+    () => computeTopArtists(deferredStreams, 12, filter, "minutes"),
+    [deferredStreams, filter]
+  );
+  const albums = useMemo(
+    () => computeTopAlbums(deferredStreams, 12, filter, "minutes"),
+    [deferredStreams, filter]
+  );
+  const recent = useMemo(
+    () => computeRecentStreams(deferredStreams, 18, filter),
+    [deferredStreams, filter]
+  );
 
-  const setSection = (next: LibrarySection) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("section", next);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
+  if (loading && streams.length === 0) {
+    return <p className="py-20 text-center text-sm text-muted-foreground">Loading library…</p>;
+  }
+
+  if (deferredStreams !== streams && stats.totalStreams === 0) {
+    return <p className="py-20 text-center text-sm text-muted-foreground">Loading library…</p>;
+  }
+
+  if (stats.totalStreams === 0) {
+    return <p className="py-20 text-center text-sm text-muted-foreground">No plays this year.</p>;
+  }
+
+  const line = scopeResultLine({
+    minutes: stats.totalMinutes,
+    scope: "this year",
+    when:
+      peakDay && peakHour
+        ? `mostly ${peakDay.label} at ${formatHourLabel(peakHour.label)}`
+        : null,
+    leader: artists[0]?.artistName,
+  });
 
   return (
-    <PageShell>
-      <PageHeader title="Library" />
-
-      <nav
-        role="tablist"
-        aria-label="Library sections"
-        className="flex w-full border border-border bg-card p-0.5"
-      >
-        {sections.map((item) => {
-          const isActive = section === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setSection(item.id)}
-              className={cn(
-                "min-h-11 flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors",
-                isActive
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              )}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="min-w-0 space-y-3">
-        {section === "recent" ? <LibraryRecentSection /> : null}
-        {section === "rankings" ? <LibraryRankingsSection /> : null}
-        {section === "patterns" ? <LibraryPatternsSection /> : null}
-        {section === "insights" ? <LibraryInsightsSection /> : null}
-      </div>
+    <PageShell className="space-y-6">
+      <ResultLine>{line}</ResultLine>
+      <WeekHeatmap
+        grid={heatmap.grid}
+        peakDay={peakDay?.label}
+        peakHour={peakHour ? formatHourLabel(peakHour.label) : null}
+      />
+      <CoverRail title="Tracks" items={trackCovers(tracks, base)} />
+      <CoverRail title="Artists" items={artistCovers(artists, base)} shape="round" />
+      <CoverRail title="Albums" items={albumCovers(albums, base)} />
+      <CoverRail title="Recent" items={recentCovers(recent, base)} />
     </PageShell>
   );
 }
@@ -74,18 +114,18 @@ function LibraryContentInner() {
 export function LibraryContent() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-          Loading library…
-        </div>
-      }
+      fallback={<p className="py-20 text-center text-sm text-muted-foreground">Loading library…</p>}
     >
       <LibraryContentInner />
     </Suspense>
   );
 }
 
-export function librarySectionHref(section: LibrarySection, searchParams: URLSearchParams, demo = false) {
+export function librarySectionHref(
+  section: LibrarySection,
+  searchParams: URLSearchParams,
+  demo = false
+) {
   const params = new URLSearchParams(searchParams.toString());
   params.set("section", section);
   return `${demo ? "/demo/library" : "/library"}?${params.toString()}`;

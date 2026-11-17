@@ -28,7 +28,7 @@ export function ChartPanel({
   children,
 }: {
   title: string;
-  caption: string;
+  caption?: string;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -37,7 +37,7 @@ export function ChartPanel({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-          <p className="text-xs text-muted-foreground">{caption}</p>
+          {caption ? <p className="text-xs text-muted-foreground">{caption}</p> : null}
         </div>
         {actions}
       </div>
@@ -93,10 +93,14 @@ export function BarSeriesChart({
   points,
   metric,
   label,
+  onSelect,
+  selectedLabel,
 }: {
   points: ChartPoint[];
   metric: "minutes" | "streams";
   label: string;
+  onSelect?: (point: ChartPoint, index: number) => void;
+  selectedLabel?: string;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -157,7 +161,7 @@ export function BarSeriesChart({
             width={contentWidth}
             height={height}
             className="block"
-            role="img"
+            role={onSelect ? "group" : "img"}
             aria-label={label}
           >
             <line x1={0} x2={contentWidth} y1={baseline} y2={baseline} className="stroke-border" />
@@ -166,11 +170,41 @@ export function BarSeriesChart({
               const x = edge + index * usedSlot + (usedSlot - barWidth) / 2;
               const y = baseline - barHeight;
               const point = points[index];
+              const pointLabel = point?.label ?? "";
+              const selected = selectedLabel != null && selectedLabel === pointLabel;
+              const dimmed = selectedLabel != null && !selected;
+              const choose = () => {
+                if (point && onSelect) onSelect(point, index);
+              };
               return (
-                <g key={`${point?.label ?? index}`}>
-                  <path d={barPath(x, y, barWidth, barHeight)} className="fill-primary">
+                <g
+                  key={`${pointLabel || index}`}
+                  role={onSelect ? "button" : undefined}
+                  tabIndex={onSelect ? 0 : undefined}
+                  aria-label={onSelect ? `${chartAxisLabel(pointLabel)}: ${value.toLocaleString()} ${unit}` : undefined}
+                  aria-pressed={onSelect ? selected : undefined}
+                  className={onSelect ? "cursor-pointer outline-none" : undefined}
+                  onClick={onSelect ? choose : undefined}
+                  onKeyDown={
+                    onSelect
+                      ? (event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            choose();
+                          }
+                        }
+                      : undefined
+                  }
+                >
+                  {onSelect ? (
+                    <rect x={x} y={padTop} width={barWidth} height={plotHeight} className="fill-transparent" />
+                  ) : null}
+                  <path
+                    d={barPath(x, y, barWidth, barHeight)}
+                    className={dimmed ? "fill-primary/30" : "fill-primary"}
+                  >
                     <title>
-                      {chartAxisLabel(point?.label ?? "")}: {value.toLocaleString()} {unit}
+                      {chartAxisLabel(pointLabel)}: {value.toLocaleString()} {unit}
                     </title>
                   </path>
                   {points.length <= 8 && value > 0 ? (

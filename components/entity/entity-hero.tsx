@@ -42,7 +42,7 @@ export function EntityHero({
     <div className="space-y-3">
       <ContentPanel className="p-3 sm:p-4">
         <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
-          <div className="size-24 shrink-0 overflow-hidden rounded-xl bg-secondary sm:size-28">
+          <div className="size-36 shrink-0 overflow-hidden rounded-2xl bg-secondary sm:size-44">
             {artwork}
           </div>
           <div className="min-w-0">

@@ -1,21 +1,19 @@
 "use client";
 
-import { EntityArchiveHistory } from "@/components/archive/entity-archive-history";
 import { Suspense, useMemo } from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { AlbumArt } from "@/components/album-art";
-import {
-  BarSeriesChart,
-  ChartPanel,
-  chartCaption,
-  historyChartTitle,
-} from "@/components/bar-series-chart";
 import { EntityHero } from "@/components/entity/entity-hero";
-import { FilterToolbar } from "@/components/filter-toolbar";
-import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
-import { LocalDateTime } from "@/components/local-datetime";
+import { PageShell } from "@/components/page-shell";
 import { useStreams } from "@/components/streams-provider";
+import { CoverRail } from "@/components/visual/cover-rail";
+import { EntityCharts } from "@/components/visual/entity-charts";
+import { playCovers } from "@/components/visual/rank-covers";
+import { ResultLine, scopeResultLine } from "@/components/visual/result-line";
+import { useBasePath } from "@/components/visual/use-base-path";
+import { useViewerTimeZone } from "@/components/visual/use-viewer-time-zone";
+import { historyChartData } from "@/lib/stats-chart-data";
 import {
   calendarDaysInFilter,
   computeListeningSpan,
@@ -24,33 +22,17 @@ import {
   computeTrackDetail,
   parseTimeRange,
 } from "@/lib/stats-compute";
-import { historyChartData } from "@/lib/stats-chart-data";
 import { matchesEntity } from "@/lib/entity-normalize";
 import { albumPath } from "@/lib/entity-paths";
-import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
-import {
-  detectViewerTimeZone,
-  readViewerTimeZoneCookie,
-} from "@/lib/viewer-timezone-client";
 
 function TrackDetailInner() {
   const params = useParams<{ artist: string; name: string }>();
-  const searchParams = useSearchParams();
+  const base = useBasePath();
+  const timeZone = useViewerTimeZone();
   const { streams, loading } = useStreams();
-
   const artistName = decodeURIComponent(params.artist);
   const trackName = decodeURIComponent(params.name);
-  const range = searchParams.get("range") ?? undefined;
-  const from = searchParams.get("from") ?? undefined;
-  const to = searchParams.get("to") ?? undefined;
-  const viewerTimeZone =
-    searchParams.get(VIEWER_TIMEZONE_PARAM) ??
-    readViewerTimeZoneCookie() ??
-    detectViewerTimeZone();
-  const filter = useMemo(
-    () => parseTimeRange(range, from, to, viewerTimeZone ?? undefined),
-    [range, from, to, viewerTimeZone]
-  );
+  const filter = useMemo(() => parseTimeRange("all", undefined, undefined, timeZone), [timeZone]);
   const detail = useMemo(
     () => computeTrackDetail(streams, trackName, artistName, filter),
     [streams, trackName, artistName, filter]
@@ -63,30 +45,37 @@ function TrackDetailInner() {
     [streams, trackName, artistName]
   );
   const span = useMemo(() => computeListeningSpan(scoped, filter), [scoped, filter]);
-  const days = calendarDaysInFilter(filter, span, viewerTimeZone ?? undefined);
+  const days = calendarDaysInFilter(filter, span, timeZone);
   const mode = days > 400 ? "months" : days > 120 ? "weeks" : "days";
   const history = useMemo(
-    () => historyChartData(scoped, mode, filter, viewerTimeZone ?? "UTC"),
-    [scoped, mode, filter, viewerTimeZone]
+    () => historyChartData(scoped, mode, filter, timeZone),
+    [scoped, mode, filter, timeZone]
   );
   const hours = useMemo(
-    () => computeStreamsByHour(scoped, filter, viewerTimeZone ?? undefined),
-    [scoped, filter, viewerTimeZone]
+    () => computeStreamsByHour(scoped, filter, timeZone),
+    [scoped, filter, timeZone]
   );
   const weekdays = useMemo(
-    () => computeStreamsByDayOfWeek(scoped, filter, viewerTimeZone ?? undefined),
-    [scoped, filter, viewerTimeZone]
+    () => computeStreamsByDayOfWeek(scoped, filter, timeZone),
+    [scoped, filter, timeZone]
   );
 
   if (loading) {
     return <p className="py-16 text-center text-sm text-muted-foreground">Loading track…</p>;
   }
 
+  const line =
+    detail.streams > 0
+      ? scopeResultLine({
+          minutes: detail.minutesListened,
+          scope: `of ${detail.trackName}`,
+          when: `${detail.streams.toLocaleString()} plays`,
+        })
+      : `No plays of ${detail.trackName}.`;
+
   return (
-    <PageShell width="default">
-      <FilterToolbar context="entity" />
+    <PageShell className="space-y-6">
       <EntityHero
-        eyebrow="Track"
         title={detail.trackName}
         subtitle={
           <span>
@@ -94,7 +83,7 @@ function TrackDetailInner() {
             {detail.albumName ? (
               <>
                 {" · "}
-                <Link href={albumPath(detail.artistName, detail.albumName)} className="text-primary hover:underline">
+                <Link href={`${base}${albumPath(detail.artistName, detail.albumName)}`} className="text-primary">
                   {detail.albumName}
                 </Link>
               </>
@@ -104,65 +93,17 @@ function TrackDetailInner() {
         artwork={
           <AlbumArt
             src={detail.albumArt}
-            alt={detail.albumName}
-            width={112}
-            height={112}
+            alt={detail.albumName || detail.trackName}
+            width={176}
+            height={176}
             className="size-full object-cover"
           />
         }
-        figures={[
-          { label: "Plays", value: detail.streams.toLocaleString() },
-          { label: "Minutes", value: detail.minutesListened.toLocaleString() },
-          {
-            label: "First play",
-            value: detail.firstPlayedAt ? (
-              <LocalDateTime date={detail.firstPlayedAt.toISOString()} pattern="MMM d, yyyy" />
-            ) : (
-              "—"
-            ),
-          },
-          {
-            label: "Last play",
-            value: detail.lastPlayedAt ? (
-              <LocalDateTime date={detail.lastPlayedAt.toISOString()} pattern="MMM d, yyyy" />
-            ) : (
-              "—"
-            ),
-          },
-          { label: "Rank", value: detail.rank ? `#${detail.rank}` : "—", hint: "among tracks" },
-          { label: "Share", value: `${detail.share}%`, hint: "of minutes" },
-        ]}
-      />
-
-      <ChartPanel title={historyChartTitle(mode, "streams")} caption={chartCaption(filter.label, "streams")}>
-        <BarSeriesChart points={history} metric="streams" label={historyChartTitle(mode, "streams")} />
-      </ChartPanel>
-      <div className="grid gap-3 lg:grid-cols-2">
-        <ChartPanel title="Plays by hour" caption={chartCaption(filter.label, "streams")}>
-          <BarSeriesChart points={hours} metric="streams" label="Plays by hour" />
-        </ChartPanel>
-        <ChartPanel title="Plays by weekday" caption={chartCaption(filter.label, "streams")}>
-          <BarSeriesChart points={weekdays} metric="streams" label="Plays by weekday" />
-        </ChartPanel>
-      </div>
-
-      {detail.recentPlays.length > 0 ? (
-        <SectionBlock title="Recent plays in period">
-          <ContentPanel>
-            <div className="grid gap-x-4 divide-y divide-border/30 md:grid-cols-2 md:divide-y-0 xl:grid-cols-3">
-              {detail.recentPlays.map((play) => (
-                <div key={play.id} className="flex items-center justify-between gap-3 px-1 py-2 text-sm">
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    <LocalDateTime date={play.playedAt.toISOString()} pattern="MMM d · h:mm a" />
-                  </span>
-                  <span className="min-w-0 truncate text-xs">{play.albumName}</span>
-                </div>
-              ))}
-            </div>
-          </ContentPanel>
-        </SectionBlock>
-      ) : null}
-      <EntityArchiveHistory artist={artistName} track={trackName} />
+      >
+        <ResultLine>{line}</ResultLine>
+      </EntityHero>
+      {detail.streams > 0 ? <EntityCharts history={history} hours={hours} weekdays={weekdays} /> : null}
+      <CoverRail title="Recent" items={playCovers(detail.recentPlays.slice(0, 12))} />
     </PageShell>
   );
 }

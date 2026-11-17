@@ -1,21 +1,17 @@
 "use client";
 
-import { EntityArchiveHistory } from "@/components/archive/entity-archive-history";
 import { Suspense, useMemo } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { AlbumArt } from "@/components/album-art";
-import {
-  BarSeriesChart,
-  ChartPanel,
-  chartCaption,
-  historyChartTitle,
-} from "@/components/bar-series-chart";
 import { EntityHero } from "@/components/entity/entity-hero";
-import { FilterToolbar } from "@/components/filter-toolbar";
-import { ContentPanel, PageShell, SectionBlock } from "@/components/page-shell";
-import { LocalDateTime } from "@/components/local-datetime";
-import { RankedEntityList } from "@/components/ranked-entity-list";
+import { PageShell } from "@/components/page-shell";
 import { useStreams } from "@/components/streams-provider";
+import { CoverRail } from "@/components/visual/cover-rail";
+import { EntityCharts } from "@/components/visual/entity-charts";
+import { ResultLine, scopeResultLine } from "@/components/visual/result-line";
+import { useBasePath } from "@/components/visual/use-base-path";
+import { useViewerTimeZone } from "@/components/visual/use-viewer-time-zone";
+import { historyChartData } from "@/lib/stats-chart-data";
 import {
   calendarDaysInFilter,
   computeAlbumDetail,
@@ -24,32 +20,17 @@ import {
   computeStreamsByHour,
   parseTimeRange,
 } from "@/lib/stats-compute";
-import { historyChartData } from "@/lib/stats-chart-data";
 import { matchesEntity, sameAlbum } from "@/lib/entity-normalize";
 import { trackPath } from "@/lib/entity-paths";
-import { VIEWER_TIMEZONE_PARAM } from "@/lib/stats-timezone";
-import {
-  detectViewerTimeZone,
-  readViewerTimeZoneCookie,
-} from "@/lib/viewer-timezone-client";
 
 function AlbumDetailInner() {
   const params = useParams<{ artist: string; name: string }>();
-  const searchParams = useSearchParams();
+  const base = useBasePath();
+  const timeZone = useViewerTimeZone();
   const { streams, loading } = useStreams();
   const artistName = decodeURIComponent(params.artist);
   const albumName = decodeURIComponent(params.name);
-  const range = searchParams.get("range") ?? undefined;
-  const from = searchParams.get("from") ?? undefined;
-  const to = searchParams.get("to") ?? undefined;
-  const viewerTimeZone =
-    searchParams.get(VIEWER_TIMEZONE_PARAM) ??
-    readViewerTimeZoneCookie() ??
-    detectViewerTimeZone();
-  const filter = useMemo(
-    () => parseTimeRange(range, from, to, viewerTimeZone ?? undefined),
-    [range, from, to, viewerTimeZone]
-  );
+  const filter = useMemo(() => parseTimeRange("all", undefined, undefined, timeZone), [timeZone]);
   const detail = useMemo(
     () => computeAlbumDetail(streams, albumName, artistName, filter),
     [streams, albumName, artistName, filter]
@@ -62,103 +43,71 @@ function AlbumDetailInner() {
     [streams, albumName, artistName]
   );
   const span = useMemo(() => computeListeningSpan(scoped, filter), [scoped, filter]);
-  const days = calendarDaysInFilter(filter, span, viewerTimeZone ?? undefined);
+  const days = calendarDaysInFilter(filter, span, timeZone);
   const mode = days > 400 ? "months" : days > 120 ? "weeks" : "days";
   const history = useMemo(
-    () => historyChartData(scoped, mode, filter, viewerTimeZone ?? "UTC"),
-    [scoped, mode, filter, viewerTimeZone]
+    () => historyChartData(scoped, mode, filter, timeZone),
+    [scoped, mode, filter, timeZone]
   );
-  const trackBars = detail.tracks.map((track) => ({
-    label: track.trackName,
-    minutes: track.minutes,
-    streams: track.streams,
-  }));
   const hours = useMemo(
-    () => computeStreamsByHour(scoped, filter, viewerTimeZone ?? undefined),
-    [scoped, filter, viewerTimeZone]
+    () => computeStreamsByHour(scoped, filter, timeZone),
+    [scoped, filter, timeZone]
   );
   const weekdays = useMemo(
-    () => computeStreamsByDayOfWeek(scoped, filter, viewerTimeZone ?? undefined),
-    [scoped, filter, viewerTimeZone]
+    () => computeStreamsByDayOfWeek(scoped, filter, timeZone),
+    [scoped, filter, timeZone]
   );
+  const tracks = [...detail.tracks].sort((a, b) => b.minutes - a.minutes);
 
   if (loading) {
     return <p className="py-16 text-center text-sm text-muted-foreground">Loading album…</p>;
   }
 
+  const line =
+    detail.streams > 0
+      ? scopeResultLine({
+          minutes: detail.minutesListened,
+          scope: `of ${detail.albumName}`,
+          when: `${tracks.length.toLocaleString()} tracks`,
+        })
+      : `No plays of ${detail.albumName}.`;
+
   return (
-    <PageShell width="default">
-      <FilterToolbar context="entity" />
+    <PageShell className="space-y-6">
       <EntityHero
-        eyebrow="Album"
         title={detail.albumName}
         subtitle={detail.artistName}
         artwork={
           <AlbumArt
             src={detail.albumArt}
             alt={detail.albumName}
-            width={112}
-            height={112}
+            width={176}
+            height={176}
             className="size-full object-cover"
           />
         }
-        figures={[
-          { label: "Plays", value: detail.streams.toLocaleString() },
-          { label: "Minutes", value: detail.minutesListened.toLocaleString() },
-          { label: "Tracks heard", value: detail.tracks.length.toLocaleString() },
-          {
-            label: "First play",
-            value: detail.firstPlayedAt ? (
-              <LocalDateTime date={detail.firstPlayedAt.toISOString()} pattern="MMM d, yyyy" />
-            ) : (
-              "—"
-            ),
-          },
-          { label: "Share", value: `${detail.share}%`, hint: "of minutes" },
-        ]}
+      >
+        <ResultLine>{line}</ResultLine>
+      </EntityHero>
+      {detail.streams > 0 ? <EntityCharts history={history} hours={hours} weekdays={weekdays} /> : null}
+      <CoverRail
+        title="Tracks"
+        items={tracks.map((track) => ({
+          key: track.trackName,
+          href: `${base}${trackPath(detail.artistName, track.trackName)}`,
+          title: track.trackName,
+          minutes: track.minutes,
+          art: (
+            <AlbumArt
+              src={detail.albumArt}
+              alt={detail.albumName}
+              width={160}
+              height={160}
+              className="size-full object-cover"
+            />
+          ),
+        }))}
       />
-
-      <ChartPanel title="Minutes by track" caption={chartCaption(filter.label, "minutes")}>
-        <BarSeriesChart points={trackBars} metric="minutes" label="Minutes by track" />
-      </ChartPanel>
-      <ChartPanel title={historyChartTitle(mode, "minutes")} caption={chartCaption(filter.label, "minutes")}>
-        <BarSeriesChart points={history} metric="minutes" label={historyChartTitle(mode, "minutes")} />
-      </ChartPanel>
-      <div className="grid gap-3 lg:grid-cols-2">
-        <ChartPanel title="Minutes by hour" caption={chartCaption(filter.label, "minutes")}>
-          <BarSeriesChart points={hours} metric="minutes" label="Minutes by hour" />
-        </ChartPanel>
-        <ChartPanel title="Minutes by weekday" caption={chartCaption(filter.label, "minutes")}>
-          <BarSeriesChart points={weekdays} metric="minutes" label="Minutes by weekday" />
-        </ChartPanel>
-      </div>
-
-      <SectionBlock title="Tracks">
-        <ContentPanel>
-          <RankedEntityList
-            columns="two"
-            sortBy="minutes"
-            items={detail.tracks.map((track) => ({
-              key: track.trackName,
-              href: trackPath(detail.artistName, track.trackName),
-              title: track.trackName,
-              subtitle: `${track.streams.toLocaleString()} plays`,
-              streams: track.streams,
-              minutes: track.minutes,
-              leading: (
-                <AlbumArt
-                  src={detail.albumArt}
-                  alt={detail.albumName}
-                  width={36}
-                  height={36}
-                  className="size-9 rounded"
-                />
-              ),
-            }))}
-          />
-        </ContentPanel>
-      </SectionBlock>
-      <EntityArchiveHistory artist={artistName} album={albumName} />
     </PageShell>
   );
 }
