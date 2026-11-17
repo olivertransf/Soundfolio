@@ -17,15 +17,18 @@ export function trackCovers(
     albumName: string;
     albumArt: string | null;
     minutesListened: number;
+    streams: number;
   }[],
   base: string
 ): CoverItem[] {
-  return tracks.map((track) => ({
+  return tracks.map((track, index) => ({
     key: `${track.artistName}-${track.trackName}`,
     href: `${base}${trackPath(track.artistName, track.trackName)}`,
     title: track.trackName,
     subtitle: track.artistName,
     minutes: track.minutesListened,
+    plays: track.streams,
+    rank: index + 1,
     art: (
       <AlbumArt
         src={track.albumArt}
@@ -43,14 +46,17 @@ export function artistCovers(
     artistName: string;
     artistArt: string | null;
     minutesListened: number;
+    streams: number;
   }[],
   base: string
 ): CoverItem[] {
-  return artists.map((artist) => ({
+  return artists.map((artist, index) => ({
     key: artist.artistName,
     href: `${base}${artistPath(artist.artistName)}`,
     title: artist.artistName,
     minutes: artist.minutesListened,
+    plays: artist.streams,
+    rank: index + 1,
     art: (
       <ArtistArt
         src={artist.artistArt}
@@ -69,15 +75,18 @@ export function albumCovers(
     artistName: string;
     albumArt: string | null;
     minutesListened: number;
+    streams: number;
   }[],
   base: string
 ): CoverItem[] {
-  return albums.map((album) => ({
+  return albums.map((album, index) => ({
     key: `${album.artistName}-${album.albumName}`,
     href: `${base}${albumPath(album.artistName, album.albumName)}`,
     title: album.albumName,
     subtitle: album.artistName,
     minutes: album.minutesListened,
+    plays: album.streams,
+    rank: index + 1,
     art: (
       <AlbumArt
         src={album.albumArt}
@@ -97,6 +106,7 @@ export function recentCovers(streams: Stream[], base: string): CoverItem[] {
     title: stream.trackName,
     subtitle: stream.artistName,
     detail: format(stream.playedAt, "MMM d · h:mm a"),
+    minutes: minutesFromMs(stream.durationMs),
     art: (
       <AlbumArt
         src={stream.albumArt}

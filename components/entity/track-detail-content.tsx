@@ -9,8 +9,10 @@ import { PageShell } from "@/components/page-shell";
 import { useStreams } from "@/components/streams-provider";
 import { CoverRail } from "@/components/visual/cover-rail";
 import { EntityCharts } from "@/components/visual/entity-charts";
+import { patternStats } from "@/components/visual/mix-charts";
 import { playCovers } from "@/components/visual/rank-covers";
 import { ResultLine, scopeResultLine } from "@/components/visual/result-line";
+import { StatGrid, countDetail, listeningStatItems } from "@/components/visual/stat-grid";
 import { useBasePath } from "@/components/visual/use-base-path";
 import { useViewerTimeZone } from "@/components/visual/use-viewer-time-zone";
 import { historyChartData } from "@/lib/stats-chart-data";
@@ -19,7 +21,10 @@ import {
   computeListeningSpan,
   computeStreamsByDayOfWeek,
   computeStreamsByHour,
+  computePeriodBreakdown,
   computeTrackDetail,
+  filterForStats,
+  formatHourLabel,
   parseTimeRange,
 } from "@/lib/stats-compute";
 import { matchesEntity } from "@/lib/entity-normalize";
@@ -39,10 +44,10 @@ function TrackDetailInner() {
   );
   const scoped = useMemo(
     () =>
-      streams.filter(
+      filterForStats(streams, filter).filter(
         (row) => matchesEntity(row.trackName, trackName) && matchesEntity(row.artistName, artistName)
       ),
-    [streams, trackName, artistName]
+    [streams, trackName, artistName, filter]
   );
   const span = useMemo(() => computeListeningSpan(scoped, filter), [scoped, filter]);
   const days = calendarDaysInFilter(filter, span, timeZone);
@@ -59,6 +64,10 @@ function TrackDetailInner() {
     () => computeStreamsByDayOfWeek(scoped, filter, timeZone),
     [scoped, filter, timeZone]
   );
+  const breakdown = useMemo(
+    () => computePeriodBreakdown(scoped, filter, timeZone),
+    [scoped, filter, timeZone]
+  );
 
   if (loading) {
     return <p className="py-16 text-center text-sm text-muted-foreground">Loading track…</p>;
@@ -72,6 +81,14 @@ function TrackDetailInner() {
           when: `${detail.streams.toLocaleString()} plays`,
         })
       : `No plays of ${detail.trackName}.`;
+  const peakHour = hours.reduce(
+    (best, row) => (row.minutes > best.minutes ? row : best),
+    hours[0]
+  );
+  const peakDay = weekdays.reduce(
+    (best, row) => (row.minutes > best.minutes ? row : best),
+    weekdays[0]
+  );
 
   return (
     <PageShell className="space-y-6">
@@ -102,8 +119,34 @@ function TrackDetailInner() {
       >
         <ResultLine>{line}</ResultLine>
       </EntityHero>
+      {detail.streams > 0 ? (
+        <StatGrid
+          items={listeningStatItems({
+            minutes: detail.minutesListened,
+            plays: detail.streams,
+            days,
+            rank: detail.rank,
+            share: detail.share,
+            first: detail.firstPlayedAt,
+            last: detail.lastPlayedAt,
+            peakHour: peakHour ? formatHourLabel(peakHour.label) : null,
+            peakHourDetail: peakHour ? countDetail(peakHour.minutes, peakHour.streams) : null,
+            peakDay: peakDay?.label,
+            peakDayDetail: peakDay ? countDetail(peakDay.minutes, peakDay.streams) : null,
+          }).concat(
+            patternStats({
+              minutes: detail.minutesListened,
+              plays: detail.streams,
+              breakdown,
+              hours,
+              weekdays,
+              hourLabel: formatHourLabel,
+            })
+          )}
+        />
+      ) : null}
       {detail.streams > 0 ? <EntityCharts history={history} hours={hours} weekdays={weekdays} /> : null}
-      <CoverRail title="Recent" items={playCovers(detail.recentPlays.slice(0, 12))} />
+      <CoverRail title="Recent" items={playCovers(detail.recentPlays)} />
     </PageShell>
   );
 }

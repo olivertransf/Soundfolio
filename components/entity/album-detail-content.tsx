@@ -8,7 +8,9 @@ import { PageShell } from "@/components/page-shell";
 import { useStreams } from "@/components/streams-provider";
 import { CoverRail } from "@/components/visual/cover-rail";
 import { EntityCharts } from "@/components/visual/entity-charts";
+import { patternStats } from "@/components/visual/mix-charts";
 import { ResultLine, scopeResultLine } from "@/components/visual/result-line";
+import { StatGrid, countDetail, listeningStatItems } from "@/components/visual/stat-grid";
 import { useBasePath } from "@/components/visual/use-base-path";
 import { useViewerTimeZone } from "@/components/visual/use-viewer-time-zone";
 import { historyChartData } from "@/lib/stats-chart-data";
@@ -16,8 +18,11 @@ import {
   calendarDaysInFilter,
   computeAlbumDetail,
   computeListeningSpan,
+  computePeriodBreakdown,
   computeStreamsByDayOfWeek,
   computeStreamsByHour,
+  filterForStats,
+  formatHourLabel,
   parseTimeRange,
 } from "@/lib/stats-compute";
 import { matchesEntity, sameAlbum } from "@/lib/entity-normalize";
@@ -37,10 +42,10 @@ function AlbumDetailInner() {
   );
   const scoped = useMemo(
     () =>
-      streams.filter(
+      filterForStats(streams, filter).filter(
         (row) => sameAlbum(row.albumName, albumName) && matchesEntity(row.artistName, artistName)
       ),
-    [streams, albumName, artistName]
+    [streams, albumName, artistName, filter]
   );
   const span = useMemo(() => computeListeningSpan(scoped, filter), [scoped, filter]);
   const days = calendarDaysInFilter(filter, span, timeZone);
@@ -57,6 +62,10 @@ function AlbumDetailInner() {
     () => computeStreamsByDayOfWeek(scoped, filter, timeZone),
     [scoped, filter, timeZone]
   );
+  const breakdown = useMemo(
+    () => computePeriodBreakdown(scoped, filter, timeZone),
+    [scoped, filter, timeZone]
+  );
   const tracks = [...detail.tracks].sort((a, b) => b.minutes - a.minutes);
 
   if (loading) {
@@ -71,6 +80,14 @@ function AlbumDetailInner() {
           when: `${tracks.length.toLocaleString()} tracks`,
         })
       : `No plays of ${detail.albumName}.`;
+  const peakHour = hours.reduce(
+    (best, row) => (row.minutes > best.minutes ? row : best),
+    hours[0]
+  );
+  const peakDay = weekdays.reduce(
+    (best, row) => (row.minutes > best.minutes ? row : best),
+    weekdays[0]
+  );
 
   return (
     <PageShell className="space-y-6">
@@ -89,14 +106,43 @@ function AlbumDetailInner() {
       >
         <ResultLine>{line}</ResultLine>
       </EntityHero>
+      {detail.streams > 0 ? (
+        <StatGrid
+          items={listeningStatItems({
+            minutes: detail.minutesListened,
+            plays: detail.streams,
+            days,
+            tracks: tracks.length,
+            share: detail.share,
+            first: detail.firstPlayedAt,
+            last: span?.last,
+            peakHour: peakHour ? formatHourLabel(peakHour.label) : null,
+            peakHourDetail: peakHour ? countDetail(peakHour.minutes, peakHour.streams) : null,
+            peakDay: peakDay?.label,
+            peakDayDetail: peakDay ? countDetail(peakDay.minutes, peakDay.streams) : null,
+          }).concat(
+            patternStats({
+              minutes: detail.minutesListened,
+              plays: detail.streams,
+              tracks: tracks.length,
+              breakdown,
+              hours,
+              weekdays,
+              hourLabel: formatHourLabel,
+            })
+          )}
+        />
+      ) : null}
       {detail.streams > 0 ? <EntityCharts history={history} hours={hours} weekdays={weekdays} /> : null}
       <CoverRail
         title="Tracks"
-        items={tracks.map((track) => ({
+        items={tracks.map((track, index) => ({
           key: track.trackName,
           href: `${base}${trackPath(detail.artistName, track.trackName)}`,
           title: track.trackName,
           minutes: track.minutes,
+          plays: track.streams,
+          rank: index + 1,
           art: (
             <AlbumArt
               src={detail.albumArt}

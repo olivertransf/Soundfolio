@@ -10,7 +10,9 @@ import { BarSeriesChart, chartAxisLabel } from "@/components/bar-series-chart";
 import { PageShell } from "@/components/page-shell";
 import { useStreams } from "@/components/streams-provider";
 import { CoverRail, type CoverItem } from "@/components/visual/cover-rail";
+import { ListeningMix, RankBars, quietPoint, withRestPlays } from "@/components/visual/mix-charts";
 import { ResultLine, scopeResultLine } from "@/components/visual/result-line";
+import { NumberChart, StatGrid, countDetail, extraStatItems, listeningStatItems } from "@/components/visual/stat-grid";
 import {
   ARCHIVE_RULES,
   buildArchive,
@@ -23,6 +25,7 @@ import {
 import { listeningChapters } from "@/lib/archive-chapters";
 import { albumPath, artistPath, trackPath } from "@/lib/entity-paths";
 import { minutesFromMs } from "@/lib/listening-minutes";
+import { computePeriodBreakdown, computeStreamsByHour, formatHourLabel } from "@/lib/stats-compute";
 import { resolveStatsTimeZone } from "@/lib/stats-timezone";
 
 function byTime<T extends { ms: number; plays: number }>(items: T[]) {
@@ -30,7 +33,7 @@ function byTime<T extends { ms: number; plays: number }>(items: T[]) {
 }
 
 function archiveCovers(items: ArchiveEntity[], kind: "track" | "artist" | "album", base: string): CoverItem[] {
-  return items.slice(0, 12).map((item) => ({
+  return items.slice(0, 12).map((item, index) => ({
     key: `${kind}-${item.key}`,
     href:
       kind === "artist"
@@ -41,6 +44,8 @@ function archiveCovers(items: ArchiveEntity[], kind: "track" | "artist" | "album
     title: item.name,
     subtitle: kind === "artist" ? undefined : item.artist,
     minutes: minutesFromMs(item.ms),
+    plays: item.plays,
+    rank: index + 1,
     art:
       kind === "artist" ? (
         <ArtistArt
@@ -116,6 +121,14 @@ export function ArchiveExperience() {
     const rows = insight.p.rows.filter((row) => archive.dates.get(row) === day);
     return byTime(archive.select(rows, day).tracks).slice(0, 12);
   }, [archive, day, insight.p.rows]);
+  const monthBreakdown = useMemo(
+    () => computePeriodBreakdown(insight.p.rows, undefined, timeZone),
+    [insight.p.rows, timeZone]
+  );
+  const monthHours = useMemo(
+    () => computeStreamsByHour(insight.p.rows, undefined, timeZone),
+    [insight.p.rows, timeZone]
+  );
 
   const go = (nextMonth: string) => {
     const query = new URLSearchParams(params.toString());
@@ -194,6 +207,19 @@ export function ArchiveExperience() {
   const fell = shifts.filter((item) => item.delta < 0).slice(0, 8);
   const comparison =
     previous && previous.rows.length > 0 ? comparePeriods(period, previous) : null;
+  const minutes = minutesFromMs(period.ms);
+  const plays = period.rows.length;
+  const peakDay = dayPoints.reduce(
+    (best, point) => (point.minutes > best.minutes ? point : best),
+    dayPoints[0]
+  );
+  const quietDayPoint = quietPoint(dayPoints);
+  const quietHourPoint = quietPoint(monthHours);
+  const rankedTracks = byTime(period.tracks);
+  const topTenMinutes = rankedTracks.slice(0, 10).reduce((sum, track) => sum + minutesFromMs(track.ms), 0);
+  const topTenPlays = rankedTracks.slice(0, 10).reduce((sum, track) => sum + track.plays, 0);
+  const replay = monthBreakdown.replays[1];
+  const selectedDay = day ? dayPoints.find((point) => point.label === day) : null;
 
   return (
     <PageShell className="space-y-6">
@@ -229,9 +255,52 @@ export function ArchiveExperience() {
 
       <CoverRail items={archiveCovers(byTime(period.albums).slice(0, 5), "album", base)} size="hero" />
       <ResultLine>{line}</ResultLine>
+      {period.rows.length > 0 ? (
+        <StatGrid
+          items={listeningStatItems({
+            minutes,
+            plays,
+            days: dayPoints.length,
+            tracks: period.tracks.length,
+            artists: period.artists.length,
+            albums: period.albums.length,
+            activeDays: period.days.length,
+            peakDay: peakDay ? chartAxisLabel(peakDay.label) : null,
+            peakDayDetail: peakDay ? countDetail(peakDay.minutes, peakDay.streams) : null,
+          }).concat(
+            extraStatItems({
+              minutes,
+              plays,
+              tracks: period.tracks.length,
+              artists: period.artists.length,
+              albums: period.albums.length,
+              activeDays: period.days.length,
+              dayparts: monthBreakdown.dayparts,
+              weekParts: monthBreakdown.weekParts,
+              topArtist: monthBreakdown.artistShare.find((artist) => artist.label !== "Rest") ?? null,
+              restMinutes: Math.max(0, minutes - topTenMinutes),
+              onceTracks: monthBreakdown.onceTracks,
+              replayTracks: monthBreakdown.replayTracks,
+              replayMinutes: replay?.minutes,
+              replayPlays: replay?.streams,
+              longestPlayMinutes: monthBreakdown.longestPlayMinutes,
+              quietDay: quietDayPoint && quietDayPoint.label !== peakDay?.label ? quietDayPoint.label : null,
+              quietMinutes: quietDayPoint?.minutes,
+              quietPlays: quietDayPoint?.streams,
+              quietHour: quietHourPoint ? formatHourLabel(quietHourPoint.label) : null,
+              quietHourDetail: quietHourPoint
+                ? countDetail(quietHourPoint.minutes, quietHourPoint.streams)
+                : null,
+            })
+          )}
+        />
+      ) : null}
 
       {period.rows.length > 0 ? (
-        <div className="rounded-xl border border-border bg-card p-3">
+        <NumberChart
+          title={monthLabel(month)}
+          detail={peakDay ? `${chartAxisLabel(peakDay.label)} · ${countDetail(peakDay.minutes, peakDay.streams)}` : countDetail(minutes, plays)}
+        >
           <BarSeriesChart
             points={dayPoints}
             metric="minutes"
@@ -239,11 +308,45 @@ export function ArchiveExperience() {
             selectedLabel={day ?? undefined}
             onSelect={(point) => setDay((current) => (current === point.label ? null : point.label))}
           />
-        </div>
+        </NumberChart>
       ) : null}
 
-      {day ? (
-        <CoverRail title={chartAxisLabel(day)} items={archiveCovers(dayTracks, "track", base)} />
+      {period.rows.length > 0 ? (
+        <>
+          <ListeningMix
+            dayparts={monthBreakdown.dayparts}
+            weekParts={monthBreakdown.weekParts}
+            replays={monthBreakdown.replays}
+            artists={withRestPlays(monthBreakdown.artistShare, plays)}
+            topTen={[
+              { label: "Top 10", minutes: topTenMinutes, streams: topTenPlays },
+              {
+                label: "The rest",
+                minutes: Math.max(0, minutes - topTenMinutes),
+                streams: Math.max(0, plays - topTenPlays),
+              },
+            ]}
+          />
+          <NumberChart title="Tracks">
+            <RankBars
+              items={rankedTracks.slice(0, 8).map((track) => ({
+                key: track.key,
+                label: track.name,
+                hint: track.artist,
+                minutes: minutesFromMs(track.ms),
+                plays: track.plays,
+                href: `${base}${trackPath(track.artist, track.name)}`,
+              }))}
+            />
+          </NumberChart>
+        </>
+      ) : null}
+
+      {day && selectedDay ? (
+        <CoverRail
+          title={`${chartAxisLabel(day)} · ${countDetail(selectedDay.minutes, selectedDay.streams)}`}
+          items={archiveCovers(dayTracks, "track", base)}
+        />
       ) : null}
 
       <CoverRail title="On repeat" items={archiveCovers(onRepeat, "track", base)} />
@@ -252,9 +355,9 @@ export function ArchiveExperience() {
         title="Came back"
         items={archiveCovers(cameBack, "track", base).map((item, index) => ({
           ...item,
-          subtitle: cameBack[index]
+          detail: cameBack[index]
             ? `${cameBack[index].gap.toLocaleString()} days away`
-            : item.subtitle,
+            : item.detail,
         }))}
       />
 
@@ -268,6 +371,7 @@ export function ArchiveExperience() {
               ? monthLabel(chapter.from)
               : `${monthLabel(chapter.from)} – ${monthLabel(chapter.to)}`,
           minutes: minutesFromMs(chapter.period.ms),
+          plays: chapter.period.rows.length,
           active: month >= chapter.from && month <= chapter.to,
           onSelect: () => go(chapter.from),
           art: (
@@ -287,7 +391,38 @@ export function ArchiveExperience() {
           <ResultLine>
             {`${Math.round(comparison.overlap * 100)}% of artists showed up in both ${monthLabel(previous.key)} and ${monthLabel(month)}.`}
           </ResultLine>
-          <div className="rounded-xl border border-border bg-card p-3">
+          <StatGrid
+            items={[
+              {
+                label: monthLabel(previous.key),
+                value: minutesFromMs(previous.ms).toLocaleString(),
+                hint: `${previous.rows.length.toLocaleString()} plays`,
+              },
+              {
+                label: monthLabel(month),
+                value: minutes.toLocaleString(),
+                hint: `${plays.toLocaleString()} plays`,
+              },
+              {
+                label: "Plays / day then",
+                value: Math.round(comparison.perDayB).toLocaleString(),
+              },
+              {
+                label: "Plays / day now",
+                value: Math.round(comparison.perDayA).toLocaleString(),
+              },
+              {
+                label: "Shared artists",
+                value: `${Math.round(comparison.overlap * 100)}%`,
+              },
+              {
+                label: "Only this month",
+                value: comparison.onlyA.length.toLocaleString(),
+                hint: "tracks",
+              },
+            ]}
+          />
+          <NumberChart title="Against last month" detail={countDetail(minutes, plays)}>
             <BarSeriesChart
               points={[
                 {
@@ -304,7 +439,7 @@ export function ArchiveExperience() {
               metric="minutes"
               label="This month and the previous month"
             />
-          </div>
+          </NumberChart>
           <CoverRail
             title="Up"
             shape="round"
@@ -313,6 +448,8 @@ export function ArchiveExperience() {
               href: `${base}${artistPath(entity.name)}`,
               title: entity.name,
               detail: signedMinutes(delta),
+              minutes: minutesFromMs(entity.ms),
+              plays: entity.plays,
               art: (
                 <ArtistArt
                   src={entity.row.artistArt || entity.art}
@@ -332,6 +469,8 @@ export function ArchiveExperience() {
               href: `${base}${artistPath(entity.name)}`,
               title: entity.name,
               detail: signedMinutes(delta),
+              minutes: minutesFromMs(entity.ms),
+              plays: entity.plays,
               art: (
                 <ArtistArt
                   src={entity.row.artistArt || entity.art}

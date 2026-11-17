@@ -5,7 +5,15 @@ export type HeatCell = {
   day: number;
   hour: number;
   minutes: number;
+  count?: number;
+  plays?: number;
 };
+
+function hourLabel(hour: number) {
+  const date = new Date();
+  date.setHours(hour, 0, 0, 0);
+  return date.toLocaleTimeString(undefined, { hour: "numeric" });
+}
 
 export function WeekHeatmap({
   grid,
@@ -18,6 +26,7 @@ export function WeekHeatmap({
 }) {
   const max = Math.max(1, ...grid.map((cell) => cell.minutes));
   const minutes = new Map(grid.map((cell) => [`${cell.day}-${cell.hour}`, cell.minutes]));
+  const plays = new Map(grid.map((cell) => [`${cell.day}-${cell.hour}`, cell.plays ?? cell.count ?? 0]));
   const peak = [peakDay, peakHour].filter(Boolean).join(" · ");
 
   return (
@@ -39,10 +48,11 @@ export function WeekHeatmap({
               <span className="self-center text-[10px] text-muted-foreground">{DAY_NAMES[day]}</span>
               {Array.from({ length: 24 }, (_, hour) => {
                 const value = minutes.get(`${day}-${hour}`) ?? 0;
+                const playCount = plays.get(`${day}-${hour}`) ?? 0;
                 return (
                   <span
                     key={hour}
-                    title={`${DAY_NAMES[day]} ${String(hour).padStart(2, "0")}:00 · ${value.toLocaleString()}m`}
+                    title={`${DAY_NAMES[day]} ${hourLabel(hour)} · ${value.toLocaleString()} min · ${playCount.toLocaleString()} plays`}
                     className="aspect-square rounded-[2px]"
                     style={{
                       backgroundColor: `color-mix(in srgb, var(--primary) ${value ? 14 + (86 * value) / max : 8}%, var(--secondary))`,

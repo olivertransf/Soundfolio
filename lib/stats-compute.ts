@@ -334,10 +334,17 @@ export function computeInsightSummary(streams: Stream[], filter?: TimeRangeFilte
     },
     timeZone
   );
-  const mostActive = days.reduce<(typeof days)[number] | null>((best, row) => {
+  const activeDays = days.filter((row) => row.streams > 0);
+  const mostActive = activeDays.reduce<(typeof days)[number] | null>((best, row) => {
     if (!best) return row;
     if (row.minutes > best.minutes) return row;
     if (row.minutes === best.minutes && row.streams > best.streams) return row;
+    return best;
+  }, null);
+  const quietest = activeDays.reduce<(typeof days)[number] | null>((best, row) => {
+    if (!best) return row;
+    if (row.minutes < best.minutes) return row;
+    if (row.minutes === best.minutes && row.streams < best.streams) return row;
     return best;
   }, null);
 
@@ -345,6 +352,10 @@ export function computeInsightSummary(streams: Stream[], filter?: TimeRangeFilte
     uniqueAlbums: diversity.uniqueAlbums,
     mostActiveDay: mostActive?.label ?? null,
     mostActiveMinutes: mostActive?.minutes ?? 0,
+    mostActivePlays: mostActive?.streams ?? 0,
+    quietDay: quietest?.label ?? null,
+    quietMinutes: quietest?.minutes ?? 0,
+    quietPlays: quietest?.streams ?? 0,
     topTenShare: totalMinutes > 0 ? Math.round((topMinutes / totalMinutes) * 100) : 0,
     topTenMinutes: topMinutes,
     restMinutes: Math.max(0, totalMinutes - topMinutes),
@@ -399,15 +410,23 @@ export function computePeriodBreakdown(
 
   let onceMs = 0;
   let oncePlays = 0;
+  let onceTracks = 0;
   let replayMs = 0;
   let replayPlays = 0;
+  let replayTracks = 0;
+  let longestMs = 0;
+  for (const row of rows) {
+    if (row.durationMs > longestMs) longestMs = row.durationMs;
+  }
   for (const group of tracks.values()) {
     if (group.plays <= 1) {
       onceMs += group.durationMs;
       oncePlays += group.plays;
+      onceTracks += 1;
     } else {
       replayMs += group.durationMs;
       replayPlays += group.plays;
+      replayTracks += 1;
     }
   }
 
@@ -445,6 +464,9 @@ export function computePeriodBreakdown(
     averageMinutesPerPlay: rows.length ? Math.round(totalMs / rows.length / 60000) : 0,
     activeDays: activeDays.size,
     replayShare: totalMinutes > 0 ? Math.round((replayMinutes / totalMinutes) * 100) : 0,
+    onceTracks,
+    replayTracks,
+    longestPlayMinutes: minutesFromMs(longestMs),
   };
 }
 

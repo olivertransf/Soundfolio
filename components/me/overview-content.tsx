@@ -9,19 +9,29 @@ import { LiveSyncStatus } from "@/components/live-sync-status";
 import { PageShell } from "@/components/page-shell";
 import { useStreams } from "@/components/streams-provider";
 import { CoverRail } from "@/components/visual/cover-rail";
+import { ListeningMix, RankBars, quietPoint, withRestPlays } from "@/components/visual/mix-charts";
 import { albumCovers, artistCovers, recentCovers, trackCovers } from "@/components/visual/rank-covers";
 import { ResultLine, scopeResultLine } from "@/components/visual/result-line";
+import { NumberChart, StatGrid, countDetail, extraStatItems, listeningStatItems } from "@/components/visual/stat-grid";
 import { useBasePath } from "@/components/visual/use-base-path";
 import { useViewerTimeZone } from "@/components/visual/use-viewer-time-zone";
 import { historyChartData } from "@/lib/stats-chart-data";
+import { albumPath, artistPath, trackPath } from "@/lib/entity-paths";
 import {
+  calendarDaysInFilter,
+  computeInsightSummary,
+  computeListeningDiversity,
+  computeListeningSpan,
+  computePeakHour,
   computePeriodBreakdown,
   computeRecentStreams,
   computeStreamsByDayOfWeek,
+  computeStreamsByHour,
   computeTopAlbums,
   computeTopArtists,
   computeTopTracks,
   computeTotalStats,
+  formatHourLabel,
   parseTimeRange,
 } from "@/lib/stats-compute";
 
@@ -67,6 +77,27 @@ export function OverviewContent() {
     () => computeStreamsByDayOfWeek(deferredStreams, filter, timeZone),
     [deferredStreams, filter, timeZone]
   );
+  const hours = useMemo(
+    () => computeStreamsByHour(deferredStreams, filter, timeZone),
+    [deferredStreams, filter, timeZone]
+  );
+  const diversity = useMemo(
+    () => computeListeningDiversity(deferredStreams, filter),
+    [deferredStreams, filter]
+  );
+  const span = useMemo(
+    () => computeListeningSpan(deferredStreams, filter),
+    [deferredStreams, filter]
+  );
+  const summary = useMemo(
+    () => computeInsightSummary(deferredStreams, filter, timeZone),
+    [deferredStreams, filter, timeZone]
+  );
+  const peakHour = useMemo(
+    () => computePeakHour(deferredStreams, filter, timeZone),
+    [deferredStreams, filter, timeZone]
+  );
+  const days = calendarDaysInFilter(filter, span, timeZone);
 
   const openMonth = (point: ChartPoint) => {
     if (!/^\d{4}-\d{2}$/.test(point.label)) return;
@@ -114,20 +145,112 @@ export function OverviewContent() {
     leader: topArtists[0]?.artistName,
   });
 
+  const peakDay = weekdays.reduce((best, day) => (day.minutes > best.minutes ? day : best));
+  const quietHourPoint = quietPoint(hours);
+  const topArtist = breakdown.artistShare.find((artist) => artist.label !== "Rest") ?? null;
+  const topTenPlays = topTracks.slice(0, 10).reduce((sum, track) => sum + track.streams, 0);
+  const replay = breakdown.replays[1];
+
   return (
     <PageShell className="space-y-6">
       <section className="space-y-4">
         <CoverRail items={albumCovers(topAlbums.slice(0, 5), base)} size="hero" />
         <ResultLine>{line}</ResultLine>
+        <StatGrid
+          items={listeningStatItems({
+            minutes: stats.totalMinutes,
+            plays: stats.totalStreams,
+            days,
+            tracks: diversity.uniqueTracks,
+            artists: diversity.uniqueArtists,
+            albums: diversity.uniqueAlbums,
+            activeDays: breakdown.activeDays,
+            peakHour: peakHour ? formatHourLabel(peakHour.label) : null,
+            peakHourDetail: peakHour ? countDetail(peakHour.minutes, peakHour.streams) : null,
+            peakDay: peakDay.label,
+            peakDayDetail: countDetail(peakDay.minutes, peakDay.streams),
+            replayShare: breakdown.replayShare,
+            topShare: summary.topTenShare,
+            topMinutes: summary.topTenMinutes,
+            first: span?.first,
+            last: span?.last,
+          }).concat(
+            extraStatItems({
+              minutes: stats.totalMinutes,
+              plays: stats.totalStreams,
+              tracks: diversity.uniqueTracks,
+              artists: diversity.uniqueArtists,
+              albums: diversity.uniqueAlbums,
+              activeDays: breakdown.activeDays,
+              dayparts: breakdown.dayparts,
+              weekParts: breakdown.weekParts,
+              topArtist,
+              restMinutes: summary.restMinutes,
+              onceTracks: breakdown.onceTracks,
+              replayTracks: breakdown.replayTracks,
+              replayMinutes: replay?.minutes,
+              replayPlays: replay?.streams,
+              longestPlayMinutes: breakdown.longestPlayMinutes,
+              busiestDay: summary.mostActiveDay,
+              busiestMinutes: summary.mostActiveMinutes,
+              busiestPlays: summary.mostActivePlays,
+              quietDay: summary.quietDay,
+              quietMinutes: summary.quietMinutes,
+              quietPlays: summary.quietPlays,
+              quietHour: quietHourPoint ? formatHourLabel(quietHourPoint.label) : null,
+              quietHourDetail: quietHourPoint
+                ? countDetail(quietHourPoint.minutes, quietHourPoint.streams)
+                : null,
+            })
+          )}
+        />
       </section>
 
-      <div className="rounded-xl border border-border bg-card p-3">
+      <NumberChart title="This year" detail={countDetail(stats.totalMinutes, stats.totalStreams)}>
         <BarSeriesChart
           points={year}
           metric="minutes"
           label="Minutes by month"
           onSelect={openMonth}
         />
+      </NumberChart>
+
+      <div className="grid gap-3 xl:grid-cols-3">
+        <NumberChart title="Tracks" detail={topTracks[0] ? `${topTracks[0].trackName} · ${countDetail(topTracks[0].minutesListened, topTracks[0].streams)}` : undefined}>
+          <RankBars
+            items={topTracks.slice(0, 8).map((track) => ({
+              key: `${track.artistName}-${track.trackName}`,
+              label: track.trackName,
+              hint: track.artistName,
+              minutes: track.minutesListened,
+              plays: track.streams,
+              href: `${base}${trackPath(track.artistName, track.trackName)}`,
+            }))}
+          />
+        </NumberChart>
+        <NumberChart title="Artists" detail={topArtists[0] ? `${topArtists[0].artistName} · ${countDetail(topArtists[0].minutesListened, topArtists[0].streams)}` : undefined}>
+          <RankBars
+            items={topArtists.slice(0, 8).map((artist) => ({
+              key: artist.artistName,
+              label: artist.artistName,
+              minutes: artist.minutesListened,
+              plays: artist.streams,
+              href: `${base}${artistPath(artist.artistName)}`,
+            }))}
+          />
+        </NumberChart>
+        <NumberChart title="Albums" detail={topAlbums[0] ? `${topAlbums[0].albumName} · ${countDetail(topAlbums[0].minutesListened, topAlbums[0].streams)}` : undefined}>
+          <RankBars
+            items={topAlbums.slice(0, 8).map((album) => ({
+              key: `${album.artistName}-${album.albumName}`,
+              label: album.albumName,
+              hint: album.artistName,
+              minutes: album.minutesListened,
+              plays: album.streams,
+              href: `${base}${albumPath(album.artistName, album.albumName)}`,
+            }))}
+          />
+        </NumberChart>
       </div>
 
       <CoverRail title="Tracks" items={trackCovers(topTracks, base)} />
@@ -135,17 +258,28 @@ export function OverviewContent() {
       <CoverRail title="Albums" items={albumCovers(topAlbums, base)} />
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-3">
-          <BarSeriesChart
-            points={breakdown.dayparts}
-            metric="minutes"
-            label="Time of day"
-          />
-        </div>
-        <div className="rounded-xl border border-border bg-card p-3">
+        <NumberChart title="Time of day" detail={peakHour ? `${formatHourLabel(peakHour.label)} · ${countDetail(peakHour.minutes, peakHour.streams)}` : undefined}>
+          <BarSeriesChart points={hours} metric="minutes" label="Time of day" />
+        </NumberChart>
+        <NumberChart title="Weekday" detail={`${peakDay.label} · ${countDetail(peakDay.minutes, peakDay.streams)}`}>
           <BarSeriesChart points={weekdays} metric="minutes" label="Weekday" />
-        </div>
+        </NumberChart>
       </div>
+
+      <ListeningMix
+        dayparts={breakdown.dayparts}
+        weekParts={breakdown.weekParts}
+        replays={breakdown.replays}
+        artists={withRestPlays(breakdown.artistShare, stats.totalStreams)}
+        topTen={[
+          { label: "Top 10", minutes: summary.topTenMinutes, streams: topTenPlays },
+          {
+            label: "The rest",
+            minutes: summary.restMinutes,
+            streams: Math.max(0, stats.totalStreams - topTenPlays),
+          },
+        ]}
+      />
 
       <CoverRail title="Recent" items={recentCovers(recent, base)} />
     </PageShell>

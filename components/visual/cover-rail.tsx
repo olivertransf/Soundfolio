@@ -11,7 +11,9 @@ export type CoverItem = {
   title: string;
   subtitle?: string;
   minutes?: number;
+  plays?: number;
   detail?: string;
+  rank?: number;
   active?: boolean;
   art: ReactNode;
 };
@@ -38,12 +40,17 @@ export function CoverRail({
             <>
               <div
                 className={cn(
-                  "aspect-square overflow-hidden bg-secondary",
+                  "relative aspect-square overflow-hidden bg-secondary",
                   shape === "round" ? "rounded-full" : size === "hero" ? "rounded-2xl" : "rounded-xl",
                   item.active && "ring-2 ring-primary"
                 )}
               >
                 {item.art}
+                {item.rank ? (
+                  <span className="absolute left-1 top-1 rounded bg-black/75 px-1 text-[10px] font-semibold tabular-nums text-white">
+                    #{item.rank}
+                  </span>
+                ) : null}
               </div>
               <p className="truncate text-xs font-medium">{item.title}</p>
               {item.subtitle ? (
@@ -51,9 +58,15 @@ export function CoverRail({
               ) : null}
               {item.detail ? (
                 <p className="truncate text-[11px] tabular-nums text-muted-foreground">{item.detail}</p>
-              ) : item.minutes != null ? (
+              ) : null}
+              {item.minutes != null || item.plays != null ? (
                 <p className="truncate text-[11px] tabular-nums text-muted-foreground">
-                  {item.minutes.toLocaleString()}m
+                  {[
+                    item.minutes != null ? `${item.minutes.toLocaleString()} min` : null,
+                    item.plays != null ? `${item.plays.toLocaleString()} plays` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               ) : null}
             </>

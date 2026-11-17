@@ -125,13 +125,13 @@ export function BarSeriesChart({
   const unit = metric === "minutes" ? "min" : "plays";
   const values = points.map((point) => (metric === "minutes" ? point.minutes : point.streams));
   const max = Math.max(1, ...values);
-  const height = 176;
+  const height = 228;
   const showScale = points.length > 8;
-  const padTop = 22;
+  const padTop = 26;
   const padBottom = 28;
   const plotHeight = height - padTop - padBottom;
   const maxLabel = Math.max(20, ...points.map((point) => labelWidth(point.label)));
-  const slot = maxLabel;
+  const slot = Math.max(maxLabel, points.length > 16 ? 36 : 52);
   const edge = maxLabel / 2;
   const minContent = edge * 2 + points.length * slot;
   const contentWidth = Math.max(width, minContent);
@@ -140,7 +140,7 @@ export function BarSeriesChart({
   const baseline = padTop + plotHeight;
 
   return (
-    <div className="flex h-44 w-full min-w-0">
+    <div className="flex h-[228px] w-full min-w-0">
       <div className="relative w-11 shrink-0 text-[11px] text-muted-foreground">
         {showScale ? (
           <span className="absolute left-0 top-0 leading-none">
@@ -152,7 +152,7 @@ export function BarSeriesChart({
           0
         </span>
       </div>
-      <div ref={frameRef} className="h-44 min-w-0 flex-1 overflow-x-auto">
+      <div ref={frameRef} className="h-[228px] min-w-0 flex-1 overflow-x-auto">
         {points.length === 0 ? (
           <p className="px-2 py-8 text-center text-sm text-muted-foreground">No plays in this range.</p>
         ) : width < 1 ? null : (
@@ -181,7 +181,11 @@ export function BarSeriesChart({
                   key={`${pointLabel || index}`}
                   role={onSelect ? "button" : undefined}
                   tabIndex={onSelect ? 0 : undefined}
-                  aria-label={onSelect ? `${chartAxisLabel(pointLabel)}: ${value.toLocaleString()} ${unit}` : undefined}
+                  aria-label={
+                    onSelect
+                      ? `${chartAxisLabel(pointLabel)}: ${point?.minutes.toLocaleString() ?? 0} min, ${point?.streams.toLocaleString() ?? 0} plays`
+                      : undefined
+                  }
                   aria-pressed={onSelect ? selected : undefined}
                   className={onSelect ? "cursor-pointer outline-none" : undefined}
                   onClick={onSelect ? choose : undefined}
@@ -204,15 +208,16 @@ export function BarSeriesChart({
                     className={dimmed ? "fill-primary/30" : "fill-primary"}
                   >
                     <title>
-                      {chartAxisLabel(pointLabel)}: {value.toLocaleString()} {unit}
+                      {chartAxisLabel(pointLabel)}: {point?.minutes.toLocaleString() ?? 0} min ·{" "}
+                      {point?.streams.toLocaleString() ?? 0} plays
                     </title>
                   </path>
-                  {points.length <= 8 && value > 0 ? (
+                  {value > 0 && usedSlot >= 24 ? (
                     <text
                       x={x + barWidth / 2}
                       y={Math.max(12, y - 4)}
                       textAnchor="middle"
-                      fontSize={11}
+                      fontSize={usedSlot >= 42 ? 11 : 9}
                       className="fill-foreground"
                     >
                       {compactNumber(value)}
