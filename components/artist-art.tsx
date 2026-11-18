@@ -19,21 +19,24 @@ export function ArtistArt({ src, alt, width = 44, height = 44, className }: Arti
   const isPlaceholder = src?.includes(PLACEHOLDER_HASH);
   const size = Math.min(width, height);
 
+  const fill = /(?:^|\s)(?:size-full|h-full|w-full)(?:\s|$)/.test(className ?? "");
+
   if (!src || error || isPlaceholder) {
     const letter = (alt?.trim()[0] ?? "?").toUpperCase();
-    const fontSize = Math.max(12, Math.floor(size * 0.45));
+    const fontSize = fill ? undefined : Math.max(12, Math.floor(size * 0.45));
     return (
       <div
         data-art
         role="img"
         aria-label={alt || "Artist"}
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-full bg-secondary",
+          "flex items-center justify-center rounded-full bg-secondary",
+          fill ? "size-full text-2xl" : "shrink-0",
           className
         )}
-        style={{ width, height, minWidth: size, minHeight: size }}
+        style={fill ? undefined : { width, height, minWidth: size, minHeight: size }}
       >
-        <span className="font-semibold text-muted-foreground" style={{ fontSize }}>
+        <span className="font-semibold text-muted-foreground" style={fontSize ? { fontSize } : undefined}>
           {letter}
         </span>
       </div>
@@ -47,8 +50,8 @@ export function ArtistArt({ src, alt, width = 44, height = 44, className }: Arti
       alt={alt}
       width={width}
       height={height}
-      className={cn("shrink-0 rounded-full object-cover", className)}
-      style={{ width, height, minWidth: size, minHeight: size }}
+      className={cn("rounded-full object-cover", fill ? "size-full" : "shrink-0", className)}
+      style={fill ? undefined : { width, height, minWidth: size, minHeight: size }}
       unoptimized
       referrerPolicy="no-referrer"
       onError={() => setError(true)}
